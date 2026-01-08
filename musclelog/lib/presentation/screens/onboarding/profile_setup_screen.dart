@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../data/models/user_profile.dart';
 import '../../providers/auth_provider.dart';
-import '../workout/home_screen.dart';
+import '../workout/main_screen.dart';
 
 /// 프로필 설정 화면
 class ProfileSetupScreen extends ConsumerStatefulWidget {
@@ -15,6 +17,10 @@ class ProfileSetupScreen extends ConsumerStatefulWidget {
 
 class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   String? _selectedExperienceLevel;
+  DateTime? _selectedBirthDate;
+  String? _selectedGender;
+  final _heightController = TextEditingController();
+  final _weightController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
 
@@ -23,6 +29,70 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     {'value': AppConstants.experienceIntermediate, 'label': '중급'},
     {'value': AppConstants.experienceAdvanced, 'label': '고급'},
   ];
+
+  final _genders = [
+    {'value': 'MALE', 'label': '남성'},
+    {'value': 'FEMALE', 'label': '여성'},
+  ];
+
+  @override
+  void dispose() {
+    _heightController.dispose();
+    _weightController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _selectBirthDate() async {
+    final DateTime initialDate = _selectedBirthDate ?? 
+        DateTime.now().subtract(const Duration(days: 365 * 25));
+    DateTime? selectedDate = _selectedBirthDate;
+    
+    await showModalBottomSheet(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => Container(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('취소'),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      if (selectedDate != null) {
+                        setState(() {
+                          _selectedBirthDate = selectedDate;
+                        });
+                      }
+                      Navigator.pop(context);
+                    },
+                    child: const Text('확인'),
+                  ),
+                ],
+              ),
+              SizedBox(
+                height: 250,
+                child: CupertinoDatePicker(
+                  initialDateTime: initialDate,
+                  maximumDate: DateTime.now(),
+                  minimumDate: DateTime(1900),
+                  mode: CupertinoDatePickerMode.date,
+                  onDateTimeChanged: (date) {
+                    selectedDate = date;
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
@@ -44,6 +114,14 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
       final profile = UserProfile(
         id: userId,
         experienceLevel: _selectedExperienceLevel,
+        birthDate: _selectedBirthDate,
+        gender: _selectedGender,
+        height: _heightController.text.isNotEmpty
+            ? double.tryParse(_heightController.text)
+            : null,
+        weight: _weightController.text.isNotEmpty
+            ? double.tryParse(_weightController.text)
+            : null,
         createdAt: DateTime.now(),
       );
 
@@ -51,7 +129,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
 
       if (mounted) {
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          MaterialPageRoute(builder: (_) => const MainScreen()),
         );
       }
     } catch (e) {
@@ -69,11 +147,13 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('프로필 설정'),
-      ),
-      body: SafeArea(
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('프로필 설정'),
+        ),
+        body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24.0),
           child: Form(
@@ -121,6 +201,111 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                     }).toList(),
                   ),
                 ),
+                const SizedBox(height: 24),
+                InkWell(
+                  onTap: _selectBirthDate,
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: '생년월일',
+                      border: OutlineInputBorder(),
+                      suffixIcon: Icon(Icons.calendar_today),
+                    ),
+                    child: Text(
+                      _selectedBirthDate != null
+                          ? DateFormat('yyyy-MM-dd').format(_selectedBirthDate!)
+                          : '생년월일을 선택하세요',
+                      style: TextStyle(
+                        color: _selectedBirthDate != null
+                            ? null
+                            : Colors.grey,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                RadioGroup<String>(
+                  groupValue: _selectedGender,
+                  onChanged: (value) {
+                    setState(() => _selectedGender = value);
+                  },
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '성별',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: _genders.map((gender) {
+                          final isSelected = _selectedGender == gender['value'];
+                          return Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              child: RadioListTile<String>(
+                                title: Text(gender['label']!),
+                                value: gender['value']!,
+                                contentPadding: EdgeInsets.zero,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  side: BorderSide(
+                                    color: isSelected
+                                        ? Theme.of(context).colorScheme.primary
+                                        : Colors.grey,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _heightController,
+                  decoration: const InputDecoration(
+                    labelText: '키 (cm)',
+                    border: OutlineInputBorder(),
+                    hintText: '예: 175',
+                  ),
+                  keyboardType: TextInputType.number,
+                  validator: (value) {
+                    if (value != null && value.isNotEmpty) {
+                      final height = double.tryParse(value);
+                      if (height == null) {
+                        return '올바른 숫자를 입력해주세요';
+                      }
+                      if (height < 50 || height > 250) {
+                        return '50cm ~ 250cm 사이의 값을 입력해주세요';
+                      }
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _weightController,
+                  decoration: const InputDecoration(
+                    labelText: '몸무게 (kg)',
+                    border: OutlineInputBorder(),
+                    hintText: '예: 70',
+                  ),
+                  keyboardType: TextInputType.number,
+                  validator: (value) {
+                    if (value != null && value.isNotEmpty) {
+                      final weight = double.tryParse(value);
+                      if (weight == null) {
+                        return '올바른 숫자를 입력해주세요';
+                      }
+                      if (weight < 20 || weight > 300) {
+                        return '20kg ~ 300kg 사이의 값을 입력해주세요';
+                      }
+                    }
+                    return null;
+                  },
+                ),
                 const Spacer(),
                 SizedBox(
                   width: double.infinity,
@@ -139,6 +324,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
             ),
           ),
         ),
+      ),
       ),
     );
   }

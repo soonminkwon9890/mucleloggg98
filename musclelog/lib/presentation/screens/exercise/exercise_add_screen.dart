@@ -3,12 +3,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/utils/media_helper.dart';
 import '../../../core/utils/video_compressor.dart';
+import '../../../data/models/exercise_baseline.dart';
 import 'media_source_modal.dart';
 import 'exercise_input_screen.dart';
 
 /// 운동 추가 화면
 class ExerciseAddScreen extends ConsumerStatefulWidget {
-  const ExerciseAddScreen({super.key});
+  final ExerciseBaseline? initialBaseline;
+
+  const ExerciseAddScreen({
+    super.key,
+    this.initialBaseline,
+  });
 
   @override
   ConsumerState<ExerciseAddScreen> createState() => _ExerciseAddScreenState();
@@ -58,6 +64,7 @@ class _ExerciseAddScreenState extends ConsumerState<ExerciseAddScreen> {
                 builder: (_) => ExerciseInputScreen(
                   videoFile: _selectedVideo!,
                   thumbnailFile: _thumbnailFile!,
+                  initialBaseline: widget.initialBaseline,
                 ),
               ),
             );
@@ -87,7 +94,11 @@ class _ExerciseAddScreenState extends ConsumerState<ExerciseAddScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('운동 추가'),
+        title: Text(
+          widget.initialBaseline != null 
+            ? '운동 다시하기' 
+            : '새 운동 추가',
+        ),
       ),
       body: Center(
         child: _isProcessing
@@ -122,16 +133,43 @@ class _ExerciseAddScreenState extends ConsumerState<ExerciseAddScreen> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 32),
-                  ElevatedButton.icon(
-                    onPressed: _showSourceModal,
-                    icon: const Icon(Icons.video_library),
-                    label: const Text('영상 선택'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 32,
-                        vertical: 16,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          // 영상 없이 바로 입력 화면으로 이동
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ExerciseInputScreen(
+                                initialBaseline: widget.initialBaseline,
+                              ),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.edit),
+                        label: const Text('텍스트로 기록'),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 16,
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 16),
+                      OutlinedButton.icon(
+                        onPressed: _showSourceModal,
+                        icon: const Icon(Icons.video_library),
+                        label: const Text('영상 선택'),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 16,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

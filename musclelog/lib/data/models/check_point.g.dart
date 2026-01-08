@@ -9,19 +9,19 @@ part of 'check_point.dart';
 _$CheckPointImpl _$$CheckPointImplFromJson(Map<String, dynamic> json) =>
     _$CheckPointImpl(
       id: json['id'] as String,
-      baselineId: json['baselineId'] as String,
-      checkVideoPath: json['checkVideoPath'] as String,
-      comparisonResult: json['comparisonResult'] as Map<String, dynamic>?,
-      createdAt: json['createdAt'] == null
+      baselineId: json['baseline_id'] as String,
+      checkVideoPath: json['check_video_path'] as String,
+      comparisonResult: json['comparison_result'] as Map<String, dynamic>?,
+      createdAt: json['created_at'] == null
           ? null
-          : DateTime.parse(json['createdAt'] as String),
+          : DateTime.parse(json['created_at'] as String),
     );
 
 Map<String, dynamic> _$$CheckPointImplToJson(_$CheckPointImpl instance) =>
     <String, dynamic>{
       'id': instance.id,
-      'baselineId': instance.baselineId,
-      'checkVideoPath': instance.checkVideoPath,
-      'comparisonResult': instance.comparisonResult,
-      'createdAt': instance.createdAt?.toIso8601String(),
+      'baseline_id': instance.baselineId,
+      'check_video_path': instance.checkVideoPath,
+      'comparison_result': instance.comparisonResult,
+      'created_at': instance.createdAt?.toIso8601String(),
     };

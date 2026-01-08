@@ -20,22 +20,36 @@ ExerciseBaseline _$ExerciseBaselineFromJson(Map<String, dynamic> json) {
 
 /// @nodoc
 mixin _$ExerciseBaseline {
+  @JsonKey(name: 'id')
   String get id => throw _privateConstructorUsedError;
+  @JsonKey(name: 'user_id')
   String get userId => throw _privateConstructorUsedError;
+  @JsonKey(name: 'exercise_name')
   String get exerciseName =>
       throw _privateConstructorUsedError; // 'BENCH_PRESS', 'SQUAT' 등
+  @JsonKey(name: 'target_muscle')
   String? get targetMuscle =>
       throw _privateConstructorUsedError; // 'CHEST', 'LEGS'
+  @JsonKey(name: 'body_part')
   String? get bodyPart =>
       throw _privateConstructorUsedError; // 'UPPER', 'LOWER', 'FULL'
+  @JsonKey(name: 'movement_type')
   String? get movementType =>
       throw _privateConstructorUsedError; // 'PUSH', 'PULL'
+  @JsonKey(name: 'video_url')
   String? get videoUrl => throw _privateConstructorUsedError; // 원본/압축 영상 경로
+  @JsonKey(name: 'thumbnail_url')
   String? get thumbnailUrl => throw _privateConstructorUsedError; // 리스트 표시용 썸네일
+  @JsonKey(name: 'skeleton_data')
   Map<String, dynamic>? get skeletonData =>
       throw _privateConstructorUsedError; // JSONB: 기준 자세의 관절 좌표 데이터 캐싱
+  @JsonKey(name: 'feedback_prompt')
   String? get feedbackPrompt =>
       throw _privateConstructorUsedError; // "어깨 관절 개입 과다" 등 분석 내용
+  @JsonKey(name: 'workout_sets', includeToJson: false)
+  List<WorkoutSet>? get workoutSets =>
+      throw _privateConstructorUsedError; // 조인 쿼리 결과 매핑용 (읽기 전용)
+  @JsonKey(name: 'created_at')
   DateTime? get createdAt => throw _privateConstructorUsedError;
 
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -51,17 +65,19 @@ abstract class $ExerciseBaselineCopyWith<$Res> {
       _$ExerciseBaselineCopyWithImpl<$Res, ExerciseBaseline>;
   @useResult
   $Res call(
-      {String id,
-      String userId,
-      String exerciseName,
-      String? targetMuscle,
-      String? bodyPart,
-      String? movementType,
-      String? videoUrl,
-      String? thumbnailUrl,
-      Map<String, dynamic>? skeletonData,
-      String? feedbackPrompt,
-      DateTime? createdAt});
+      {@JsonKey(name: 'id') String id,
+      @JsonKey(name: 'user_id') String userId,
+      @JsonKey(name: 'exercise_name') String exerciseName,
+      @JsonKey(name: 'target_muscle') String? targetMuscle,
+      @JsonKey(name: 'body_part') String? bodyPart,
+      @JsonKey(name: 'movement_type') String? movementType,
+      @JsonKey(name: 'video_url') String? videoUrl,
+      @JsonKey(name: 'thumbnail_url') String? thumbnailUrl,
+      @JsonKey(name: 'skeleton_data') Map<String, dynamic>? skeletonData,
+      @JsonKey(name: 'feedback_prompt') String? feedbackPrompt,
+      @JsonKey(name: 'workout_sets', includeToJson: false)
+      List<WorkoutSet>? workoutSets,
+      @JsonKey(name: 'created_at') DateTime? createdAt});
 }
 
 /// @nodoc
@@ -87,6 +103,7 @@ class _$ExerciseBaselineCopyWithImpl<$Res, $Val extends ExerciseBaseline>
     Object? thumbnailUrl = freezed,
     Object? skeletonData = freezed,
     Object? feedbackPrompt = freezed,
+    Object? workoutSets = freezed,
     Object? createdAt = freezed,
   }) {
     return _then(_value.copyWith(
@@ -130,6 +147,10 @@ class _$ExerciseBaselineCopyWithImpl<$Res, $Val extends ExerciseBaseline>
           ? _value.feedbackPrompt
           : feedbackPrompt // ignore: cast_nullable_to_non_nullable
               as String?,
+      workoutSets: freezed == workoutSets
+          ? _value.workoutSets
+          : workoutSets // ignore: cast_nullable_to_non_nullable
+              as List<WorkoutSet>?,
       createdAt: freezed == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
@@ -147,17 +168,19 @@ abstract class _$$ExerciseBaselineImplCopyWith<$Res>
   @override
   @useResult
   $Res call(
-      {String id,
-      String userId,
-      String exerciseName,
-      String? targetMuscle,
-      String? bodyPart,
-      String? movementType,
-      String? videoUrl,
-      String? thumbnailUrl,
-      Map<String, dynamic>? skeletonData,
-      String? feedbackPrompt,
-      DateTime? createdAt});
+      {@JsonKey(name: 'id') String id,
+      @JsonKey(name: 'user_id') String userId,
+      @JsonKey(name: 'exercise_name') String exerciseName,
+      @JsonKey(name: 'target_muscle') String? targetMuscle,
+      @JsonKey(name: 'body_part') String? bodyPart,
+      @JsonKey(name: 'movement_type') String? movementType,
+      @JsonKey(name: 'video_url') String? videoUrl,
+      @JsonKey(name: 'thumbnail_url') String? thumbnailUrl,
+      @JsonKey(name: 'skeleton_data') Map<String, dynamic>? skeletonData,
+      @JsonKey(name: 'feedback_prompt') String? feedbackPrompt,
+      @JsonKey(name: 'workout_sets', includeToJson: false)
+      List<WorkoutSet>? workoutSets,
+      @JsonKey(name: 'created_at') DateTime? createdAt});
 }
 
 /// @nodoc
@@ -181,6 +204,7 @@ class __$$ExerciseBaselineImplCopyWithImpl<$Res>
     Object? thumbnailUrl = freezed,
     Object? skeletonData = freezed,
     Object? feedbackPrompt = freezed,
+    Object? workoutSets = freezed,
     Object? createdAt = freezed,
   }) {
     return _then(_$ExerciseBaselineImpl(
@@ -224,6 +248,10 @@ class __$$ExerciseBaselineImplCopyWithImpl<$Res>
           ? _value.feedbackPrompt
           : feedbackPrompt // ignore: cast_nullable_to_non_nullable
               as String?,
+      workoutSets: freezed == workoutSets
+          ? _value._workoutSets
+          : workoutSets // ignore: cast_nullable_to_non_nullable
+              as List<WorkoutSet>?,
       createdAt: freezed == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
@@ -236,47 +264,59 @@ class __$$ExerciseBaselineImplCopyWithImpl<$Res>
 @JsonSerializable()
 class _$ExerciseBaselineImpl implements _ExerciseBaseline {
   const _$ExerciseBaselineImpl(
-      {required this.id,
-      required this.userId,
-      required this.exerciseName,
-      this.targetMuscle,
-      this.bodyPart,
-      this.movementType,
-      this.videoUrl,
-      this.thumbnailUrl,
-      final Map<String, dynamic>? skeletonData,
-      this.feedbackPrompt,
-      this.createdAt})
-      : _skeletonData = skeletonData;
+      {@JsonKey(name: 'id') required this.id,
+      @JsonKey(name: 'user_id') required this.userId,
+      @JsonKey(name: 'exercise_name') required this.exerciseName,
+      @JsonKey(name: 'target_muscle') this.targetMuscle,
+      @JsonKey(name: 'body_part') this.bodyPart,
+      @JsonKey(name: 'movement_type') this.movementType,
+      @JsonKey(name: 'video_url') this.videoUrl,
+      @JsonKey(name: 'thumbnail_url') this.thumbnailUrl,
+      @JsonKey(name: 'skeleton_data') final Map<String, dynamic>? skeletonData,
+      @JsonKey(name: 'feedback_prompt') this.feedbackPrompt,
+      @JsonKey(name: 'workout_sets', includeToJson: false)
+      final List<WorkoutSet>? workoutSets,
+      @JsonKey(name: 'created_at') this.createdAt})
+      : _skeletonData = skeletonData,
+        _workoutSets = workoutSets;
 
   factory _$ExerciseBaselineImpl.fromJson(Map<String, dynamic> json) =>
       _$$ExerciseBaselineImplFromJson(json);
 
   @override
+  @JsonKey(name: 'id')
   final String id;
   @override
+  @JsonKey(name: 'user_id')
   final String userId;
   @override
+  @JsonKey(name: 'exercise_name')
   final String exerciseName;
 // 'BENCH_PRESS', 'SQUAT' 등
   @override
+  @JsonKey(name: 'target_muscle')
   final String? targetMuscle;
 // 'CHEST', 'LEGS'
   @override
+  @JsonKey(name: 'body_part')
   final String? bodyPart;
 // 'UPPER', 'LOWER', 'FULL'
   @override
+  @JsonKey(name: 'movement_type')
   final String? movementType;
 // 'PUSH', 'PULL'
   @override
+  @JsonKey(name: 'video_url')
   final String? videoUrl;
 // 원본/압축 영상 경로
   @override
+  @JsonKey(name: 'thumbnail_url')
   final String? thumbnailUrl;
 // 리스트 표시용 썸네일
   final Map<String, dynamic>? _skeletonData;
 // 리스트 표시용 썸네일
   @override
+  @JsonKey(name: 'skeleton_data')
   Map<String, dynamic>? get skeletonData {
     final value = _skeletonData;
     if (value == null) return null;
@@ -287,14 +327,29 @@ class _$ExerciseBaselineImpl implements _ExerciseBaseline {
 
 // JSONB: 기준 자세의 관절 좌표 데이터 캐싱
   @override
+  @JsonKey(name: 'feedback_prompt')
   final String? feedbackPrompt;
 // "어깨 관절 개입 과다" 등 분석 내용
+  final List<WorkoutSet>? _workoutSets;
+// "어깨 관절 개입 과다" 등 분석 내용
   @override
+  @JsonKey(name: 'workout_sets', includeToJson: false)
+  List<WorkoutSet>? get workoutSets {
+    final value = _workoutSets;
+    if (value == null) return null;
+    if (_workoutSets is EqualUnmodifiableListView) return _workoutSets;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(value);
+  }
+
+// 조인 쿼리 결과 매핑용 (읽기 전용)
+  @override
+  @JsonKey(name: 'created_at')
   final DateTime? createdAt;
 
   @override
   String toString() {
-    return 'ExerciseBaseline(id: $id, userId: $userId, exerciseName: $exerciseName, targetMuscle: $targetMuscle, bodyPart: $bodyPart, movementType: $movementType, videoUrl: $videoUrl, thumbnailUrl: $thumbnailUrl, skeletonData: $skeletonData, feedbackPrompt: $feedbackPrompt, createdAt: $createdAt)';
+    return 'ExerciseBaseline(id: $id, userId: $userId, exerciseName: $exerciseName, targetMuscle: $targetMuscle, bodyPart: $bodyPart, movementType: $movementType, videoUrl: $videoUrl, thumbnailUrl: $thumbnailUrl, skeletonData: $skeletonData, feedbackPrompt: $feedbackPrompt, workoutSets: $workoutSets, createdAt: $createdAt)';
   }
 
   @override
@@ -320,6 +375,8 @@ class _$ExerciseBaselineImpl implements _ExerciseBaseline {
                 .equals(other._skeletonData, _skeletonData) &&
             (identical(other.feedbackPrompt, feedbackPrompt) ||
                 other.feedbackPrompt == feedbackPrompt) &&
+            const DeepCollectionEquality()
+                .equals(other._workoutSets, _workoutSets) &&
             (identical(other.createdAt, createdAt) ||
                 other.createdAt == createdAt));
   }
@@ -338,6 +395,7 @@ class _$ExerciseBaselineImpl implements _ExerciseBaseline {
       thumbnailUrl,
       const DeepCollectionEquality().hash(_skeletonData),
       feedbackPrompt,
+      const DeepCollectionEquality().hash(_workoutSets),
       createdAt);
 
   @JsonKey(ignore: true)
@@ -357,42 +415,59 @@ class _$ExerciseBaselineImpl implements _ExerciseBaseline {
 
 abstract class _ExerciseBaseline implements ExerciseBaseline {
   const factory _ExerciseBaseline(
-      {required final String id,
-      required final String userId,
-      required final String exerciseName,
-      final String? targetMuscle,
-      final String? bodyPart,
-      final String? movementType,
-      final String? videoUrl,
-      final String? thumbnailUrl,
-      final Map<String, dynamic>? skeletonData,
-      final String? feedbackPrompt,
+      {@JsonKey(name: 'id') required final String id,
+      @JsonKey(name: 'user_id') required final String userId,
+      @JsonKey(name: 'exercise_name') required final String exerciseName,
+      @JsonKey(name: 'target_muscle') final String? targetMuscle,
+      @JsonKey(name: 'body_part') final String? bodyPart,
+      @JsonKey(name: 'movement_type') final String? movementType,
+      @JsonKey(name: 'video_url') final String? videoUrl,
+      @JsonKey(name: 'thumbnail_url') final String? thumbnailUrl,
+      @JsonKey(name: 'skeleton_data') final Map<String, dynamic>? skeletonData,
+      @JsonKey(name: 'feedback_prompt') final String? feedbackPrompt,
+      @JsonKey(name: 'workout_sets', includeToJson: false)
+      final List<WorkoutSet>? workoutSets,
+      @JsonKey(name: 'created_at')
       final DateTime? createdAt}) = _$ExerciseBaselineImpl;
 
   factory _ExerciseBaseline.fromJson(Map<String, dynamic> json) =
       _$ExerciseBaselineImpl.fromJson;
 
   @override
+  @JsonKey(name: 'id')
   String get id;
   @override
+  @JsonKey(name: 'user_id')
   String get userId;
   @override
+  @JsonKey(name: 'exercise_name')
   String get exerciseName;
   @override // 'BENCH_PRESS', 'SQUAT' 등
+  @JsonKey(name: 'target_muscle')
   String? get targetMuscle;
   @override // 'CHEST', 'LEGS'
+  @JsonKey(name: 'body_part')
   String? get bodyPart;
   @override // 'UPPER', 'LOWER', 'FULL'
+  @JsonKey(name: 'movement_type')
   String? get movementType;
   @override // 'PUSH', 'PULL'
+  @JsonKey(name: 'video_url')
   String? get videoUrl;
   @override // 원본/압축 영상 경로
+  @JsonKey(name: 'thumbnail_url')
   String? get thumbnailUrl;
   @override // 리스트 표시용 썸네일
+  @JsonKey(name: 'skeleton_data')
   Map<String, dynamic>? get skeletonData;
   @override // JSONB: 기준 자세의 관절 좌표 데이터 캐싱
+  @JsonKey(name: 'feedback_prompt')
   String? get feedbackPrompt;
   @override // "어깨 관절 개입 과다" 등 분석 내용
+  @JsonKey(name: 'workout_sets', includeToJson: false)
+  List<WorkoutSet>? get workoutSets;
+  @override // 조인 쿼리 결과 매핑용 (읽기 전용)
+  @JsonKey(name: 'created_at')
   DateTime? get createdAt;
   @override
   @JsonKey(ignore: true)

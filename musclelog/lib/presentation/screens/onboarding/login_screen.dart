@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/auth_provider.dart';
-import '../workout/home_screen.dart';
+import '../workout/main_screen.dart';
 
 /// 로그인 화면
 class LoginScreen extends ConsumerStatefulWidget {
@@ -17,12 +19,41 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
   bool _isSignUp = false;
+  StreamSubscription<AuthState>? _authStateSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    // OAuth 리다이렉트 후 인증 상태 변경 감지
+    _authStateSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((event) {
+      if (event.event == AuthChangeEvent.signedIn && mounted) {
+        _navigateAfterAuth();
+      }
+    });
+  }
 
   @override
   void dispose() {
+    _authStateSubscription?.cancel();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  void _toggleSignUpMode() {
+    FocusScope.of(context).unfocus();
+    _emailController.clear();
+    _passwordController.clear();
+    setState(() => _isSignUp = !_isSignUp);
+  }
+
+  Future<void> _navigateAfterAuth() async {
+    if (!mounted) return;
+
+    // 프로필 확인 없이 바로 MainScreen으로 이동
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const MainScreen()),
+    );
   }
 
   Future<void> _handleAuth() async {
@@ -47,15 +78,37 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           _passwordController.text,
         );
         if (mounted) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const HomeScreen()),
-          );
+          await _navigateAfterAuth();
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('오류: ${e.toString()}')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _handleGoogleSignIn() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final repository = ref.read(authRepositoryProvider);
+      await repository.signInWithGoogle();
+      // OAuth는 리다이렉트를 사용하므로 여기서는 완료되지 않음
+      // 인증 상태 변경은 initState에서 등록한 리스너를 통해 감지됨
+    } catch (e) {
+      debugPrint('구글 로그인 오류: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('구글 설정 오류입니다. 관리자에게 문의하세요.'),
+          ),
         );
       }
     } finally {
@@ -142,10 +195,31 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
+                const Row(
+                  children: [
+                    Expanded(child: Divider()),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: Text('또는', style: TextStyle(color: Colors.grey)),
+                    ),
+                    Expanded(child: Divider()),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _isLoading ? null : _handleGoogleSignIn,
+                    icon: const Icon(Icons.g_mobiledata, size: 24),
+                    label: const Text('구글로 로그인'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
                 TextButton(
-                  onPressed: _isLoading
-                      ? null
-                      : () => setState(() => _isSignUp = !_isSignUp),
+                  onPressed: _isLoading ? null : _toggleSignUpMode,
                   child: Text(
                     _isSignUp
                         ? '이미 계정이 있으신가요? 로그인'

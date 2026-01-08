@@ -38,3 +38,9 @@ final latestWorkoutSetProvider = FutureProvider.family<WorkoutSet?, String>(
   },
 );
 
+/// 운동 날짜 목록 프로바이더 (달력용)
+final workoutDatesProvider = FutureProvider<List<DateTime>>((ref) async {
+  final repository = ref.watch(workoutRepositoryProvider);
+  return await repository.getWorkoutDates();
+});
+

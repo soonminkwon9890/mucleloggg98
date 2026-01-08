@@ -7,9 +7,13 @@ part 'user_profile.g.dart';
 @freezed
 class UserProfile with _$UserProfile {
   const factory UserProfile({
-    required String id,
-    String? experienceLevel, // 'BEGINNER', 'INTERMEDIATE', 'ADVANCED'
-    DateTime? createdAt,
+    @JsonKey(name: 'id') required String id,
+    @JsonKey(name: 'experience_level') String? experienceLevel, // 'BEGINNER', 'INTERMEDIATE', 'ADVANCED'
+    @JsonKey(name: 'birth_date') DateTime? birthDate, // 생년월일
+    @JsonKey(name: 'gender') String? gender, // 성별 ('MALE', 'FEMALE')
+    @JsonKey(name: 'height') double? height, // 키 (cm 단위)
+    @JsonKey(name: 'weight') double? weight, // 몸무게 (kg 단위)
+    @JsonKey(name: 'created_at') DateTime? createdAt,
   }) = _UserProfile;
 
   factory UserProfile.fromJson(Map<String, dynamic> json) =>

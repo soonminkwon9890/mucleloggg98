@@ -9,29 +9,31 @@ part of 'workout_set.dart';
 _$WorkoutSetImpl _$$WorkoutSetImplFromJson(Map<String, dynamic> json) =>
     _$WorkoutSetImpl(
       id: json['id'] as String,
-      baselineId: json['baselineId'] as String,
+      baselineId: json['baseline_id'] as String,
       weight: (json['weight'] as num).toDouble(),
       reps: (json['reps'] as num).toInt(),
+      sets: (json['sets'] as num?)?.toInt() ?? 1,
       rpe: (json['rpe'] as num?)?.toInt(),
-      rpeLevel: json['rpeLevel'] as String?,
-      estimated1rm: (json['estimated1rm'] as num?)?.toDouble(),
-      isAiSuggested: json['isAiSuggested'] as bool? ?? false,
-      performanceScore: (json['performanceScore'] as num?)?.toDouble(),
-      createdAt: json['createdAt'] == null
+      rpeLevel: json['rpe_level'] as String?,
+      estimated1rm: (json['estimated_1rm'] as num?)?.toDouble(),
+      isAiSuggested: json['is_ai_suggested'] as bool? ?? false,
+      performanceScore: (json['performance_score'] as num?)?.toDouble(),
+      createdAt: json['created_at'] == null
           ? null
-          : DateTime.parse(json['createdAt'] as String),
+          : DateTime.parse(json['created_at'] as String),
     );
 
 Map<String, dynamic> _$$WorkoutSetImplToJson(_$WorkoutSetImpl instance) =>
     <String, dynamic>{
       'id': instance.id,
-      'baselineId': instance.baselineId,
+      'baseline_id': instance.baselineId,
       'weight': instance.weight,
       'reps': instance.reps,
+      'sets': instance.sets,
       'rpe': instance.rpe,
-      'rpeLevel': instance.rpeLevel,
-      'estimated1rm': instance.estimated1rm,
-      'isAiSuggested': instance.isAiSuggested,
-      'performanceScore': instance.performanceScore,
-      'createdAt': instance.createdAt?.toIso8601String(),
+      'rpe_level': instance.rpeLevel,
+      'estimated_1rm': instance.estimated1rm,
+      'is_ai_suggested': instance.isAiSuggested,
+      'performance_score': instance.performanceScore,
+      'created_at': instance.createdAt?.toIso8601String(),
     };

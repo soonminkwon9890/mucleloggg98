@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/utils/date_formatter.dart';
 import '../../../data/models/exercise_baseline.dart';
 import '../../providers/workout_provider.dart';
-import '../../screens/workout/workout_log_screen.dart';
 import '../../screens/checkpoint/checkpoint_camera_screen.dart';
+import '../../screens/exercise/exercise_add_screen.dart';
 
 /// 아코디언 형식의 기록 리스트 위젯
 class AccordionList extends ConsumerStatefulWidget {
@@ -121,7 +121,9 @@ class _AccordionListState extends ConsumerState<AccordionList> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => WorkoutLogScreen(baseline: widget.baseline),
+                      builder: (_) => ExerciseAddScreen(
+                        initialBaseline: widget.baseline,
+                      ),
                     ),
                   );
                 },

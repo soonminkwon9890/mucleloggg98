@@ -20,9 +20,21 @@ UserProfile _$UserProfileFromJson(Map<String, dynamic> json) {
 
 /// @nodoc
 mixin _$UserProfile {
+  @JsonKey(name: 'id')
   String get id => throw _privateConstructorUsedError;
+  @JsonKey(name: 'experience_level')
   String? get experienceLevel =>
       throw _privateConstructorUsedError; // 'BEGINNER', 'INTERMEDIATE', 'ADVANCED'
+  @JsonKey(name: 'birth_date')
+  DateTime? get birthDate => throw _privateConstructorUsedError; // 생년월일
+  @JsonKey(name: 'gender')
+  String? get gender =>
+      throw _privateConstructorUsedError; // 성별 ('MALE', 'FEMALE')
+  @JsonKey(name: 'height')
+  double? get height => throw _privateConstructorUsedError; // 키 (cm 단위)
+  @JsonKey(name: 'weight')
+  double? get weight => throw _privateConstructorUsedError; // 몸무게 (kg 단위)
+  @JsonKey(name: 'created_at')
   DateTime? get createdAt => throw _privateConstructorUsedError;
 
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -37,7 +49,14 @@ abstract class $UserProfileCopyWith<$Res> {
           UserProfile value, $Res Function(UserProfile) then) =
       _$UserProfileCopyWithImpl<$Res, UserProfile>;
   @useResult
-  $Res call({String id, String? experienceLevel, DateTime? createdAt});
+  $Res call(
+      {@JsonKey(name: 'id') String id,
+      @JsonKey(name: 'experience_level') String? experienceLevel,
+      @JsonKey(name: 'birth_date') DateTime? birthDate,
+      @JsonKey(name: 'gender') String? gender,
+      @JsonKey(name: 'height') double? height,
+      @JsonKey(name: 'weight') double? weight,
+      @JsonKey(name: 'created_at') DateTime? createdAt});
 }
 
 /// @nodoc
@@ -55,6 +74,10 @@ class _$UserProfileCopyWithImpl<$Res, $Val extends UserProfile>
   $Res call({
     Object? id = null,
     Object? experienceLevel = freezed,
+    Object? birthDate = freezed,
+    Object? gender = freezed,
+    Object? height = freezed,
+    Object? weight = freezed,
     Object? createdAt = freezed,
   }) {
     return _then(_value.copyWith(
@@ -66,6 +89,22 @@ class _$UserProfileCopyWithImpl<$Res, $Val extends UserProfile>
           ? _value.experienceLevel
           : experienceLevel // ignore: cast_nullable_to_non_nullable
               as String?,
+      birthDate: freezed == birthDate
+          ? _value.birthDate
+          : birthDate // ignore: cast_nullable_to_non_nullable
+              as DateTime?,
+      gender: freezed == gender
+          ? _value.gender
+          : gender // ignore: cast_nullable_to_non_nullable
+              as String?,
+      height: freezed == height
+          ? _value.height
+          : height // ignore: cast_nullable_to_non_nullable
+              as double?,
+      weight: freezed == weight
+          ? _value.weight
+          : weight // ignore: cast_nullable_to_non_nullable
+              as double?,
       createdAt: freezed == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
@@ -82,7 +121,14 @@ abstract class _$$UserProfileImplCopyWith<$Res>
       __$$UserProfileImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({String id, String? experienceLevel, DateTime? createdAt});
+  $Res call(
+      {@JsonKey(name: 'id') String id,
+      @JsonKey(name: 'experience_level') String? experienceLevel,
+      @JsonKey(name: 'birth_date') DateTime? birthDate,
+      @JsonKey(name: 'gender') String? gender,
+      @JsonKey(name: 'height') double? height,
+      @JsonKey(name: 'weight') double? weight,
+      @JsonKey(name: 'created_at') DateTime? createdAt});
 }
 
 /// @nodoc
@@ -98,6 +144,10 @@ class __$$UserProfileImplCopyWithImpl<$Res>
   $Res call({
     Object? id = null,
     Object? experienceLevel = freezed,
+    Object? birthDate = freezed,
+    Object? gender = freezed,
+    Object? height = freezed,
+    Object? weight = freezed,
     Object? createdAt = freezed,
   }) {
     return _then(_$UserProfileImpl(
@@ -109,6 +159,22 @@ class __$$UserProfileImplCopyWithImpl<$Res>
           ? _value.experienceLevel
           : experienceLevel // ignore: cast_nullable_to_non_nullable
               as String?,
+      birthDate: freezed == birthDate
+          ? _value.birthDate
+          : birthDate // ignore: cast_nullable_to_non_nullable
+              as DateTime?,
+      gender: freezed == gender
+          ? _value.gender
+          : gender // ignore: cast_nullable_to_non_nullable
+              as String?,
+      height: freezed == height
+          ? _value.height
+          : height // ignore: cast_nullable_to_non_nullable
+              as double?,
+      weight: freezed == weight
+          ? _value.weight
+          : weight // ignore: cast_nullable_to_non_nullable
+              as double?,
       createdAt: freezed == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
@@ -121,22 +187,47 @@ class __$$UserProfileImplCopyWithImpl<$Res>
 @JsonSerializable()
 class _$UserProfileImpl implements _UserProfile {
   const _$UserProfileImpl(
-      {required this.id, this.experienceLevel, this.createdAt});
+      {@JsonKey(name: 'id') required this.id,
+      @JsonKey(name: 'experience_level') this.experienceLevel,
+      @JsonKey(name: 'birth_date') this.birthDate,
+      @JsonKey(name: 'gender') this.gender,
+      @JsonKey(name: 'height') this.height,
+      @JsonKey(name: 'weight') this.weight,
+      @JsonKey(name: 'created_at') this.createdAt});
 
   factory _$UserProfileImpl.fromJson(Map<String, dynamic> json) =>
       _$$UserProfileImplFromJson(json);
 
   @override
+  @JsonKey(name: 'id')
   final String id;
   @override
+  @JsonKey(name: 'experience_level')
   final String? experienceLevel;
 // 'BEGINNER', 'INTERMEDIATE', 'ADVANCED'
   @override
+  @JsonKey(name: 'birth_date')
+  final DateTime? birthDate;
+// 생년월일
+  @override
+  @JsonKey(name: 'gender')
+  final String? gender;
+// 성별 ('MALE', 'FEMALE')
+  @override
+  @JsonKey(name: 'height')
+  final double? height;
+// 키 (cm 단위)
+  @override
+  @JsonKey(name: 'weight')
+  final double? weight;
+// 몸무게 (kg 단위)
+  @override
+  @JsonKey(name: 'created_at')
   final DateTime? createdAt;
 
   @override
   String toString() {
-    return 'UserProfile(id: $id, experienceLevel: $experienceLevel, createdAt: $createdAt)';
+    return 'UserProfile(id: $id, experienceLevel: $experienceLevel, birthDate: $birthDate, gender: $gender, height: $height, weight: $weight, createdAt: $createdAt)';
   }
 
   @override
@@ -147,13 +238,19 @@ class _$UserProfileImpl implements _UserProfile {
             (identical(other.id, id) || other.id == id) &&
             (identical(other.experienceLevel, experienceLevel) ||
                 other.experienceLevel == experienceLevel) &&
+            (identical(other.birthDate, birthDate) ||
+                other.birthDate == birthDate) &&
+            (identical(other.gender, gender) || other.gender == gender) &&
+            (identical(other.height, height) || other.height == height) &&
+            (identical(other.weight, weight) || other.weight == weight) &&
             (identical(other.createdAt, createdAt) ||
                 other.createdAt == createdAt));
   }
 
   @JsonKey(ignore: true)
   @override
-  int get hashCode => Object.hash(runtimeType, id, experienceLevel, createdAt);
+  int get hashCode => Object.hash(runtimeType, id, experienceLevel, birthDate,
+      gender, height, weight, createdAt);
 
   @JsonKey(ignore: true)
   @override
@@ -171,18 +268,38 @@ class _$UserProfileImpl implements _UserProfile {
 
 abstract class _UserProfile implements UserProfile {
   const factory _UserProfile(
-      {required final String id,
-      final String? experienceLevel,
-      final DateTime? createdAt}) = _$UserProfileImpl;
+          {@JsonKey(name: 'id') required final String id,
+          @JsonKey(name: 'experience_level') final String? experienceLevel,
+          @JsonKey(name: 'birth_date') final DateTime? birthDate,
+          @JsonKey(name: 'gender') final String? gender,
+          @JsonKey(name: 'height') final double? height,
+          @JsonKey(name: 'weight') final double? weight,
+          @JsonKey(name: 'created_at') final DateTime? createdAt}) =
+      _$UserProfileImpl;
 
   factory _UserProfile.fromJson(Map<String, dynamic> json) =
       _$UserProfileImpl.fromJson;
 
   @override
+  @JsonKey(name: 'id')
   String get id;
   @override
+  @JsonKey(name: 'experience_level')
   String? get experienceLevel;
   @override // 'BEGINNER', 'INTERMEDIATE', 'ADVANCED'
+  @JsonKey(name: 'birth_date')
+  DateTime? get birthDate;
+  @override // 생년월일
+  @JsonKey(name: 'gender')
+  String? get gender;
+  @override // 성별 ('MALE', 'FEMALE')
+  @JsonKey(name: 'height')
+  double? get height;
+  @override // 키 (cm 단위)
+  @JsonKey(name: 'weight')
+  double? get weight;
+  @override // 몸무게 (kg 단위)
+  @JsonKey(name: 'created_at')
   DateTime? get createdAt;
   @override
   @JsonKey(ignore: true)

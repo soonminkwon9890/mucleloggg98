@@ -20,12 +20,17 @@ CheckPoint _$CheckPointFromJson(Map<String, dynamic> json) {
 
 /// @nodoc
 mixin _$CheckPoint {
+  @JsonKey(name: 'id')
   String get id => throw _privateConstructorUsedError;
+  @JsonKey(name: 'baseline_id')
   String get baselineId => throw _privateConstructorUsedError;
+  @JsonKey(name: 'check_video_path')
   String get checkVideoPath =>
       throw _privateConstructorUsedError; // 중간 점검 영상 경로
+  @JsonKey(name: 'comparison_result')
   Map<String, dynamic>? get comparisonResult =>
       throw _privateConstructorUsedError; // JSONB: { "rom_change": -10, "muscle_activation_change": +15... }
+  @JsonKey(name: 'created_at')
   DateTime? get createdAt => throw _privateConstructorUsedError;
 
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -41,11 +46,12 @@ abstract class $CheckPointCopyWith<$Res> {
       _$CheckPointCopyWithImpl<$Res, CheckPoint>;
   @useResult
   $Res call(
-      {String id,
-      String baselineId,
-      String checkVideoPath,
+      {@JsonKey(name: 'id') String id,
+      @JsonKey(name: 'baseline_id') String baselineId,
+      @JsonKey(name: 'check_video_path') String checkVideoPath,
+      @JsonKey(name: 'comparison_result')
       Map<String, dynamic>? comparisonResult,
-      DateTime? createdAt});
+      @JsonKey(name: 'created_at') DateTime? createdAt});
 }
 
 /// @nodoc
@@ -101,11 +107,12 @@ abstract class _$$CheckPointImplCopyWith<$Res>
   @override
   @useResult
   $Res call(
-      {String id,
-      String baselineId,
-      String checkVideoPath,
+      {@JsonKey(name: 'id') String id,
+      @JsonKey(name: 'baseline_id') String baselineId,
+      @JsonKey(name: 'check_video_path') String checkVideoPath,
+      @JsonKey(name: 'comparison_result')
       Map<String, dynamic>? comparisonResult,
-      DateTime? createdAt});
+      @JsonKey(name: 'created_at') DateTime? createdAt});
 }
 
 /// @nodoc
@@ -154,26 +161,31 @@ class __$$CheckPointImplCopyWithImpl<$Res>
 @JsonSerializable()
 class _$CheckPointImpl implements _CheckPoint {
   const _$CheckPointImpl(
-      {required this.id,
-      required this.baselineId,
-      required this.checkVideoPath,
+      {@JsonKey(name: 'id') required this.id,
+      @JsonKey(name: 'baseline_id') required this.baselineId,
+      @JsonKey(name: 'check_video_path') required this.checkVideoPath,
+      @JsonKey(name: 'comparison_result')
       final Map<String, dynamic>? comparisonResult,
-      this.createdAt})
+      @JsonKey(name: 'created_at') this.createdAt})
       : _comparisonResult = comparisonResult;
 
   factory _$CheckPointImpl.fromJson(Map<String, dynamic> json) =>
       _$$CheckPointImplFromJson(json);
 
   @override
+  @JsonKey(name: 'id')
   final String id;
   @override
+  @JsonKey(name: 'baseline_id')
   final String baselineId;
   @override
+  @JsonKey(name: 'check_video_path')
   final String checkVideoPath;
 // 중간 점검 영상 경로
   final Map<String, dynamic>? _comparisonResult;
 // 중간 점검 영상 경로
   @override
+  @JsonKey(name: 'comparison_result')
   Map<String, dynamic>? get comparisonResult {
     final value = _comparisonResult;
     if (value == null) return null;
@@ -184,6 +196,7 @@ class _$CheckPointImpl implements _CheckPoint {
 
 // JSONB: { "rom_change": -10, "muscle_activation_change": +15... }
   @override
+  @JsonKey(name: 'created_at')
   final DateTime? createdAt;
 
   @override
@@ -228,24 +241,31 @@ class _$CheckPointImpl implements _CheckPoint {
 
 abstract class _CheckPoint implements CheckPoint {
   const factory _CheckPoint(
-      {required final String id,
-      required final String baselineId,
-      required final String checkVideoPath,
+      {@JsonKey(name: 'id') required final String id,
+      @JsonKey(name: 'baseline_id') required final String baselineId,
+      @JsonKey(name: 'check_video_path') required final String checkVideoPath,
+      @JsonKey(name: 'comparison_result')
       final Map<String, dynamic>? comparisonResult,
+      @JsonKey(name: 'created_at')
       final DateTime? createdAt}) = _$CheckPointImpl;
 
   factory _CheckPoint.fromJson(Map<String, dynamic> json) =
       _$CheckPointImpl.fromJson;
 
   @override
+  @JsonKey(name: 'id')
   String get id;
   @override
+  @JsonKey(name: 'baseline_id')
   String get baselineId;
   @override
+  @JsonKey(name: 'check_video_path')
   String get checkVideoPath;
   @override // 중간 점검 영상 경로
+  @JsonKey(name: 'comparison_result')
   Map<String, dynamic>? get comparisonResult;
   @override // JSONB: { "rom_change": -10, "muscle_activation_change": +15... }
+  @JsonKey(name: 'created_at')
   DateTime? get createdAt;
   @override
   @JsonKey(ignore: true)

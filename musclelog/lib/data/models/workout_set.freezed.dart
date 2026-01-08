@@ -20,17 +20,29 @@ WorkoutSet _$WorkoutSetFromJson(Map<String, dynamic> json) {
 
 /// @nodoc
 mixin _$WorkoutSet {
+  @JsonKey(name: 'id')
   String get id => throw _privateConstructorUsedError;
+  @JsonKey(name: 'baseline_id')
   String get baselineId => throw _privateConstructorUsedError; // 어떤 운동의 로그인지 연결
+  @JsonKey(name: 'weight')
   double get weight => throw _privateConstructorUsedError; // 무게 (kg)
+  @JsonKey(name: 'reps')
   int get reps => throw _privateConstructorUsedError; // 횟수
+  @JsonKey(name: 'sets')
+  int get sets => throw _privateConstructorUsedError; // 세트 수
+  @JsonKey(name: 'rpe')
   int? get rpe => throw _privateConstructorUsedError; // 1~10
+  @JsonKey(name: 'rpe_level')
   String? get rpeLevel =>
       throw _privateConstructorUsedError; // 'LOW', 'MEDIUM', 'HIGH' (하위 호환)
+  @JsonKey(name: 'estimated_1rm')
   double? get estimated1rm => throw _privateConstructorUsedError; // 계산된 1RM
+  @JsonKey(name: 'is_ai_suggested')
   bool get isAiSuggested => throw _privateConstructorUsedError; // AI 추천 값 수용 여부
+  @JsonKey(name: 'performance_score')
   double? get performanceScore =>
       throw _privateConstructorUsedError; // 추가 성능 점수
+  @JsonKey(name: 'created_at')
   DateTime? get createdAt => throw _privateConstructorUsedError;
 
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -46,16 +58,17 @@ abstract class $WorkoutSetCopyWith<$Res> {
       _$WorkoutSetCopyWithImpl<$Res, WorkoutSet>;
   @useResult
   $Res call(
-      {String id,
-      String baselineId,
-      double weight,
-      int reps,
-      int? rpe,
-      String? rpeLevel,
-      double? estimated1rm,
-      bool isAiSuggested,
-      double? performanceScore,
-      DateTime? createdAt});
+      {@JsonKey(name: 'id') String id,
+      @JsonKey(name: 'baseline_id') String baselineId,
+      @JsonKey(name: 'weight') double weight,
+      @JsonKey(name: 'reps') int reps,
+      @JsonKey(name: 'sets') int sets,
+      @JsonKey(name: 'rpe') int? rpe,
+      @JsonKey(name: 'rpe_level') String? rpeLevel,
+      @JsonKey(name: 'estimated_1rm') double? estimated1rm,
+      @JsonKey(name: 'is_ai_suggested') bool isAiSuggested,
+      @JsonKey(name: 'performance_score') double? performanceScore,
+      @JsonKey(name: 'created_at') DateTime? createdAt});
 }
 
 /// @nodoc
@@ -75,6 +88,7 @@ class _$WorkoutSetCopyWithImpl<$Res, $Val extends WorkoutSet>
     Object? baselineId = null,
     Object? weight = null,
     Object? reps = null,
+    Object? sets = null,
     Object? rpe = freezed,
     Object? rpeLevel = freezed,
     Object? estimated1rm = freezed,
@@ -98,6 +112,10 @@ class _$WorkoutSetCopyWithImpl<$Res, $Val extends WorkoutSet>
       reps: null == reps
           ? _value.reps
           : reps // ignore: cast_nullable_to_non_nullable
+              as int,
+      sets: null == sets
+          ? _value.sets
+          : sets // ignore: cast_nullable_to_non_nullable
               as int,
       rpe: freezed == rpe
           ? _value.rpe
@@ -136,16 +154,17 @@ abstract class _$$WorkoutSetImplCopyWith<$Res>
   @override
   @useResult
   $Res call(
-      {String id,
-      String baselineId,
-      double weight,
-      int reps,
-      int? rpe,
-      String? rpeLevel,
-      double? estimated1rm,
-      bool isAiSuggested,
-      double? performanceScore,
-      DateTime? createdAt});
+      {@JsonKey(name: 'id') String id,
+      @JsonKey(name: 'baseline_id') String baselineId,
+      @JsonKey(name: 'weight') double weight,
+      @JsonKey(name: 'reps') int reps,
+      @JsonKey(name: 'sets') int sets,
+      @JsonKey(name: 'rpe') int? rpe,
+      @JsonKey(name: 'rpe_level') String? rpeLevel,
+      @JsonKey(name: 'estimated_1rm') double? estimated1rm,
+      @JsonKey(name: 'is_ai_suggested') bool isAiSuggested,
+      @JsonKey(name: 'performance_score') double? performanceScore,
+      @JsonKey(name: 'created_at') DateTime? createdAt});
 }
 
 /// @nodoc
@@ -163,6 +182,7 @@ class __$$WorkoutSetImplCopyWithImpl<$Res>
     Object? baselineId = null,
     Object? weight = null,
     Object? reps = null,
+    Object? sets = null,
     Object? rpe = freezed,
     Object? rpeLevel = freezed,
     Object? estimated1rm = freezed,
@@ -186,6 +206,10 @@ class __$$WorkoutSetImplCopyWithImpl<$Res>
       reps: null == reps
           ? _value.reps
           : reps // ignore: cast_nullable_to_non_nullable
+              as int,
+      sets: null == sets
+          ? _value.sets
+          : sets // ignore: cast_nullable_to_non_nullable
               as int,
       rpe: freezed == rpe
           ? _value.rpe
@@ -219,53 +243,67 @@ class __$$WorkoutSetImplCopyWithImpl<$Res>
 @JsonSerializable()
 class _$WorkoutSetImpl implements _WorkoutSet {
   const _$WorkoutSetImpl(
-      {required this.id,
-      required this.baselineId,
-      required this.weight,
-      required this.reps,
-      this.rpe,
-      this.rpeLevel,
-      this.estimated1rm,
-      this.isAiSuggested = false,
-      this.performanceScore,
-      this.createdAt});
+      {@JsonKey(name: 'id') required this.id,
+      @JsonKey(name: 'baseline_id') required this.baselineId,
+      @JsonKey(name: 'weight') required this.weight,
+      @JsonKey(name: 'reps') required this.reps,
+      @JsonKey(name: 'sets') this.sets = 1,
+      @JsonKey(name: 'rpe') this.rpe,
+      @JsonKey(name: 'rpe_level') this.rpeLevel,
+      @JsonKey(name: 'estimated_1rm') this.estimated1rm,
+      @JsonKey(name: 'is_ai_suggested') this.isAiSuggested = false,
+      @JsonKey(name: 'performance_score') this.performanceScore,
+      @JsonKey(name: 'created_at') this.createdAt});
 
   factory _$WorkoutSetImpl.fromJson(Map<String, dynamic> json) =>
       _$$WorkoutSetImplFromJson(json);
 
   @override
+  @JsonKey(name: 'id')
   final String id;
   @override
+  @JsonKey(name: 'baseline_id')
   final String baselineId;
 // 어떤 운동의 로그인지 연결
   @override
+  @JsonKey(name: 'weight')
   final double weight;
 // 무게 (kg)
   @override
+  @JsonKey(name: 'reps')
   final int reps;
 // 횟수
   @override
+  @JsonKey(name: 'sets')
+  final int sets;
+// 세트 수
+  @override
+  @JsonKey(name: 'rpe')
   final int? rpe;
 // 1~10
   @override
+  @JsonKey(name: 'rpe_level')
   final String? rpeLevel;
 // 'LOW', 'MEDIUM', 'HIGH' (하위 호환)
   @override
+  @JsonKey(name: 'estimated_1rm')
   final double? estimated1rm;
 // 계산된 1RM
   @override
-  @JsonKey()
+  @JsonKey(name: 'is_ai_suggested')
   final bool isAiSuggested;
 // AI 추천 값 수용 여부
   @override
+  @JsonKey(name: 'performance_score')
   final double? performanceScore;
 // 추가 성능 점수
   @override
+  @JsonKey(name: 'created_at')
   final DateTime? createdAt;
 
   @override
   String toString() {
-    return 'WorkoutSet(id: $id, baselineId: $baselineId, weight: $weight, reps: $reps, rpe: $rpe, rpeLevel: $rpeLevel, estimated1rm: $estimated1rm, isAiSuggested: $isAiSuggested, performanceScore: $performanceScore, createdAt: $createdAt)';
+    return 'WorkoutSet(id: $id, baselineId: $baselineId, weight: $weight, reps: $reps, sets: $sets, rpe: $rpe, rpeLevel: $rpeLevel, estimated1rm: $estimated1rm, isAiSuggested: $isAiSuggested, performanceScore: $performanceScore, createdAt: $createdAt)';
   }
 
   @override
@@ -278,6 +316,7 @@ class _$WorkoutSetImpl implements _WorkoutSet {
                 other.baselineId == baselineId) &&
             (identical(other.weight, weight) || other.weight == weight) &&
             (identical(other.reps, reps) || other.reps == reps) &&
+            (identical(other.sets, sets) || other.sets == sets) &&
             (identical(other.rpe, rpe) || other.rpe == rpe) &&
             (identical(other.rpeLevel, rpeLevel) ||
                 other.rpeLevel == rpeLevel) &&
@@ -293,8 +332,19 @@ class _$WorkoutSetImpl implements _WorkoutSet {
 
   @JsonKey(ignore: true)
   @override
-  int get hashCode => Object.hash(runtimeType, id, baselineId, weight, reps,
-      rpe, rpeLevel, estimated1rm, isAiSuggested, performanceScore, createdAt);
+  int get hashCode => Object.hash(
+      runtimeType,
+      id,
+      baselineId,
+      weight,
+      reps,
+      sets,
+      rpe,
+      rpeLevel,
+      estimated1rm,
+      isAiSuggested,
+      performanceScore,
+      createdAt);
 
   @JsonKey(ignore: true)
   @override
@@ -312,39 +362,54 @@ class _$WorkoutSetImpl implements _WorkoutSet {
 
 abstract class _WorkoutSet implements WorkoutSet {
   const factory _WorkoutSet(
-      {required final String id,
-      required final String baselineId,
-      required final double weight,
-      required final int reps,
-      final int? rpe,
-      final String? rpeLevel,
-      final double? estimated1rm,
-      final bool isAiSuggested,
-      final double? performanceScore,
-      final DateTime? createdAt}) = _$WorkoutSetImpl;
+          {@JsonKey(name: 'id') required final String id,
+          @JsonKey(name: 'baseline_id') required final String baselineId,
+          @JsonKey(name: 'weight') required final double weight,
+          @JsonKey(name: 'reps') required final int reps,
+          @JsonKey(name: 'sets') final int sets,
+          @JsonKey(name: 'rpe') final int? rpe,
+          @JsonKey(name: 'rpe_level') final String? rpeLevel,
+          @JsonKey(name: 'estimated_1rm') final double? estimated1rm,
+          @JsonKey(name: 'is_ai_suggested') final bool isAiSuggested,
+          @JsonKey(name: 'performance_score') final double? performanceScore,
+          @JsonKey(name: 'created_at') final DateTime? createdAt}) =
+      _$WorkoutSetImpl;
 
   factory _WorkoutSet.fromJson(Map<String, dynamic> json) =
       _$WorkoutSetImpl.fromJson;
 
   @override
+  @JsonKey(name: 'id')
   String get id;
   @override
+  @JsonKey(name: 'baseline_id')
   String get baselineId;
   @override // 어떤 운동의 로그인지 연결
+  @JsonKey(name: 'weight')
   double get weight;
   @override // 무게 (kg)
+  @JsonKey(name: 'reps')
   int get reps;
   @override // 횟수
+  @JsonKey(name: 'sets')
+  int get sets;
+  @override // 세트 수
+  @JsonKey(name: 'rpe')
   int? get rpe;
   @override // 1~10
+  @JsonKey(name: 'rpe_level')
   String? get rpeLevel;
   @override // 'LOW', 'MEDIUM', 'HIGH' (하위 호환)
+  @JsonKey(name: 'estimated_1rm')
   double? get estimated1rm;
   @override // 계산된 1RM
+  @JsonKey(name: 'is_ai_suggested')
   bool get isAiSuggested;
   @override // AI 추천 값 수용 여부
+  @JsonKey(name: 'performance_score')
   double? get performanceScore;
   @override // 추가 성능 점수
+  @JsonKey(name: 'created_at')
   DateTime? get createdAt;
   @override
   @JsonKey(ignore: true)

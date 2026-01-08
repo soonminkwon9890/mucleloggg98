@@ -10,32 +10,35 @@ _$ExerciseBaselineImpl _$$ExerciseBaselineImplFromJson(
         Map<String, dynamic> json) =>
     _$ExerciseBaselineImpl(
       id: json['id'] as String,
-      userId: json['userId'] as String,
-      exerciseName: json['exerciseName'] as String,
-      targetMuscle: json['targetMuscle'] as String?,
-      bodyPart: json['bodyPart'] as String?,
-      movementType: json['movementType'] as String?,
-      videoUrl: json['videoUrl'] as String?,
-      thumbnailUrl: json['thumbnailUrl'] as String?,
-      skeletonData: json['skeletonData'] as Map<String, dynamic>?,
-      feedbackPrompt: json['feedbackPrompt'] as String?,
-      createdAt: json['createdAt'] == null
+      userId: json['user_id'] as String,
+      exerciseName: json['exercise_name'] as String,
+      targetMuscle: json['target_muscle'] as String?,
+      bodyPart: json['body_part'] as String?,
+      movementType: json['movement_type'] as String?,
+      videoUrl: json['video_url'] as String?,
+      thumbnailUrl: json['thumbnail_url'] as String?,
+      skeletonData: json['skeleton_data'] as Map<String, dynamic>?,
+      feedbackPrompt: json['feedback_prompt'] as String?,
+      workoutSets: (json['workout_sets'] as List<dynamic>?)
+          ?.map((e) => WorkoutSet.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      createdAt: json['created_at'] == null
           ? null
-          : DateTime.parse(json['createdAt'] as String),
+          : DateTime.parse(json['created_at'] as String),
     );
 
 Map<String, dynamic> _$$ExerciseBaselineImplToJson(
         _$ExerciseBaselineImpl instance) =>
     <String, dynamic>{
       'id': instance.id,
-      'userId': instance.userId,
-      'exerciseName': instance.exerciseName,
-      'targetMuscle': instance.targetMuscle,
-      'bodyPart': instance.bodyPart,
-      'movementType': instance.movementType,
-      'videoUrl': instance.videoUrl,
-      'thumbnailUrl': instance.thumbnailUrl,
-      'skeletonData': instance.skeletonData,
-      'feedbackPrompt': instance.feedbackPrompt,
-      'createdAt': instance.createdAt?.toIso8601String(),
+      'user_id': instance.userId,
+      'exercise_name': instance.exerciseName,
+      'target_muscle': instance.targetMuscle,
+      'body_part': instance.bodyPart,
+      'movement_type': instance.movementType,
+      'video_url': instance.videoUrl,
+      'thumbnail_url': instance.thumbnailUrl,
+      'skeleton_data': instance.skeletonData,
+      'feedback_prompt': instance.feedbackPrompt,
+      'created_at': instance.createdAt?.toIso8601String(),
     };
