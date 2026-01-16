@@ -1,4 +1,5 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
+import '../../core/utils/json_converters.dart';
 
 part 'user_profile.freezed.dart';
 part 'user_profile.g.dart';
@@ -11,8 +12,16 @@ class UserProfile with _$UserProfile {
     @JsonKey(name: 'experience_level') String? experienceLevel, // 'BEGINNER', 'INTERMEDIATE', 'ADVANCED'
     @JsonKey(name: 'birth_date') DateTime? birthDate, // 생년월일
     @JsonKey(name: 'gender') String? gender, // 성별 ('MALE', 'FEMALE')
-    @JsonKey(name: 'height') double? height, // 키 (cm 단위)
-    @JsonKey(name: 'weight') double? weight, // 몸무게 (kg 단위)
+    @JsonKey(
+      name: 'height',
+      fromJson: JsonConverters.toDoubleNullable,
+    )
+    double? height, // 키 (cm 단위)
+    @JsonKey(
+      name: 'weight',
+      fromJson: JsonConverters.toDoubleNullable,
+    )
+    double? weight, // 몸무게 (kg 단위)
     @JsonKey(name: 'created_at') DateTime? createdAt,
   }) = _UserProfile;
 

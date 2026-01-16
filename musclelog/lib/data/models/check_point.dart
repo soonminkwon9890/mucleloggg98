@@ -9,12 +9,12 @@ class CheckPoint with _$CheckPoint {
   const factory CheckPoint({
     @JsonKey(name: 'id') required String id,
     @JsonKey(name: 'baseline_id') required String baselineId,
-    @JsonKey(name: 'check_video_path') required String checkVideoPath, // 중간 점검 영상 경로
-    @JsonKey(name: 'comparison_result') Map<String, dynamic>? comparisonResult, // JSONB: { "rom_change": -10, "muscle_activation_change": +15... }
+    @JsonKey(name: 'video_url') required String videoUrl, // 중간 검사 영상 URL
+    @JsonKey(name: 'analysis_result')
+    String? analysisResult, // AI 분석 결과 (JSON 형태 or 텍스트)
     @JsonKey(name: 'created_at') DateTime? createdAt,
   }) = _CheckPoint;
 
   factory CheckPoint.fromJson(Map<String, dynamic> json) =>
       _$CheckPointFromJson(json);
 }
-

@@ -43,5 +43,25 @@ class DateFormatter {
   static String getDateGroupKey(DateTime date) {
     return DateFormat('yyyy-MM-dd').format(date);
   }
-}
 
+  /// 두 날짜가 같은 날인지 문자열 비교로 확인 (시차 문제 완전 해결)
+  /// [디버깅] 터미널에 비교 과정을 출력하여 문제 원인 파악
+  /// [중요] DB에서 가져온 UTC 날짜를 로컬 시간으로 변환 후 비교
+  static bool isSameDate(DateTime? dateA, DateTime? dateB) {
+    // null 체크
+    if (dateA == null || dateB == null) {
+      return false;
+    }
+
+    // [중요] DB 날짜(UTC)를 로컬 시간으로 변환
+    final localDateA = dateA.toLocal();
+    final localDateB = dateB.toLocal();
+
+    // yyyy-MM-dd 형식의 문자열로 변환
+    final dateStrA = DateFormat('yyyy-MM-dd').format(localDateA);
+    final dateStrB = DateFormat('yyyy-MM-dd').format(localDateB);
+
+    // 문자열 비교로 같은 날인지 확인
+    return dateStrA == dateStrB;
+  }
+}

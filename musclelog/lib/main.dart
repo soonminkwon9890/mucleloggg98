@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'core/theme/app_theme.dart';
 import 'data/services/supabase_service.dart';
 import 'presentation/screens/onboarding/login_screen.dart';
-import 'presentation/screens/exercise/exercise_add_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,9 +14,6 @@ void main() async {
 
   // .env 파일 로드
   await dotenv.load(fileName: ".env");
-
-  // Hive 초기화 (로컬 저장소)
-  await Hive.initFlutter();
 
   // Supabase 초기화
   await SupabaseService.initialize();
@@ -38,9 +33,6 @@ class MyApp extends StatelessWidget {
         darkTheme: AppTheme.darkTheme,
         themeMode: ThemeMode.system,
         home: const LoginScreen(),
-        routes: {
-          '/exercise/add': (context) => const ExerciseAddScreen(),
-        },
       ),
     );
   }

@@ -9,19 +9,8 @@ class AppConstants {
   static const String experienceIntermediate = 'INTERMEDIATE';
   static const String experienceAdvanced = 'ADVANCED';
 
-  // 신체 부위
-  static const String bodyPartUpper = 'UPPER';
-  static const String bodyPartLower = 'LOWER';
-  static const String bodyPartFull = 'FULL';
-
-  // 운동 타입
-  static const String movementTypePush = 'PUSH';
-  static const String movementTypePull = 'PULL';
-
-  // RPE 레벨
-  static const String rpeLevelLow = 'LOW';
-  static const String rpeLevelMedium = 'MEDIUM';
-  static const String rpeLevelHigh = 'HIGH';
+  // [Phase 1.2] BodyPart, MovementType, RpeLevel 관련 상수는 Enum으로 대체됨
+  // enum BodyPart, MovementType, RpeLevel 사용 (lib/core/enums/exercise_enums.dart)
 
   // RPE 범위
   static const int rpeMin = 1;

@@ -1,3 +1,5 @@
+// Legacy: 추후 고도화 시 참고용
+/*
 import 'dart:math' as math;
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 
@@ -215,3 +217,4 @@ class BiomechanicsAnalyzer {
     };
   }
 }
+*/

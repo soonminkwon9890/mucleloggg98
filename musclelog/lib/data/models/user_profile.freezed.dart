@@ -30,9 +30,9 @@ mixin _$UserProfile {
   @JsonKey(name: 'gender')
   String? get gender =>
       throw _privateConstructorUsedError; // 성별 ('MALE', 'FEMALE')
-  @JsonKey(name: 'height')
+  @JsonKey(name: 'height', fromJson: JsonConverters.toDoubleNullable)
   double? get height => throw _privateConstructorUsedError; // 키 (cm 단위)
-  @JsonKey(name: 'weight')
+  @JsonKey(name: 'weight', fromJson: JsonConverters.toDoubleNullable)
   double? get weight => throw _privateConstructorUsedError; // 몸무게 (kg 단위)
   @JsonKey(name: 'created_at')
   DateTime? get createdAt => throw _privateConstructorUsedError;
@@ -54,8 +54,10 @@ abstract class $UserProfileCopyWith<$Res> {
       @JsonKey(name: 'experience_level') String? experienceLevel,
       @JsonKey(name: 'birth_date') DateTime? birthDate,
       @JsonKey(name: 'gender') String? gender,
-      @JsonKey(name: 'height') double? height,
-      @JsonKey(name: 'weight') double? weight,
+      @JsonKey(name: 'height', fromJson: JsonConverters.toDoubleNullable)
+      double? height,
+      @JsonKey(name: 'weight', fromJson: JsonConverters.toDoubleNullable)
+      double? weight,
       @JsonKey(name: 'created_at') DateTime? createdAt});
 }
 
@@ -126,8 +128,10 @@ abstract class _$$UserProfileImplCopyWith<$Res>
       @JsonKey(name: 'experience_level') String? experienceLevel,
       @JsonKey(name: 'birth_date') DateTime? birthDate,
       @JsonKey(name: 'gender') String? gender,
-      @JsonKey(name: 'height') double? height,
-      @JsonKey(name: 'weight') double? weight,
+      @JsonKey(name: 'height', fromJson: JsonConverters.toDoubleNullable)
+      double? height,
+      @JsonKey(name: 'weight', fromJson: JsonConverters.toDoubleNullable)
+      double? weight,
       @JsonKey(name: 'created_at') DateTime? createdAt});
 }
 
@@ -191,8 +195,10 @@ class _$UserProfileImpl implements _UserProfile {
       @JsonKey(name: 'experience_level') this.experienceLevel,
       @JsonKey(name: 'birth_date') this.birthDate,
       @JsonKey(name: 'gender') this.gender,
-      @JsonKey(name: 'height') this.height,
-      @JsonKey(name: 'weight') this.weight,
+      @JsonKey(name: 'height', fromJson: JsonConverters.toDoubleNullable)
+      this.height,
+      @JsonKey(name: 'weight', fromJson: JsonConverters.toDoubleNullable)
+      this.weight,
       @JsonKey(name: 'created_at') this.createdAt});
 
   factory _$UserProfileImpl.fromJson(Map<String, dynamic> json) =>
@@ -214,11 +220,11 @@ class _$UserProfileImpl implements _UserProfile {
   final String? gender;
 // 성별 ('MALE', 'FEMALE')
   @override
-  @JsonKey(name: 'height')
+  @JsonKey(name: 'height', fromJson: JsonConverters.toDoubleNullable)
   final double? height;
 // 키 (cm 단위)
   @override
-  @JsonKey(name: 'weight')
+  @JsonKey(name: 'weight', fromJson: JsonConverters.toDoubleNullable)
   final double? weight;
 // 몸무게 (kg 단위)
   @override
@@ -272,8 +278,10 @@ abstract class _UserProfile implements UserProfile {
           @JsonKey(name: 'experience_level') final String? experienceLevel,
           @JsonKey(name: 'birth_date') final DateTime? birthDate,
           @JsonKey(name: 'gender') final String? gender,
-          @JsonKey(name: 'height') final double? height,
-          @JsonKey(name: 'weight') final double? weight,
+          @JsonKey(name: 'height', fromJson: JsonConverters.toDoubleNullable)
+          final double? height,
+          @JsonKey(name: 'weight', fromJson: JsonConverters.toDoubleNullable)
+          final double? weight,
           @JsonKey(name: 'created_at') final DateTime? createdAt}) =
       _$UserProfileImpl;
 
@@ -293,10 +301,10 @@ abstract class _UserProfile implements UserProfile {
   @JsonKey(name: 'gender')
   String? get gender;
   @override // 성별 ('MALE', 'FEMALE')
-  @JsonKey(name: 'height')
+  @JsonKey(name: 'height', fromJson: JsonConverters.toDoubleNullable)
   double? get height;
   @override // 키 (cm 단위)
-  @JsonKey(name: 'weight')
+  @JsonKey(name: 'weight', fromJson: JsonConverters.toDoubleNullable)
   double? get weight;
   @override // 몸무게 (kg 단위)
   @JsonKey(name: 'created_at')

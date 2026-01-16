@@ -14,8 +14,8 @@ _$UserProfileImpl _$$UserProfileImplFromJson(Map<String, dynamic> json) =>
           ? null
           : DateTime.parse(json['birth_date'] as String),
       gender: json['gender'] as String?,
-      height: (json['height'] as num?)?.toDouble(),
-      weight: (json['weight'] as num?)?.toDouble(),
+      height: JsonConverters.toDoubleNullable(json['height']),
+      weight: JsonConverters.toDoubleNullable(json['weight']),
       createdAt: json['created_at'] == null
           ? null
           : DateTime.parse(json['created_at'] as String),

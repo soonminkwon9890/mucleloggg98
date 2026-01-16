@@ -35,6 +35,10 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            
+            // 🔥 Release 모드 최적화 비활성화 (타입 안전성 보장) 🔥
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 }

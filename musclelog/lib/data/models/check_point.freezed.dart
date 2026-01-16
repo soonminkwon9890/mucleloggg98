@@ -24,12 +24,11 @@ mixin _$CheckPoint {
   String get id => throw _privateConstructorUsedError;
   @JsonKey(name: 'baseline_id')
   String get baselineId => throw _privateConstructorUsedError;
-  @JsonKey(name: 'check_video_path')
-  String get checkVideoPath =>
-      throw _privateConstructorUsedError; // 중간 점검 영상 경로
-  @JsonKey(name: 'comparison_result')
-  Map<String, dynamic>? get comparisonResult =>
-      throw _privateConstructorUsedError; // JSONB: { "rom_change": -10, "muscle_activation_change": +15... }
+  @JsonKey(name: 'video_url')
+  String get videoUrl => throw _privateConstructorUsedError; // 중간 검사 영상 URL
+  @JsonKey(name: 'analysis_result')
+  String? get analysisResult =>
+      throw _privateConstructorUsedError; // AI 분석 결과 (JSON 형태 or 텍스트)
   @JsonKey(name: 'created_at')
   DateTime? get createdAt => throw _privateConstructorUsedError;
 
@@ -48,9 +47,8 @@ abstract class $CheckPointCopyWith<$Res> {
   $Res call(
       {@JsonKey(name: 'id') String id,
       @JsonKey(name: 'baseline_id') String baselineId,
-      @JsonKey(name: 'check_video_path') String checkVideoPath,
-      @JsonKey(name: 'comparison_result')
-      Map<String, dynamic>? comparisonResult,
+      @JsonKey(name: 'video_url') String videoUrl,
+      @JsonKey(name: 'analysis_result') String? analysisResult,
       @JsonKey(name: 'created_at') DateTime? createdAt});
 }
 
@@ -69,8 +67,8 @@ class _$CheckPointCopyWithImpl<$Res, $Val extends CheckPoint>
   $Res call({
     Object? id = null,
     Object? baselineId = null,
-    Object? checkVideoPath = null,
-    Object? comparisonResult = freezed,
+    Object? videoUrl = null,
+    Object? analysisResult = freezed,
     Object? createdAt = freezed,
   }) {
     return _then(_value.copyWith(
@@ -82,14 +80,14 @@ class _$CheckPointCopyWithImpl<$Res, $Val extends CheckPoint>
           ? _value.baselineId
           : baselineId // ignore: cast_nullable_to_non_nullable
               as String,
-      checkVideoPath: null == checkVideoPath
-          ? _value.checkVideoPath
-          : checkVideoPath // ignore: cast_nullable_to_non_nullable
+      videoUrl: null == videoUrl
+          ? _value.videoUrl
+          : videoUrl // ignore: cast_nullable_to_non_nullable
               as String,
-      comparisonResult: freezed == comparisonResult
-          ? _value.comparisonResult
-          : comparisonResult // ignore: cast_nullable_to_non_nullable
-              as Map<String, dynamic>?,
+      analysisResult: freezed == analysisResult
+          ? _value.analysisResult
+          : analysisResult // ignore: cast_nullable_to_non_nullable
+              as String?,
       createdAt: freezed == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
@@ -109,9 +107,8 @@ abstract class _$$CheckPointImplCopyWith<$Res>
   $Res call(
       {@JsonKey(name: 'id') String id,
       @JsonKey(name: 'baseline_id') String baselineId,
-      @JsonKey(name: 'check_video_path') String checkVideoPath,
-      @JsonKey(name: 'comparison_result')
-      Map<String, dynamic>? comparisonResult,
+      @JsonKey(name: 'video_url') String videoUrl,
+      @JsonKey(name: 'analysis_result') String? analysisResult,
       @JsonKey(name: 'created_at') DateTime? createdAt});
 }
 
@@ -128,8 +125,8 @@ class __$$CheckPointImplCopyWithImpl<$Res>
   $Res call({
     Object? id = null,
     Object? baselineId = null,
-    Object? checkVideoPath = null,
-    Object? comparisonResult = freezed,
+    Object? videoUrl = null,
+    Object? analysisResult = freezed,
     Object? createdAt = freezed,
   }) {
     return _then(_$CheckPointImpl(
@@ -141,14 +138,14 @@ class __$$CheckPointImplCopyWithImpl<$Res>
           ? _value.baselineId
           : baselineId // ignore: cast_nullable_to_non_nullable
               as String,
-      checkVideoPath: null == checkVideoPath
-          ? _value.checkVideoPath
-          : checkVideoPath // ignore: cast_nullable_to_non_nullable
+      videoUrl: null == videoUrl
+          ? _value.videoUrl
+          : videoUrl // ignore: cast_nullable_to_non_nullable
               as String,
-      comparisonResult: freezed == comparisonResult
-          ? _value._comparisonResult
-          : comparisonResult // ignore: cast_nullable_to_non_nullable
-              as Map<String, dynamic>?,
+      analysisResult: freezed == analysisResult
+          ? _value.analysisResult
+          : analysisResult // ignore: cast_nullable_to_non_nullable
+              as String?,
       createdAt: freezed == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
@@ -163,11 +160,9 @@ class _$CheckPointImpl implements _CheckPoint {
   const _$CheckPointImpl(
       {@JsonKey(name: 'id') required this.id,
       @JsonKey(name: 'baseline_id') required this.baselineId,
-      @JsonKey(name: 'check_video_path') required this.checkVideoPath,
-      @JsonKey(name: 'comparison_result')
-      final Map<String, dynamic>? comparisonResult,
-      @JsonKey(name: 'created_at') this.createdAt})
-      : _comparisonResult = comparisonResult;
+      @JsonKey(name: 'video_url') required this.videoUrl,
+      @JsonKey(name: 'analysis_result') this.analysisResult,
+      @JsonKey(name: 'created_at') this.createdAt});
 
   factory _$CheckPointImpl.fromJson(Map<String, dynamic> json) =>
       _$$CheckPointImplFromJson(json);
@@ -179,29 +174,20 @@ class _$CheckPointImpl implements _CheckPoint {
   @JsonKey(name: 'baseline_id')
   final String baselineId;
   @override
-  @JsonKey(name: 'check_video_path')
-  final String checkVideoPath;
-// 중간 점검 영상 경로
-  final Map<String, dynamic>? _comparisonResult;
-// 중간 점검 영상 경로
+  @JsonKey(name: 'video_url')
+  final String videoUrl;
+// 중간 검사 영상 URL
   @override
-  @JsonKey(name: 'comparison_result')
-  Map<String, dynamic>? get comparisonResult {
-    final value = _comparisonResult;
-    if (value == null) return null;
-    if (_comparisonResult is EqualUnmodifiableMapView) return _comparisonResult;
-    // ignore: implicit_dynamic_type
-    return EqualUnmodifiableMapView(value);
-  }
-
-// JSONB: { "rom_change": -10, "muscle_activation_change": +15... }
+  @JsonKey(name: 'analysis_result')
+  final String? analysisResult;
+// AI 분석 결과 (JSON 형태 or 텍스트)
   @override
   @JsonKey(name: 'created_at')
   final DateTime? createdAt;
 
   @override
   String toString() {
-    return 'CheckPoint(id: $id, baselineId: $baselineId, checkVideoPath: $checkVideoPath, comparisonResult: $comparisonResult, createdAt: $createdAt)';
+    return 'CheckPoint(id: $id, baselineId: $baselineId, videoUrl: $videoUrl, analysisResult: $analysisResult, createdAt: $createdAt)';
   }
 
   @override
@@ -212,18 +198,18 @@ class _$CheckPointImpl implements _CheckPoint {
             (identical(other.id, id) || other.id == id) &&
             (identical(other.baselineId, baselineId) ||
                 other.baselineId == baselineId) &&
-            (identical(other.checkVideoPath, checkVideoPath) ||
-                other.checkVideoPath == checkVideoPath) &&
-            const DeepCollectionEquality()
-                .equals(other._comparisonResult, _comparisonResult) &&
+            (identical(other.videoUrl, videoUrl) ||
+                other.videoUrl == videoUrl) &&
+            (identical(other.analysisResult, analysisResult) ||
+                other.analysisResult == analysisResult) &&
             (identical(other.createdAt, createdAt) ||
                 other.createdAt == createdAt));
   }
 
   @JsonKey(ignore: true)
   @override
-  int get hashCode => Object.hash(runtimeType, id, baselineId, checkVideoPath,
-      const DeepCollectionEquality().hash(_comparisonResult), createdAt);
+  int get hashCode => Object.hash(
+      runtimeType, id, baselineId, videoUrl, analysisResult, createdAt);
 
   @JsonKey(ignore: true)
   @override
@@ -241,13 +227,12 @@ class _$CheckPointImpl implements _CheckPoint {
 
 abstract class _CheckPoint implements CheckPoint {
   const factory _CheckPoint(
-      {@JsonKey(name: 'id') required final String id,
-      @JsonKey(name: 'baseline_id') required final String baselineId,
-      @JsonKey(name: 'check_video_path') required final String checkVideoPath,
-      @JsonKey(name: 'comparison_result')
-      final Map<String, dynamic>? comparisonResult,
-      @JsonKey(name: 'created_at')
-      final DateTime? createdAt}) = _$CheckPointImpl;
+          {@JsonKey(name: 'id') required final String id,
+          @JsonKey(name: 'baseline_id') required final String baselineId,
+          @JsonKey(name: 'video_url') required final String videoUrl,
+          @JsonKey(name: 'analysis_result') final String? analysisResult,
+          @JsonKey(name: 'created_at') final DateTime? createdAt}) =
+      _$CheckPointImpl;
 
   factory _CheckPoint.fromJson(Map<String, dynamic> json) =
       _$CheckPointImpl.fromJson;
@@ -259,12 +244,12 @@ abstract class _CheckPoint implements CheckPoint {
   @JsonKey(name: 'baseline_id')
   String get baselineId;
   @override
-  @JsonKey(name: 'check_video_path')
-  String get checkVideoPath;
-  @override // 중간 점검 영상 경로
-  @JsonKey(name: 'comparison_result')
-  Map<String, dynamic>? get comparisonResult;
-  @override // JSONB: { "rom_change": -10, "muscle_activation_change": +15... }
+  @JsonKey(name: 'video_url')
+  String get videoUrl;
+  @override // 중간 검사 영상 URL
+  @JsonKey(name: 'analysis_result')
+  String? get analysisResult;
+  @override // AI 분석 결과 (JSON 형태 or 텍스트)
   @JsonKey(name: 'created_at')
   DateTime? get createdAt;
   @override

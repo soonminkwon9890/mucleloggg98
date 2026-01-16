@@ -30,12 +30,18 @@ mixin _$ExerciseBaseline {
   @JsonKey(name: 'target_muscle')
   String? get targetMuscle =>
       throw _privateConstructorUsedError; // 'CHEST', 'LEGS'
-  @JsonKey(name: 'body_part')
-  String? get bodyPart =>
-      throw _privateConstructorUsedError; // 'UPPER', 'LOWER', 'FULL'
-  @JsonKey(name: 'movement_type')
-  String? get movementType =>
-      throw _privateConstructorUsedError; // 'PUSH', 'PULL'
+  @JsonKey(
+      name: 'body_part',
+      fromJson: JsonConverters.bodyPartFromCode,
+      toJson: JsonConverters.bodyPartToCode)
+  BodyPart? get bodyPart =>
+      throw _privateConstructorUsedError; // Enum: upper, lower, full
+  @JsonKey(
+      name: 'movement_type',
+      fromJson: JsonConverters.movementTypeFromCode,
+      toJson: JsonConverters.movementTypeToCode)
+  MovementType? get movementType =>
+      throw _privateConstructorUsedError; // Enum: push, pull
   @JsonKey(name: 'video_url')
   String? get videoUrl => throw _privateConstructorUsedError; // 원본/압축 영상 경로
   @JsonKey(name: 'thumbnail_url')
@@ -49,8 +55,15 @@ mixin _$ExerciseBaseline {
   @JsonKey(name: 'workout_sets', includeToJson: false)
   List<WorkoutSet>? get workoutSets =>
       throw _privateConstructorUsedError; // 조인 쿼리 결과 매핑용 (읽기 전용)
+  @JsonKey(name: 'routine_id')
+  String? get routineId => throw _privateConstructorUsedError; // 루틴 실행 이력 추적용
+  @JsonKey(name: 'is_hidden_from_home')
+  bool get isHiddenFromHome =>
+      throw _privateConstructorUsedError; // 홈 화면에서 숨김 여부
   @JsonKey(name: 'created_at')
   DateTime? get createdAt => throw _privateConstructorUsedError;
+  @JsonKey(name: 'updated_at')
+  DateTime? get updatedAt => throw _privateConstructorUsedError;
 
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
   @JsonKey(ignore: true)
@@ -69,15 +82,26 @@ abstract class $ExerciseBaselineCopyWith<$Res> {
       @JsonKey(name: 'user_id') String userId,
       @JsonKey(name: 'exercise_name') String exerciseName,
       @JsonKey(name: 'target_muscle') String? targetMuscle,
-      @JsonKey(name: 'body_part') String? bodyPart,
-      @JsonKey(name: 'movement_type') String? movementType,
+      @JsonKey(
+          name: 'body_part',
+          fromJson: JsonConverters.bodyPartFromCode,
+          toJson: JsonConverters.bodyPartToCode)
+      BodyPart? bodyPart,
+      @JsonKey(
+          name: 'movement_type',
+          fromJson: JsonConverters.movementTypeFromCode,
+          toJson: JsonConverters.movementTypeToCode)
+      MovementType? movementType,
       @JsonKey(name: 'video_url') String? videoUrl,
       @JsonKey(name: 'thumbnail_url') String? thumbnailUrl,
       @JsonKey(name: 'skeleton_data') Map<String, dynamic>? skeletonData,
       @JsonKey(name: 'feedback_prompt') String? feedbackPrompt,
       @JsonKey(name: 'workout_sets', includeToJson: false)
       List<WorkoutSet>? workoutSets,
-      @JsonKey(name: 'created_at') DateTime? createdAt});
+      @JsonKey(name: 'routine_id') String? routineId,
+      @JsonKey(name: 'is_hidden_from_home') bool isHiddenFromHome,
+      @JsonKey(name: 'created_at') DateTime? createdAt,
+      @JsonKey(name: 'updated_at') DateTime? updatedAt});
 }
 
 /// @nodoc
@@ -104,7 +128,10 @@ class _$ExerciseBaselineCopyWithImpl<$Res, $Val extends ExerciseBaseline>
     Object? skeletonData = freezed,
     Object? feedbackPrompt = freezed,
     Object? workoutSets = freezed,
+    Object? routineId = freezed,
+    Object? isHiddenFromHome = null,
     Object? createdAt = freezed,
+    Object? updatedAt = freezed,
   }) {
     return _then(_value.copyWith(
       id: null == id
@@ -126,11 +153,11 @@ class _$ExerciseBaselineCopyWithImpl<$Res, $Val extends ExerciseBaseline>
       bodyPart: freezed == bodyPart
           ? _value.bodyPart
           : bodyPart // ignore: cast_nullable_to_non_nullable
-              as String?,
+              as BodyPart?,
       movementType: freezed == movementType
           ? _value.movementType
           : movementType // ignore: cast_nullable_to_non_nullable
-              as String?,
+              as MovementType?,
       videoUrl: freezed == videoUrl
           ? _value.videoUrl
           : videoUrl // ignore: cast_nullable_to_non_nullable
@@ -151,9 +178,21 @@ class _$ExerciseBaselineCopyWithImpl<$Res, $Val extends ExerciseBaseline>
           ? _value.workoutSets
           : workoutSets // ignore: cast_nullable_to_non_nullable
               as List<WorkoutSet>?,
+      routineId: freezed == routineId
+          ? _value.routineId
+          : routineId // ignore: cast_nullable_to_non_nullable
+              as String?,
+      isHiddenFromHome: null == isHiddenFromHome
+          ? _value.isHiddenFromHome
+          : isHiddenFromHome // ignore: cast_nullable_to_non_nullable
+              as bool,
       createdAt: freezed == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
+              as DateTime?,
+      updatedAt: freezed == updatedAt
+          ? _value.updatedAt
+          : updatedAt // ignore: cast_nullable_to_non_nullable
               as DateTime?,
     ) as $Val);
   }
@@ -172,15 +211,26 @@ abstract class _$$ExerciseBaselineImplCopyWith<$Res>
       @JsonKey(name: 'user_id') String userId,
       @JsonKey(name: 'exercise_name') String exerciseName,
       @JsonKey(name: 'target_muscle') String? targetMuscle,
-      @JsonKey(name: 'body_part') String? bodyPart,
-      @JsonKey(name: 'movement_type') String? movementType,
+      @JsonKey(
+          name: 'body_part',
+          fromJson: JsonConverters.bodyPartFromCode,
+          toJson: JsonConverters.bodyPartToCode)
+      BodyPart? bodyPart,
+      @JsonKey(
+          name: 'movement_type',
+          fromJson: JsonConverters.movementTypeFromCode,
+          toJson: JsonConverters.movementTypeToCode)
+      MovementType? movementType,
       @JsonKey(name: 'video_url') String? videoUrl,
       @JsonKey(name: 'thumbnail_url') String? thumbnailUrl,
       @JsonKey(name: 'skeleton_data') Map<String, dynamic>? skeletonData,
       @JsonKey(name: 'feedback_prompt') String? feedbackPrompt,
       @JsonKey(name: 'workout_sets', includeToJson: false)
       List<WorkoutSet>? workoutSets,
-      @JsonKey(name: 'created_at') DateTime? createdAt});
+      @JsonKey(name: 'routine_id') String? routineId,
+      @JsonKey(name: 'is_hidden_from_home') bool isHiddenFromHome,
+      @JsonKey(name: 'created_at') DateTime? createdAt,
+      @JsonKey(name: 'updated_at') DateTime? updatedAt});
 }
 
 /// @nodoc
@@ -205,7 +255,10 @@ class __$$ExerciseBaselineImplCopyWithImpl<$Res>
     Object? skeletonData = freezed,
     Object? feedbackPrompt = freezed,
     Object? workoutSets = freezed,
+    Object? routineId = freezed,
+    Object? isHiddenFromHome = null,
     Object? createdAt = freezed,
+    Object? updatedAt = freezed,
   }) {
     return _then(_$ExerciseBaselineImpl(
       id: null == id
@@ -227,11 +280,11 @@ class __$$ExerciseBaselineImplCopyWithImpl<$Res>
       bodyPart: freezed == bodyPart
           ? _value.bodyPart
           : bodyPart // ignore: cast_nullable_to_non_nullable
-              as String?,
+              as BodyPart?,
       movementType: freezed == movementType
           ? _value.movementType
           : movementType // ignore: cast_nullable_to_non_nullable
-              as String?,
+              as MovementType?,
       videoUrl: freezed == videoUrl
           ? _value.videoUrl
           : videoUrl // ignore: cast_nullable_to_non_nullable
@@ -252,9 +305,21 @@ class __$$ExerciseBaselineImplCopyWithImpl<$Res>
           ? _value._workoutSets
           : workoutSets // ignore: cast_nullable_to_non_nullable
               as List<WorkoutSet>?,
+      routineId: freezed == routineId
+          ? _value.routineId
+          : routineId // ignore: cast_nullable_to_non_nullable
+              as String?,
+      isHiddenFromHome: null == isHiddenFromHome
+          ? _value.isHiddenFromHome
+          : isHiddenFromHome // ignore: cast_nullable_to_non_nullable
+              as bool,
       createdAt: freezed == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
+              as DateTime?,
+      updatedAt: freezed == updatedAt
+          ? _value.updatedAt
+          : updatedAt // ignore: cast_nullable_to_non_nullable
               as DateTime?,
     ));
   }
@@ -268,15 +333,26 @@ class _$ExerciseBaselineImpl implements _ExerciseBaseline {
       @JsonKey(name: 'user_id') required this.userId,
       @JsonKey(name: 'exercise_name') required this.exerciseName,
       @JsonKey(name: 'target_muscle') this.targetMuscle,
-      @JsonKey(name: 'body_part') this.bodyPart,
-      @JsonKey(name: 'movement_type') this.movementType,
+      @JsonKey(
+          name: 'body_part',
+          fromJson: JsonConverters.bodyPartFromCode,
+          toJson: JsonConverters.bodyPartToCode)
+      this.bodyPart,
+      @JsonKey(
+          name: 'movement_type',
+          fromJson: JsonConverters.movementTypeFromCode,
+          toJson: JsonConverters.movementTypeToCode)
+      this.movementType,
       @JsonKey(name: 'video_url') this.videoUrl,
       @JsonKey(name: 'thumbnail_url') this.thumbnailUrl,
       @JsonKey(name: 'skeleton_data') final Map<String, dynamic>? skeletonData,
       @JsonKey(name: 'feedback_prompt') this.feedbackPrompt,
       @JsonKey(name: 'workout_sets', includeToJson: false)
       final List<WorkoutSet>? workoutSets,
-      @JsonKey(name: 'created_at') this.createdAt})
+      @JsonKey(name: 'routine_id') this.routineId,
+      @JsonKey(name: 'is_hidden_from_home') this.isHiddenFromHome = false,
+      @JsonKey(name: 'created_at') this.createdAt,
+      @JsonKey(name: 'updated_at') this.updatedAt})
       : _skeletonData = skeletonData,
         _workoutSets = workoutSets;
 
@@ -298,13 +374,19 @@ class _$ExerciseBaselineImpl implements _ExerciseBaseline {
   final String? targetMuscle;
 // 'CHEST', 'LEGS'
   @override
-  @JsonKey(name: 'body_part')
-  final String? bodyPart;
-// 'UPPER', 'LOWER', 'FULL'
+  @JsonKey(
+      name: 'body_part',
+      fromJson: JsonConverters.bodyPartFromCode,
+      toJson: JsonConverters.bodyPartToCode)
+  final BodyPart? bodyPart;
+// Enum: upper, lower, full
   @override
-  @JsonKey(name: 'movement_type')
-  final String? movementType;
-// 'PUSH', 'PULL'
+  @JsonKey(
+      name: 'movement_type',
+      fromJson: JsonConverters.movementTypeFromCode,
+      toJson: JsonConverters.movementTypeToCode)
+  final MovementType? movementType;
+// Enum: push, pull
   @override
   @JsonKey(name: 'video_url')
   final String? videoUrl;
@@ -344,12 +426,23 @@ class _$ExerciseBaselineImpl implements _ExerciseBaseline {
 
 // 조인 쿼리 결과 매핑용 (읽기 전용)
   @override
+  @JsonKey(name: 'routine_id')
+  final String? routineId;
+// 루틴 실행 이력 추적용
+  @override
+  @JsonKey(name: 'is_hidden_from_home')
+  final bool isHiddenFromHome;
+// 홈 화면에서 숨김 여부
+  @override
   @JsonKey(name: 'created_at')
   final DateTime? createdAt;
+  @override
+  @JsonKey(name: 'updated_at')
+  final DateTime? updatedAt;
 
   @override
   String toString() {
-    return 'ExerciseBaseline(id: $id, userId: $userId, exerciseName: $exerciseName, targetMuscle: $targetMuscle, bodyPart: $bodyPart, movementType: $movementType, videoUrl: $videoUrl, thumbnailUrl: $thumbnailUrl, skeletonData: $skeletonData, feedbackPrompt: $feedbackPrompt, workoutSets: $workoutSets, createdAt: $createdAt)';
+    return 'ExerciseBaseline(id: $id, userId: $userId, exerciseName: $exerciseName, targetMuscle: $targetMuscle, bodyPart: $bodyPart, movementType: $movementType, videoUrl: $videoUrl, thumbnailUrl: $thumbnailUrl, skeletonData: $skeletonData, feedbackPrompt: $feedbackPrompt, workoutSets: $workoutSets, routineId: $routineId, isHiddenFromHome: $isHiddenFromHome, createdAt: $createdAt, updatedAt: $updatedAt)';
   }
 
   @override
@@ -377,8 +470,14 @@ class _$ExerciseBaselineImpl implements _ExerciseBaseline {
                 other.feedbackPrompt == feedbackPrompt) &&
             const DeepCollectionEquality()
                 .equals(other._workoutSets, _workoutSets) &&
+            (identical(other.routineId, routineId) ||
+                other.routineId == routineId) &&
+            (identical(other.isHiddenFromHome, isHiddenFromHome) ||
+                other.isHiddenFromHome == isHiddenFromHome) &&
             (identical(other.createdAt, createdAt) ||
-                other.createdAt == createdAt));
+                other.createdAt == createdAt) &&
+            (identical(other.updatedAt, updatedAt) ||
+                other.updatedAt == updatedAt));
   }
 
   @JsonKey(ignore: true)
@@ -396,7 +495,10 @@ class _$ExerciseBaselineImpl implements _ExerciseBaseline {
       const DeepCollectionEquality().hash(_skeletonData),
       feedbackPrompt,
       const DeepCollectionEquality().hash(_workoutSets),
-      createdAt);
+      routineId,
+      isHiddenFromHome,
+      createdAt,
+      updatedAt);
 
   @JsonKey(ignore: true)
   @override
@@ -419,16 +521,27 @@ abstract class _ExerciseBaseline implements ExerciseBaseline {
       @JsonKey(name: 'user_id') required final String userId,
       @JsonKey(name: 'exercise_name') required final String exerciseName,
       @JsonKey(name: 'target_muscle') final String? targetMuscle,
-      @JsonKey(name: 'body_part') final String? bodyPart,
-      @JsonKey(name: 'movement_type') final String? movementType,
+      @JsonKey(
+          name: 'body_part',
+          fromJson: JsonConverters.bodyPartFromCode,
+          toJson: JsonConverters.bodyPartToCode)
+      final BodyPart? bodyPart,
+      @JsonKey(
+          name: 'movement_type',
+          fromJson: JsonConverters.movementTypeFromCode,
+          toJson: JsonConverters.movementTypeToCode)
+      final MovementType? movementType,
       @JsonKey(name: 'video_url') final String? videoUrl,
       @JsonKey(name: 'thumbnail_url') final String? thumbnailUrl,
       @JsonKey(name: 'skeleton_data') final Map<String, dynamic>? skeletonData,
       @JsonKey(name: 'feedback_prompt') final String? feedbackPrompt,
       @JsonKey(name: 'workout_sets', includeToJson: false)
       final List<WorkoutSet>? workoutSets,
-      @JsonKey(name: 'created_at')
-      final DateTime? createdAt}) = _$ExerciseBaselineImpl;
+      @JsonKey(name: 'routine_id') final String? routineId,
+      @JsonKey(name: 'is_hidden_from_home') final bool isHiddenFromHome,
+      @JsonKey(name: 'created_at') final DateTime? createdAt,
+      @JsonKey(name: 'updated_at')
+      final DateTime? updatedAt}) = _$ExerciseBaselineImpl;
 
   factory _ExerciseBaseline.fromJson(Map<String, dynamic> json) =
       _$ExerciseBaselineImpl.fromJson;
@@ -446,12 +559,18 @@ abstract class _ExerciseBaseline implements ExerciseBaseline {
   @JsonKey(name: 'target_muscle')
   String? get targetMuscle;
   @override // 'CHEST', 'LEGS'
-  @JsonKey(name: 'body_part')
-  String? get bodyPart;
-  @override // 'UPPER', 'LOWER', 'FULL'
-  @JsonKey(name: 'movement_type')
-  String? get movementType;
-  @override // 'PUSH', 'PULL'
+  @JsonKey(
+      name: 'body_part',
+      fromJson: JsonConverters.bodyPartFromCode,
+      toJson: JsonConverters.bodyPartToCode)
+  BodyPart? get bodyPart;
+  @override // Enum: upper, lower, full
+  @JsonKey(
+      name: 'movement_type',
+      fromJson: JsonConverters.movementTypeFromCode,
+      toJson: JsonConverters.movementTypeToCode)
+  MovementType? get movementType;
+  @override // Enum: push, pull
   @JsonKey(name: 'video_url')
   String? get videoUrl;
   @override // 원본/압축 영상 경로
@@ -467,8 +586,17 @@ abstract class _ExerciseBaseline implements ExerciseBaseline {
   @JsonKey(name: 'workout_sets', includeToJson: false)
   List<WorkoutSet>? get workoutSets;
   @override // 조인 쿼리 결과 매핑용 (읽기 전용)
+  @JsonKey(name: 'routine_id')
+  String? get routineId;
+  @override // 루틴 실행 이력 추적용
+  @JsonKey(name: 'is_hidden_from_home')
+  bool get isHiddenFromHome;
+  @override // 홈 화면에서 숨김 여부
   @JsonKey(name: 'created_at')
   DateTime? get createdAt;
+  @override
+  @JsonKey(name: 'updated_at')
+  DateTime? get updatedAt;
   @override
   @JsonKey(ignore: true)
   _$$ExerciseBaselineImplCopyWith<_$ExerciseBaselineImpl> get copyWith =>

@@ -1,3 +1,5 @@
+// Legacy: 추후 고도화 시 참고용
+/*
 import '../../data/models/workout_set.dart';
 
 /// 정체기 감지 알고리즘
@@ -65,4 +67,4 @@ class PlateauDetector {
     }
   }
 }
-
+*/
