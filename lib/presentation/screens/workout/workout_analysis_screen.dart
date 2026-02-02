@@ -1,19 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:video_player/video_player.dart';
-import 'package:chewie/chewie.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:intl/intl.dart';
+import 'package:uuid/uuid.dart';
 import '../../providers/workout_provider.dart';
+import '../../../data/models/workout_set.dart';
 import '../../../data/models/exercise_baseline.dart';
-import '../../screens/checkpoint/video_upload_screen.dart';
-import '../../screens/checkpoint/checkpoint_camera_screen.dart';
+import '../../../data/models/planned_workout_dto.dart';
+import '../../../data/models/planned_workout.dart';
+import '../../../domain/algorithms/workout_recommendation_service.dart';
+import '../../widgets/workout/routine_generation_dialog.dart';
 
 /// 운동 분석 화면
 class WorkoutAnalysisScreen extends ConsumerStatefulWidget {
-  final ExerciseBaseline baseline;
+  final String exerciseName;
 
   const WorkoutAnalysisScreen({
     super.key,
-    required this.baseline,
+    required this.exerciseName,
   });
 
   @override
@@ -22,132 +26,363 @@ class WorkoutAnalysisScreen extends ConsumerStatefulWidget {
 }
 
 class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
-  // State 관리: widget.baseline 대신 _currentBaseline 사용
-  late ExerciseBaseline _currentBaseline;
+  // 날짜별 세트 데이터
+  Map<String, List<WorkoutSet>>? _historyByDate;
+  Map<String, String?>? _difficultyByDate; // [추가] 날짜별 강도 데이터
+  bool _isLoadingHistory = false;
+  String? _historyError;
 
-  // 영상 플레이어 컨트롤러
-  VideoPlayerController? _videoController;
-  ChewieController? _chewieController;
-  bool _isInitializing = false;
-  bool _hasError = false;
+  // 차트 데이터
+  List<FlSpot>? _chartSpots;
+  Map<int, String>? _xAxisLabels; // 인덱스 -> 날짜 문자열
+
+  // 루틴 생성 관련 상태
+  bool _isGeneratingRoutine = false;
 
   @override
   void initState() {
     super.initState();
-    // initState에서 초기화
-    _currentBaseline = widget.baseline;
-    _initializeVideo();
-    _checkIntensityFeedback();
+    _loadHistory();
   }
 
-  Future<void> _initializeVideo() async {
-    final videoUrl = _currentBaseline.videoUrl;
-
-    // 영상이 없으면 초기화하지 않음
-    if (videoUrl == null || videoUrl.isEmpty) {
-      return;
-    }
-
+  /// 날짜별 세트 데이터 로딩
+  Future<void> _loadHistory() async {
     setState(() {
-      _isInitializing = true;
-      _hasError = false;
+      _isLoadingHistory = true;
+      _historyError = null;
     });
 
     try {
-      _videoController = VideoPlayerController.networkUrl(Uri.parse(videoUrl));
-      await _videoController!.initialize();
+      final repository = ref.read(workoutRepositoryProvider);
+      final history =
+          await repository.getHistoryByExerciseName(widget.exerciseName);
+      final difficultyMap =
+          await repository.getDifficultyByExerciseName(widget.exerciseName); // [추가]
+
+      // [안전핀] UI 레벨에서 정렬 보장 (오래된 순 -> 최신 순)
+      // Repository에서 정렬되어 있어도 UI 레벨에서 한 번 더 확인하여 안전성 확보
+      for (var key in history.keys) {
+        history[key]!.sort((a, b) {
+          if (a.createdAt == null || b.createdAt == null) return 0;
+          return a.createdAt!.compareTo(b.createdAt!); // 오래된 순 -> 최신 순
+        });
+      }
 
       if (mounted) {
-        _chewieController = ChewieController(
-          videoPlayerController: _videoController!,
-          autoPlay: false,
-          looping: false,
-          aspectRatio: _videoController!.value.aspectRatio,
-          errorBuilder: (context, errorMessage) {
-            return const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.error_outline, color: Colors.white, size: 48),
-                  SizedBox(height: 8),
-                  Text(
-                    '영상 재생 오류',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-
         setState(() {
-          _isInitializing = false;
+          _historyByDate = history;
+          _difficultyByDate = difficultyMap; // [추가]
+          _isLoadingHistory = false;
         });
+        // 차트 데이터 준비
+        _prepareChartData();
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _isInitializing = false;
-          _hasError = true;
+          _historyError = e.toString();
+          _isLoadingHistory = false;
         });
       }
     }
   }
 
-  @override
-  void dispose() {
-    _chewieController?.dispose();
-    _videoController?.dispose();
-    super.dispose();
+  /// 단순 Epley 공식: 1RM = 무게 * (1 + (0.0333 * 횟수))
+  /// WorkoutRecommendationService를 사용하도록 변경
+  double _calculateOneRepMax(double weight, int reps) {
+    return WorkoutRecommendationService.calculateOneRepMax(weight, reps);
   }
 
-  double _calculateTotalVolume() {
-    if (_currentBaseline.workoutSets == null ||
-        _currentBaseline.workoutSets!.isEmpty) {
-      return 0.0;
+  /// 특정 날짜의 세트들 중 최고 1RM 값 반환
+  double? _getMax1RMForDate(List<WorkoutSet> sets) {
+    if (sets.isEmpty) return null;
+
+    double max1RM = 0.0;
+    for (final set in sets) {
+      final oneRM = _calculateOneRepMax(set.weight, set.reps);
+      if (oneRM > max1RM) {
+        max1RM = oneRM;
+      }
     }
-    // 총 볼륨 계산: Sum(weight * reps) - sets를 곱하지 않음
-    return _currentBaseline.workoutSets!.fold(0.0, (sum, set) {
-      return sum + (set.weight * set.reps);
+    return max1RM;
+  }
+
+  /// 차트 데이터 준비
+  void _prepareChartData() {
+    if (_historyByDate == null || _historyByDate!.isEmpty) {
+      _chartSpots = null;
+      _xAxisLabels = null;
+      return;
+    }
+
+    // 날짜순 정렬 (과거 -> 현재)
+    final sortedEntries = _historyByDate!.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+
+    final spots = <FlSpot>[];
+    final labels = <int, String>{};
+
+    for (int i = 0; i < sortedEntries.length; i++) {
+      final dateKey = sortedEntries[i].key;
+      final sets = sortedEntries[i].value;
+      final max1RM = _getMax1RMForDate(sets);
+
+      if (max1RM != null) {
+        spots.add(FlSpot(i.toDouble(), max1RM));
+        // 날짜 포맷: MM.dd (intl 패키지 사용)
+        final date = DateTime.parse(dateKey);
+        labels[i] = DateFormat('MM.dd').format(date);
+      }
+    }
+
+    setState(() {
+      _chartSpots = spots;
+      _xAxisLabels = labels;
     });
   }
 
-  Future<void> _checkIntensityFeedback() async {
-    final repository = ref.read(workoutRepositoryProvider);
-    final frequency = await repository.getExerciseFrequency(_currentBaseline.id);
-
-    // 3일 이상 수행한 경우에만 피드백 다이얼로그 표시
-    if (frequency >= 3) {
-      // 화면이 로드된 후에 다이얼로그 표시
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _showIntensityFeedback();
-        }
-      });
+  /// 날짜별 리스트 UI 빌드 (Sliver)
+  Widget _buildHistoryList() {
+    if (_historyByDate == null || _historyByDate!.isEmpty) {
+      return const SliverToBoxAdapter(
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.all(32),
+            child: Text('기록된 운동이 없습니다'),
+          ),
+        ),
+      );
     }
+
+    final sortedDates = _historyByDate!.keys.toList()
+      ..sort((a, b) => b.compareTo(a)); // 최신순
+
+    return SliverList(
+      delegate: SliverChildBuilderDelegate(
+        (context, index) {
+          final dateKey = sortedDates[index];
+          final sets = _historyByDate![dateKey]!;
+
+          final totalVolume =
+              sets.fold(0.0, (sum, set) => sum + (set.weight * set.reps));
+          final totalReps = sets.fold(0, (sum, set) => sum + set.reps);
+
+          return Dismissible(
+            key: Key('date_$dateKey'),
+            direction: DismissDirection.endToStart,
+            background: Container(
+              alignment: Alignment.centerRight,
+              padding: const EdgeInsets.only(right: 20),
+              color: Colors.red,
+              child: const Icon(Icons.delete, color: Colors.white),
+            ),
+            confirmDismiss: (direction) async {
+              return await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('기록 삭제'),
+                      content: Text('$dateKey의 기록을 삭제하시겠습니까?'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('취소'),
+                        ),
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                          ),
+                          child: const Text('삭제'),
+                        ),
+                      ],
+                    ),
+                  ) ??
+                  false;
+            },
+            onDismissed: (direction) async {
+              await _deleteDateRecords(dateKey);
+            },
+            child: Card(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: ListTile(
+                title: Row(
+                  children: [
+                    Text(dateKey),
+                    const SizedBox(width: 8),
+                    _buildDifficultyTag(_difficultyByDate?[dateKey]),
+                  ],
+                ),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 4),
+                    Text('총 볼륨: ${totalVolume.toStringAsFixed(1)}kg'),
+                    Text('총 횟수: $totalReps회'),
+                  ],
+                ),
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: () => _showDeleteConfirmation(dateKey),
+                ),
+              ),
+            ),
+          );
+        },
+        childCount: sortedDates.length,
+      ),
+    );
   }
 
-  void _showIntensityFeedback() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('운동 강도 피드백'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
+  /// Difficulty 태그 위젯 빌드
+  Widget _buildDifficultyTag(String? difficulty) {
+    if (difficulty == null) return const SizedBox.shrink();
+    
+    String text;
+    Color color;
+    switch (difficulty) {
+      case 'easy':
+        text = '😀 쉬움';
+        color = Colors.green;
+        break;
+      case 'hard':
+        text = '🥵 어려움';
+        color = Colors.red;
+        break;
+      case 'normal':
+      default:
+        text = '😐 보통';
+        color = Colors.orange;
+        break;
+    }
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+
+  /// 1RM 성장 추이 차트 위젯
+  Widget _buildTrendChart() {
+    if (_chartSpots == null || _chartSpots!.isEmpty) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(32),
+          child: Center(
+            child: Text('데이터가 쌓이면 성장 그래프가 표시됩니다'),
+          ),
+        ),
+      );
+    }
+
+    final spots = _chartSpots!;
+    final spotsLength = spots.length;
+
+    // Single Point 처리: 데이터가 1개일 경우 minX, maxX 조정
+    final minX = spotsLength == 1 ? -0.5 : 0.0;
+    final maxX = spotsLength == 1 ? 0.5 : (spotsLength - 1).toDouble();
+
+    // Interval 동적 조정: 데이터 개수에 따라 간격 설정
+    int interval = 1;
+    if (spotsLength > 15) {
+      interval = 3;
+    } else if (spotsLength > 7) {
+      interval = 2;
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ElevatedButton(
-              onPressed: () => _handleIntensityFeedback('어려움'),
-              child: const Text('어려움'),
+            const Text(
+              '1RM 성장 추이',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 8),
-            ElevatedButton(
-              onPressed: () => _handleIntensityFeedback('보통'),
-              child: const Text('보통'),
-            ),
-            const SizedBox(height: 8),
-            ElevatedButton(
-              onPressed: () => _handleIntensityFeedback('낮음'),
-              child: const Text('낮음'),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 300,
+              child: LineChart(
+                LineChartData(
+                  minX: minX,
+                  maxX: maxX,
+                  lineBarsData: [
+                    LineChartBarData(
+                      spots: spots,
+                      isCurved: true,
+                      dotData: const FlDotData(show: true),
+                      color: Theme.of(context).colorScheme.primary,
+                      barWidth: 3,
+                      belowBarData: BarAreaData(show: true),
+                    ),
+                  ],
+                  titlesData: FlTitlesData(
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 50,
+                        interval: 1,
+                        getTitlesWidget: (value, meta) => Text(
+                          '${value.toInt()}kg',
+                          style: const TextStyle(fontSize: 10),
+                        ),
+                      ),
+                      axisNameWidget: const Text(
+                        '1RM (kg)',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 30,
+                        interval: interval.toDouble(),
+                        getTitlesWidget: (value, meta) {
+                          final index = value.toInt();
+                          if (index < 0 || _xAxisLabels?[index] == null) {
+                            return const Text('');
+                          }
+                          return Text(
+                            _xAxisLabels![index]!,
+                            style: const TextStyle(fontSize: 10),
+                          );
+                        },
+                      ),
+                    ),
+                    topTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    rightTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                  ),
+                  lineTouchData: LineTouchData(
+                    touchTooltipData: LineTouchTooltipData(
+                      getTooltipItems: (List<LineBarSpot> spots) {
+                        return spots.map((spot) {
+                          final dateIndex = spot.x.toInt();
+                          final dateLabel = _xAxisLabels?[dateIndex] ?? '';
+                          return LineTooltipItem(
+                            '$dateLabel: ${spot.y.toInt()}kg',
+                            const TextStyle(color: Colors.white),
+                          );
+                        }).toList();
+                      },
+                    ),
+                  ),
+                ),
+              ),
             ),
           ],
         ),
@@ -155,427 +390,345 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
     );
   }
 
-  void _handleIntensityFeedback(String intensity) {
-    Navigator.pop(context);
-    // AI 추천 로직 (간단한 규칙 기반)
-    final lastSet = _currentBaseline.workoutSets?.firstOrNull;
-    if (lastSet == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('추천 데이터가 없습니다.')),
+  /// 타겟 부위 정보 표시 위젯
+  Widget _buildTargetMusclesChip() {
+    // ExerciseBaseline 정보 가져오기
+    // (Repository에서 exerciseName으로 조회)
+    return FutureBuilder<ExerciseBaseline?>(
+      future: _getBaseline(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data?.targetMuscles == null) {
+          return const SizedBox.shrink();
+        }
+
+        final targetMuscles = snapshot.data!.targetMuscles!;
+        if (targetMuscles.isEmpty) return const SizedBox.shrink();
+
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '타겟 부위',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  children: targetMuscles
+                      .map((muscle) => Chip(
+                            label: Text(muscle),
+                          ))
+                      .toList(),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Baseline 정보 가져오기
+  Future<ExerciseBaseline?> _getBaseline() async {
+    final repository = ref.read(workoutRepositoryProvider);
+    final baselines = await repository.getBaselines();
+    try {
+      return baselines.firstWhere(
+        (b) => b.exerciseName == widget.exerciseName,
       );
-      return;
+    } catch (e) {
+      return null;
     }
+  }
 
-    // 추천 값 계산
-    final (recommendedWeight, recommendedReps) = _calculateRecommendation(
-      intensity,
-      lastSet.weight,
-      lastSet.reps,
-    );
-    final recommendationText = _getRecommendationText(
-      intensity,
-      recommendedWeight,
-      recommendedReps,
-    );
+  /// 날짜별 기록 삭제
+  Future<void> _deleteDateRecords(String dateKey) async {
+    if (_historyByDate == null) return;
 
-    showDialog(
+    try {
+      final repository = ref.read(workoutRepositoryProvider);
+      final date = DateTime.parse(dateKey);
+
+      // baselineId를 찾아야 함 (첫 번째 세트의 baselineId 사용)
+      final sets = _historyByDate![dateKey];
+      if (sets == null || sets.isEmpty) return;
+
+      final baselineId = sets.first.baselineId;
+
+      // Repository 메서드 호출
+      await repository.deleteWorkoutSetsByDate(baselineId, date);
+
+      // 로컬 상태 업데이트
+      setState(() {
+        _historyByDate!.remove(dateKey);
+        if (_historyByDate!.isEmpty) {
+          _historyByDate = {};
+        }
+      });
+
+      // Provider 갱신 (다른 화면 동기화)
+      ref.invalidate(baselinesProvider);
+      ref.invalidate(archivedBaselinesProvider);
+      ref.invalidate(workoutDatesProvider);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('기록이 삭제되었습니다.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('삭제 오류: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// 삭제 확인 다이얼로그 표시
+  Future<void> _showDeleteConfirmation(String dateKey) async {
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('AI 추천'),
-        content: Text(recommendationText),
+        title: const Text('기록 삭제'),
+        content: Text('$dateKey의 기록을 삭제하시겠습니까?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(context, false),
             child: const Text('취소'),
           ),
           ElevatedButton(
-            onPressed: () async {
-              // [안전 장치] 비동기 작업 전에 객체들을 미리 확보
-              final messenger = ScaffoldMessenger.of(context);
-              final navigator = Navigator.of(context);
-
-              try {
-                // 추천 값으로 운동 추가
-                await ref.read(workoutRepositoryProvider).addTodayWorkout(
-                      _currentBaseline,
-                      initialWeight: recommendedWeight,
-                      initialReps: recommendedReps,
-                    );
-
-                if (!mounted) return;
-
-                // Provider 갱신
-                ref.invalidate(baselinesProvider);
-                ref.invalidate(workoutDatesProvider);
-
-                navigator.pop(); // 다이얼로그 닫기
-                messenger.showSnackBar(
-                  const SnackBar(
-                    content: Text('오늘의 운동에 추가되었습니다!'),
-                  ),
-                );
-              } catch (e) {
-                if (!mounted) return;
-                navigator.pop();
-                messenger.showSnackBar(
-                  SnackBar(content: Text('오류가 발생했습니다: $e')),
-                );
-              }
-            },
-            child: const Text('오늘의 운동에 추가'),
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            child: const Text('삭제'),
           ),
         ],
       ),
     );
-  }
 
-  /// 추천 무게와 횟수를 계산하여 반환합니다.
-  (double weight, int reps) _calculateRecommendation(
-    String intensity,
-    double currentWeight,
-    int currentReps,
-  ) {
-    switch (intensity) {
-      case '어려움':
-        return (currentWeight, currentReps); // 무게 유지
-      case '보통':
-        return (currentWeight + 2.5, currentReps); // 무게 증가
-      case '낮음':
-        return (currentWeight + 5.0, currentReps); // 무게 증가
-      default:
-        return (currentWeight, currentReps);
+    if (confirmed == true) {
+      await _deleteDateRecords(dateKey);
     }
   }
 
-  /// 추천 텍스트를 생성합니다.
-  String _getRecommendationText(
-    String intensity,
-    double weight,
-    int reps,
-  ) {
-    String description;
-    switch (intensity) {
-      case '어려움':
-        description = '무게 유지';
-        break;
-      case '보통':
-        description = '무게 증가';
-        break;
-      case '낮음':
-        description = '무게 증가';
-        break;
-      default:
-        description = '';
+  /// 다음 주 루틴 생성
+  Future<void> _generateNextWeekRoutine() async {
+    setState(() => _isGeneratingRoutine = true);
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        content: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: 16),
+            Expanded(child: Text('AI가 루틴을 분석 중입니다...')),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final repo = ref.read(workoutRepositoryProvider);
+      
+      // 1. 지난주 데이터 및 목표 조회
+      final sessions = await repo.getLastWeekSessions();
+      if (sessions.isEmpty) {
+        if (mounted) {
+          Navigator.pop(context); // 로딩 다이얼로그 닫기
+          setState(() => _isGeneratingRoutine = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('지난주 운동 기록이 없습니다. 운동을 시작해보세요!'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+      
+      final userGoal = await repo.getUserGoal();
+      
+      // 2. Baseline 매핑
+      final baselineIds = sessions.map((s) => s.baselineId).toSet().toList();
+      final baselines = await repo.getBaselinesByIds(baselineIds);
+      final baselineMap = {for (var b in baselines) b.id: b};
+      
+      // 3. Best Set 데이터 준비 (병렬 처리)
+      final bestSetsFutures = sessions.map((s) async {
+        // [주의] Part 1에서 만든 메서드 이름 확인: getLastWeekBestSet
+        final bestSet = await repo.getLastWeekBestSet(s.baselineId, s.workoutDate);
+        return MapEntry(s.baselineId, bestSet);
+      }).toList();
+      
+      final bestSetsMap = Map.fromEntries(await Future.wait(bestSetsFutures));
+      
+      // 4. 서비스 호출 (Gemini API 우선, 실패 시 폴백)
+      final plans = await WorkoutRecommendationService.generateWeeklyPlan(
+        lastWeekSessions: sessions,
+        userGoal: userGoal,
+        baselineMap: baselineMap,
+        bestSetsMap: bestSetsMap, // 이름 매칭 확인
+      );
+      
+      // 5. 로딩 다이얼로그 닫고 결과 표시
+      if (mounted) {
+        Navigator.pop(context); // 로딩 다이얼로그 닫기
+        setState(() => _isGeneratingRoutine = false);
+        if (plans.isNotEmpty) {
+          await _showRoutineGenerationDialog(plans);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('생성된 루틴이 없습니다.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // 로딩 다이얼로그 닫기
+        setState(() => _isGeneratingRoutine = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('루틴 생성 실패: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
-    return '다음 운동: ${weight}kg × $reps회 ($description)';
+  }
+
+  /// 루틴 생성 다이얼로그 표시 (결과: 날짜가 주입된 루틴 + 색상)
+  Future<void> _showRoutineGenerationDialog(List<PlannedWorkoutDto> plans) async {
+    final result = await showDialog<RoutineApplyResult>(
+      context: context,
+      builder: (context) => RoutineGenerationDialog(routines: plans),
+    );
+    if (result == null || !mounted) return;
+    await _savePlannedWorkouts(result.routines, result.colorHex);
+  }
+
+  /// 다이얼로그에서 반환된 루틴을 캘린더에 저장 (단 하루에 일괄 저장)
+  Future<void> _savePlannedWorkouts(
+    List<PlannedWorkoutDto> routines,
+    String colorHex,
+  ) async {
+    if (routines.isEmpty) return;
+    try {
+      final repository = ref.read(workoutRepositoryProvider);
+      final plans = routines.map((dto) {
+        return PlannedWorkout(
+          id: const Uuid().v4(),
+          userId: '',
+          baselineId: dto.baselineId,
+          scheduledDate: dto.scheduledDate,
+          targetWeight: dto.targetWeight,
+          targetReps: dto.targetReps,
+          targetSets: dto.targetSets,
+          aiComment: dto.aiComment,
+          isCompleted: false,
+          exerciseName: dto.exerciseName, // 운동 이름 매핑
+          isConvertedToLog: false, // 초기값: 아직 변환 안 됨
+          createdAt: DateTime.now(),
+          colorHex: colorHex,
+        );
+      }).toList();
+      await repository.savePlannedWorkouts(plans);
+      if (mounted) {
+        final dateLabel = DateFormat('M월 d일', 'ko_KR').format(routines.first.scheduledDate);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$dateLabel에 운동이 추가되었습니다'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('저장 실패: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // _currentBaseline 사용
-    final totalVolume = _calculateTotalVolume();
-
     return Scaffold(
       appBar: AppBar(
-        title: Text(_currentBaseline.exerciseName),
+        title: Text(widget.exerciseName),
+        actions: [
+          // 로딩 중일 때는 CircularProgressIndicator 표시
+          if (_isGeneratingRoutine)
+            const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.auto_awesome),
+              tooltip: 'AI 루틴 생성',
+              onPressed: _generateNextWeekRoutine,
+            ),
+        ],
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // 영상 영역 (있으면 플레이어, 없으면 등록 버튼)
-              if (_currentBaseline.videoUrl != null &&
-                  _currentBaseline.videoUrl!.isNotEmpty)
-                Card(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: _isInitializing
-                        ? Container(
-                            height: 250,
-                            color: Colors.black,
-                            child: const Center(
-                              child: CircularProgressIndicator(
-                                  color: Colors.white),
-                            ),
-                          )
-                        : _hasError || _chewieController == null
-                            ? Container(
-                                height: 250,
-                                color: Colors.grey[800],
-                                child: const Center(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(Icons.error_outline,
-                                          color: Colors.white, size: 48),
-                                      SizedBox(height: 8),
-                                      Text(
-                                        '영상 재생 불가',
-                                        style: TextStyle(color: Colors.white),
-                                      ),
-                                    ],
-                                  ),
+        child: _isLoadingHistory
+            ? const Center(child: CircularProgressIndicator())
+            : _historyError != null
+                ? Center(child: Text('오류: $_historyError'))
+                : RefreshIndicator(
+                    onRefresh: _loadHistory,
+                    child: CustomScrollView(
+                      slivers: [
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              children: [
+                                _buildTrendChart(),
+                                const SizedBox(height: 16),
+                                _buildTargetMusclesChip(),
+                                const SizedBox(height: 16),
+                                const Text(
+                                  '날짜별 기록',
+                                  style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold),
                                 ),
-                              )
-                            : AspectRatio(
-                                aspectRatio:
-                                    _videoController!.value.aspectRatio,
-                                child: Chewie(controller: _chewieController!),
-                              ),
-                  ),
-                )
-              else
-                Card(
-                  child: SizedBox(
-                    height: 200,
-                    child: Center(
-                      child: ElevatedButton.icon(
-                        onPressed: () async {
-                          // 1. [안전 장치] 비동기 작업 전에 Messenger 객체를 미리 확보 (Context 오류 방지)
-                          final messenger = ScaffoldMessenger.of(context);
-
-                          // 2. 영상 업로드 화면으로 이동 및 결과 대기
-                          final result = await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => VideoUploadScreen(
-                                baseline: _currentBaseline,
-                                isCheckpoint: false, // 후속 업로드 모드
-                              ),
+                              ],
                             ),
-                          );
-
-                          // 3. [Early Return] 결과가 없거나(뒤로가기), 화면이 꺼졌으면 종료
-                          if (result != true || !mounted) return;
-
-                          try {
-                            // 4. [실제 데이터 갱신] DB에서 최신 데이터를 가져옴
-                            final repository =
-                                ref.read(workoutRepositoryProvider);
-                            final updatedBaseline = await repository
-                                .getBaselineById(_currentBaseline.id);
-
-                            // 5. 비동기 작업 후 화면이 살아있는지 한 번 더 체크
-                            if (!mounted) return;
-
-                            // 6. 데이터가 유효하면 화면 갱신 (플레이어 표시)
-                            if (updatedBaseline != null) {
-                              setState(() {
-                                _currentBaseline = updatedBaseline;
-                              });
-                              // 영상이 업데이트되었으면 플레이어 재초기화
-                              _chewieController?.dispose();
-                              _videoController?.dispose();
-                              _initializeVideo();
-                            }
-                          } catch (e) {
-                            // 7. [에러 처리] 미리 확보해둔 messenger를 사용하여 안전하게 스낵바 표시
-                            messenger.showSnackBar(
-                              SnackBar(
-                                  content: Text('데이터 갱신 중 오류가 발생했습니다: $e')),
-                            );
-                          }
-                        },
-                        icon: const Icon(Icons.video_library, size: 48),
-                        label: const Text(
-                          '영상 지금 등록하기',
-                          style: TextStyle(fontSize: 18),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 32,
-                            vertical: 16,
                           ),
                         ),
-                      ),
-                    ),
-                  ),
-                ),
-              const SizedBox(height: 24),
-
-              // 총 볼륨 표시
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    children: [
-                      const Text(
-                        '총 볼륨',
-                        style: TextStyle(fontSize: 16, color: Colors.grey),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '${totalVolume.toStringAsFixed(1)}kg',
-                        style: const TextStyle(
-                          fontSize: 48,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // 세트 정보 리스트 (인덱스 사용)
-              if (_currentBaseline.workoutSets != null &&
-                  _currentBaseline.workoutSets!.isNotEmpty)
-                Card(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Text(
-                          '세트 정보',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      ..._currentBaseline.workoutSets!
-                          .asMap()
-                          .entries
-                          .map((entry) {
-                        final index = entry.key;
-                        final set = entry.value;
-                        return ListTile(
-                          title: Text('${set.weight}kg × ${set.reps}회'),
-                          subtitle: Text('${index + 1}세트'),
-                        );
-                      }),
-                    ],
-                  ),
-                ),
-              const SizedBox(height: 24),
-
-              // 자세 피드백 UI (영상이 있을 때만 표시)
-              if (_currentBaseline.videoUrl != null &&
-                  _currentBaseline.videoUrl!.isNotEmpty)
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          '자세 피드백',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          _currentBaseline.feedbackPrompt ?? '분석 준비 중입니다.',
-                          style: const TextStyle(fontSize: 16),
-                        ),
+                        _buildHistoryList(),
                       ],
                     ),
                   ),
-                )
-              else
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'AI 분석',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'AI 분석을 위해 영상을 업로드해주세요',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              const SizedBox(height: 24),
-
-              // 운동 강도 피드백 버튼
-              ElevatedButton.icon(
-                onPressed: _showIntensityFeedback,
-                icon: const Icon(Icons.auto_awesome),
-                label: const Text('운동 강도 피드백'),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // 액션 버튼
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: () async {
-                      // [안전 장치] 비동기 작업 전에 객체들을 미리 확보
-                      final messenger = ScaffoldMessenger.of(context);
-                      final navigator = Navigator.of(context);
-
-                      try {
-                        // 현재 운동을 오늘의 운동에 추가 (기본값 0으로)
-                        await ref
-                            .read(workoutRepositoryProvider)
-                            .addTodayWorkout(
-                              _currentBaseline,
-                            );
-
-                        if (!mounted) return;
-
-                        // Provider 갱신
-                        ref.invalidate(baselinesProvider);
-                        ref.invalidate(workoutDatesProvider);
-
-                        // 홈 화면으로 돌아가기
-                        navigator.popUntil((route) => route.isFirst);
-                        messenger.showSnackBar(
-                          const SnackBar(
-                            content: Text('오늘의 운동에 추가되었습니다!'),
-                          ),
-                        );
-                      } catch (e) {
-                        if (!mounted) return;
-                        messenger.showSnackBar(
-                          SnackBar(content: Text('오류가 발생했습니다: $e')),
-                        );
-                      }
-                    },
-                    icon: const Icon(Icons.replay),
-                    label: const Text('다시하기'),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => CheckpointCameraScreen(
-                            baseline: _currentBaseline,
-                          ),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.camera_alt),
-                    label: const Text('중간 점검'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

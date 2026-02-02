@@ -32,8 +32,12 @@ mixin _$Routine {
   @JsonKey(name: 'created_at')
   DateTime? get createdAt => throw _privateConstructorUsedError;
 
+  /// Serializes this Routine to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
-  @JsonKey(ignore: true)
+
+  /// Create a copy of Routine
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
   $RoutineCopyWith<Routine> get copyWith => throw _privateConstructorUsedError;
 }
 
@@ -61,6 +65,8 @@ class _$RoutineCopyWithImpl<$Res, $Val extends Routine>
   // ignore: unused_field
   final $Res Function($Val) _then;
 
+  /// Create a copy of Routine
+  /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
   @override
   $Res call({
@@ -119,6 +125,8 @@ class __$$RoutineImplCopyWithImpl<$Res>
       _$RoutineImpl _value, $Res Function(_$RoutineImpl) _then)
       : super(_value, _then);
 
+  /// Create a copy of Routine
+  /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
   @override
   $Res call({
@@ -212,12 +220,14 @@ class _$RoutineImpl implements _Routine {
                 other.createdAt == createdAt));
   }
 
-  @JsonKey(ignore: true)
+  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   int get hashCode => Object.hash(runtimeType, id, userId, name,
       const DeepCollectionEquality().hash(_routineItems), createdAt);
 
-  @JsonKey(ignore: true)
+  /// Create a copy of Routine
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   @pragma('vm:prefer-inline')
   _$$RoutineImplCopyWith<_$RoutineImpl> get copyWith =>
@@ -253,12 +263,15 @@ abstract class _Routine implements Routine {
   String get name;
   @override
   @JsonKey(name: 'routine_items', includeToJson: false)
-  List<RoutineItem>? get routineItems;
-  @override // 조인 쿼리 결과 매핑용 (읽기 전용)
+  List<RoutineItem>? get routineItems; // 조인 쿼리 결과 매핑용 (읽기 전용)
+  @override
   @JsonKey(name: 'created_at')
   DateTime? get createdAt;
+
+  /// Create a copy of Routine
+  /// with the given fields replaced by the non-null parameter values.
   @override
-  @JsonKey(ignore: true)
+  @JsonKey(includeFromJson: false, includeToJson: false)
   _$$RoutineImplCopyWith<_$RoutineImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }

@@ -5,6 +5,7 @@ import 'workout_log_screen.dart';
 import '../profile/profile_screen.dart';
 import '../../providers/workout_provider.dart';
 import '../management/management_screen.dart';
+import '../profile/my_page_screen.dart';
 
 /// 메인 화면 (3단 탭 구조)
 class MainScreen extends ConsumerStatefulWidget {
@@ -32,36 +33,57 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_appBarTitles[_currentIndex]),
-        leading: _currentIndex == 2
-            ? IconButton(
-                icon: const Icon(Icons.add),
-                onPressed: () {
-                  ref.read(isProfileSearchOpenProvider.notifier).state = true;
-                },
-              )
-            : null,
-        // 홈 탭(Index 0)일 때만 설정 버튼 표시
-        actions: _currentIndex == 0
-            ? [
-                IconButton(
-                  icon: const Icon(Icons.settings),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const ManagementScreen(),
+      // 운동 분석 탭(Index 1)은 내부 WorkoutLogScreen이 자체 AppBar를 가지므로
+      // MainScreen의 AppBar는 숨겨서 타이틀 중복을 방지한다.
+      appBar: _currentIndex == 1
+          ? null
+          : AppBar(
+              title: Text(_appBarTitles[_currentIndex]),
+              // 홈 탭(Index 0): 설정 / 프로필 탭(Index 2): 마이페이지
+              actions: _currentIndex == 0
+                  ? [
+                      IconButton(
+                        icon: const Icon(Icons.settings),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const ManagementScreen(),
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
-              ]
-            : null,
-      ),
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _screens,
+                    ]
+                  : _currentIndex == 2
+                      ? [
+                          IconButton(
+                            icon: const Icon(Icons.add),
+                            onPressed: () {
+                              ref
+                                  .read(profileSearchTriggerProvider.notifier)
+                                  .state++;
+                            },
+                            tooltip: '운동 검색',
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.person),
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const MyPageScreen(),
+                                ),
+                              );
+                            },
+                          ),
+                        ]
+                      : null,
+            ),
+      body: SafeArea(
+        child: IndexedStack(
+          index: _currentIndex,
+          children: _screens,
+        ),
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,

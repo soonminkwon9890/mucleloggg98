@@ -20,6 +20,7 @@ _$WorkoutSetImpl _$$WorkoutSetImplFromJson(Map<String, dynamic> json) =>
       performanceScore:
           JsonConverters.toDoubleNullable(json['performance_score']),
       isCompleted: json['is_completed'] as bool? ?? false,
+      isHidden: json['is_hidden'] as bool? ?? false,
       createdAt: json['created_at'] == null
           ? null
           : DateTime.parse(json['created_at'] as String),
@@ -38,5 +39,6 @@ Map<String, dynamic> _$$WorkoutSetImplToJson(_$WorkoutSetImpl instance) =>
       'is_ai_suggested': instance.isAiSuggested,
       'performance_score': instance.performanceScore,
       'is_completed': instance.isCompleted,
+      'is_hidden': instance.isHidden,
       'created_at': instance.createdAt?.toIso8601String(),
     };

@@ -1,3 +1,5 @@
+// TODO: [AI Pivot] 나중에 AI 기능 복구 시 주석 해제
+/*
 import 'dart:io';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:video_compress/video_compress.dart';
@@ -113,4 +115,4 @@ class PoseDetectionService {
     await _poseDetector.close();
   }
 }
-
+*/

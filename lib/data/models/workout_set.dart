@@ -54,6 +54,9 @@ class WorkoutSet with _$WorkoutSet {
     @JsonKey(name: 'is_completed')
     @Default(false)
     bool isCompleted, // 입력 중인 세트와 완료된 세트 구분
+    @JsonKey(name: 'is_hidden')
+    @Default(false)
+    bool isHidden, // 홈 화면에서 숨김 처리된 세트 (Soft Delete)
     @JsonKey(name: 'created_at') DateTime? createdAt,
   }) = _WorkoutSet;
 

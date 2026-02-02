@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/utils/media_helper.dart';
 import '../../../core/utils/video_compressor.dart';
+import '../../../core/utils/adaptive_widgets.dart';
 import '../../../data/models/exercise_baseline.dart';
 import '../../providers/workout_provider.dart';
 import '../../screens/exercise/media_source_modal.dart';
@@ -138,16 +139,17 @@ class _VideoUploadScreenState extends ConsumerState<VideoUploadScreen> {
           widget.isCheckpoint ? '중간 점검 영상 업로드' : '영상 등록',
         ),
       ),
-      body: Center(
-        child: _isProcessing
-            ? const Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('영상을 처리하는 중...'),
-                ],
-              )
+      body: SafeArea(
+        child: Center(
+          child: _isProcessing
+              ? Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    AdaptiveWidgets.buildAdaptiveLoadingIndicator(),
+                    const SizedBox(height: 16),
+                    const Text('영상을 처리하는 중...'),
+                  ],
+                )
             : Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -168,10 +170,11 @@ class _VideoUploadScreenState extends ConsumerState<VideoUploadScreen> {
                         horizontal: 32,
                         vertical: 16,
                       ),
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
+        ),
       ),
     );
   }

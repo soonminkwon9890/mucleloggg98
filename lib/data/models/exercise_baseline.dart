@@ -13,19 +13,18 @@ class ExerciseBaseline with _$ExerciseBaseline {
     @JsonKey(name: 'id') required String id,
     @JsonKey(name: 'user_id') required String userId,
     @JsonKey(name: 'exercise_name') required String exerciseName, // 'BENCH_PRESS', 'SQUAT' 등
-    @JsonKey(name: 'target_muscle') String? targetMuscle, // 'CHEST', 'LEGS'
+    @JsonKey(
+      name: 'target_muscles',
+      fromJson: _targetMusclesFromJson,
+      toJson: _targetMusclesToJson,
+    )
+    List<String>? targetMuscles, // ['가슴', '등', '어깨'] 등
     @JsonKey(
       name: 'body_part',
       fromJson: JsonConverters.bodyPartFromCode,
       toJson: JsonConverters.bodyPartToCode,
     )
     BodyPart? bodyPart, // Enum: upper, lower, full
-    @JsonKey(
-      name: 'movement_type',
-      fromJson: JsonConverters.movementTypeFromCode,
-      toJson: JsonConverters.movementTypeToCode,
-    )
-    MovementType? movementType, // Enum: push, pull
     @JsonKey(name: 'video_url') String? videoUrl, // 원본/압축 영상 경로
     @JsonKey(name: 'thumbnail_url') String? thumbnailUrl, // 리스트 표시용 썸네일
     @JsonKey(name: 'skeleton_data') Map<String, dynamic>? skeletonData, // JSONB: 기준 자세의 관절 좌표 데이터 캐싱
@@ -39,5 +38,18 @@ class ExerciseBaseline with _$ExerciseBaseline {
 
   factory ExerciseBaseline.fromJson(Map<String, dynamic> json) =>
       _$ExerciseBaselineFromJson(json);
+}
+
+/// targetMuscles JSON 변환 헬퍼 함수
+List<String>? _targetMusclesFromJson(dynamic value) {
+  if (value == null) return [];
+  if (value is List) {
+    return value.map((e) => e.toString()).toList();
+  }
+  return [];
+}
+
+List<String>? _targetMusclesToJson(List<String>? value) {
+  return value;
 }
 

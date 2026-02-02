@@ -67,63 +67,6 @@ extension BodyPartParsing on BodyPart {
   }
 }
 
-enum MovementType {
-  push, // 밀기
-  pull, // 당기기
-}
-
-extension MovementTypeExtension on MovementType {
-  /// DB 저장용 코드 반환
-  String get code {
-    switch (this) {
-      case MovementType.push:
-        return 'PUSH';
-      case MovementType.pull:
-        return 'PULL';
-    }
-  }
-
-  /// UI 표시용 한글 라벨 반환
-  String get label {
-    switch (this) {
-      case MovementType.push:
-        return '밀기';
-      case MovementType.pull:
-        return '당기기';
-    }
-  }
-}
-
-extension MovementTypeParsing on MovementType {
-  /// DB 코드로부터 Enum 생성 (nullable)
-  /// [안전장치] 대소문자 무시, trim 적용, null 처리
-  /// [Fail-safe] 알 수 없는 값이 들어와도 null 반환 (앱 크래시 방지)
-  static MovementType? fromCode(String? code) {
-    if (code == null || code.trim().isEmpty) return null;
-    switch (code.trim().toUpperCase()) {
-      case 'PUSH':
-        return MovementType.push;
-      case 'PULL':
-        return MovementType.pull;
-      default:
-        // print('Warning: Unknown MovementType code: $code'); // 선택적 로그
-        return null; // 안전하게 null 반환 (앱 크래시 방지)
-    }
-  }
-
-  /// 한글 라벨로부터 Enum 생성 (nullable)
-  static MovementType? fromKorean(String korean) {
-    switch (korean.trim()) {
-      case '밀기':
-        return MovementType.push;
-      case '당기기':
-        return MovementType.pull;
-      default:
-        return null;
-    }
-  }
-}
-
 enum RpeLevel {
   low,    // 낮음
   medium, // 보통

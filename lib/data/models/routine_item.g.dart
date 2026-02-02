@@ -12,7 +12,6 @@ _$RoutineItemImpl _$$RoutineItemImplFromJson(Map<String, dynamic> json) =>
       routineId: json['routine_id'] as String,
       exerciseName: json['exercise_name'] as String,
       bodyPart: JsonConverters.bodyPartFromCode(json['body_part']),
-      movementType: JsonConverters.movementTypeFromCode(json['movement_type']),
       sortOrder: json['sort_order'] == null
           ? 0
           : JsonConverters.toInt(json['sort_order']),
@@ -27,7 +26,6 @@ Map<String, dynamic> _$$RoutineItemImplToJson(_$RoutineItemImpl instance) =>
       'routine_id': instance.routineId,
       'exercise_name': instance.exerciseName,
       'body_part': JsonConverters.bodyPartToCode(instance.bodyPart),
-      'movement_type': JsonConverters.movementTypeToCode(instance.movementType),
       'sort_order': instance.sortOrder,
       'created_at': instance.createdAt?.toIso8601String(),
     };

@@ -19,8 +19,10 @@ class ComparisonScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text('${baseline.exerciseName} 비교 분석'),
       ),
-      body: const Center(
-        child: Text('비교 분석 준비 중'),
+      body: const SafeArea(
+        child: Center(
+          child: Text('비교 분석 준비 중'),
+        ),
       ),
     );
   }

@@ -1,18 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:uuid/uuid.dart';
-import '../../../data/models/exercise_baseline.dart';
 import '../../providers/workout_provider.dart';
-import '../../../data/services/supabase_service.dart';
 import '../../../core/enums/exercise_enums.dart';
 
 /// 신규 운동 추가 패널
 class ExerciseAddPanel extends ConsumerStatefulWidget {
-  final VoidCallback onExerciseAdded;
-
   const ExerciseAddPanel({
     super.key,
-    required this.onExerciseAdded,
+    // onExerciseAdded 제거
   });
 
   @override
@@ -23,7 +18,13 @@ class _ExerciseAddPanelState extends ConsumerState<ExerciseAddPanel> {
   final _formKey = GlobalKey<FormState>();
   final _exerciseNameController = TextEditingController();
   BodyPart? _selectedBodyPart;
-  MovementType? _selectedMovementType;
+  final List<String> _selectedTargetMuscles = [];
+
+  static const Map<BodyPart, List<String>> _targetMusclesByBodyPart = {
+    BodyPart.upper: ['가슴', '등', '어깨', '팔', '복근'],
+    BodyPart.lower: ['대퇴사두(앞)', '햄스트링(뒤)', '둔근(힙)'],
+    BodyPart.full: [], // 전신은 하위 선택 없음
+  };
 
   @override
   void dispose() {
@@ -33,8 +34,11 @@ class _ExerciseAddPanelState extends ConsumerState<ExerciseAddPanel> {
 
   @override
   Widget build(BuildContext context) {
-    return Drawer(
-      width: MediaQuery.of(context).size.width * 0.8,
+    return Container(
+      // Drawer 대신 Container 사용
+      decoration: BoxDecoration(
+        color: Theme.of(context).scaffoldBackgroundColor, // 배경색만 지정
+      ),
       child: SafeArea(
         child: Form(
           key: _formKey,
@@ -72,7 +76,7 @@ class _ExerciseAddPanelState extends ConsumerState<ExerciseAddPanel> {
                         },
                       ),
                       const SizedBox(height: 24),
-                      
+
                       // 부위 선택
                       const Text(
                         '부위 선택 *',
@@ -91,21 +95,21 @@ class _ExerciseAddPanelState extends ConsumerState<ExerciseAddPanel> {
                             onSelected: (selected) {
                               setState(() {
                                 _selectedBodyPart = selected ? bodyPart : null;
-                                // 부위가 변경되면 운동 타입 초기화
-                                if (bodyPart != BodyPart.upper) {
-                                  _selectedMovementType = null;
-                                }
+                                // [중요] 상위 부위가 변경되면 하위 타겟 근육 선택을 반드시 초기화
+                                _selectedTargetMuscles.clear();
                               });
                             },
                           );
                         }).toList(),
                       ),
-                      
-                      // 운동 타입 (상체 선택 시에만 표시)
-                      if (_selectedBodyPart == BodyPart.upper) ...[
+
+                      // 타겟 근육 선택 (상체/하체 선택 시에만 표시)
+                      if (_selectedBodyPart != null &&
+                          _targetMusclesByBodyPart[_selectedBodyPart]!
+                              .isNotEmpty) ...[
                         const SizedBox(height: 24),
                         const Text(
-                          '운동 타입',
+                          '타겟 근육 선택',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -114,22 +118,27 @@ class _ExerciseAddPanelState extends ConsumerState<ExerciseAddPanel> {
                         const SizedBox(height: 8),
                         Wrap(
                           spacing: 8,
-                          children: MovementType.values.map((movementType) {
-                            return FilterChip(
-                              label: Text(movementType.label),
-                              selected: _selectedMovementType == movementType,
-                              onSelected: (selected) {
-                                setState(() {
-                                  _selectedMovementType = selected ? movementType : null;
-                                });
-                              },
-                            );
-                          }).toList(),
+                          children: _targetMusclesByBodyPart[_selectedBodyPart]!
+                              .map((muscle) => FilterChip(
+                                    label: Text(muscle),
+                                    selected:
+                                        _selectedTargetMuscles.contains(muscle),
+                                    onSelected: (selected) {
+                                      setState(() {
+                                        if (selected) {
+                                          _selectedTargetMuscles.add(muscle);
+                                        } else {
+                                          _selectedTargetMuscles.remove(muscle);
+                                        }
+                                      });
+                                    },
+                                  ))
+                              .toList(),
                         ),
                       ],
-                      
+
                       const SizedBox(height: 32),
-                      
+
                       // 저장 버튼
                       SizedBox(
                         width: double.infinity,
@@ -154,101 +163,62 @@ class _ExerciseAddPanelState extends ConsumerState<ExerciseAddPanel> {
 
   Future<void> _saveNewExercise() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // 3.1. 유효성 검사 추가 (Validation - 중요)
+    // 운동 이름 체크
+    final exerciseName = _exerciseNameController.text.trim();
+    if (exerciseName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('운동 이름을 입력해주세요.')),
+      );
+      return;
+    }
+
+    // 부위 체크
     if (_selectedBodyPart == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('부위를 선택해주세요')),
+        const SnackBar(content: Text('부위를 선택해주세요.')),
+      );
+      return;
+    }
+
+    // 타겟 근육 체크 (필수!)
+    if (_selectedTargetMuscles.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('타겟 근육을 최소 1개 이상 선택해주세요.')),
       );
       return;
     }
 
     if (!mounted) return;
 
+    // 1. 키보드 내리기
+    FocusScope.of(context).unfocus();
+
+    // 2. 안전 딜레이
+    await Future.delayed(const Duration(milliseconds: 100));
+
+    if (!mounted) return;
+
     try {
-      final repository = ref.read(workoutRepositoryProvider);
-      final userId = SupabaseService.currentUser?.id;
-      if (userId == null) {
-        throw Exception('로그인이 필요합니다.');
-      }
+      final viewModel = ref.read(homeViewModelProvider.notifier);
+      final bodyPartCode = _selectedBodyPart!.code;
 
-      // [Phase 3.2.1] Enum 그대로 사용 (변환 함수 제거)
-      final bodyPartCode = _selectedBodyPart?.code;
-      final movementTypeCode = _selectedMovementType?.code;
+      // 3. DB 저장
+      await viewModel.addNewExercise(
+          exerciseName, bodyPartCode, _selectedTargetMuscles);
 
-      // [신규] 중복 체크
-      final duplicate = await repository.findDuplicateBaseline(
-        exerciseName: _exerciseNameController.text.trim(),
-        bodyPart: bodyPartCode,
-        movementType: movementTypeCode,
-      );
+      // 4. mounted 체크
+      if (!mounted || !context.mounted) return;
 
-      if (duplicate != null && mounted) {
-        // 병합 다이얼로그 표시
-        final mergeChoice = await _showMergeDialog(context, duplicate.exerciseName);
-        if (mergeChoice == null) return; // 취소
-
-        if (mergeChoice == true) {
-          // 병합 선택: 기존 Baseline ID 재사용, 상태만 업데이트
-          final updatedBaseline = duplicate.copyWith(
-            isHiddenFromHome: false, // 홈에 보이게 변경
-          );
-          await repository.upsertBaseline(updatedBaseline);
-          ref.invalidate(baselinesProvider);
-          ref.invalidate(workoutDatesProvider);
-          if (!mounted) return;
-          widget.onExerciseAdded();
-          return;
-        }
-        // false면 새로 생성 계속 진행
-      }
-
-      // 기존 저장 로직 (중복이 없거나 "새로 저장" 선택한 경우)
-      // [Phase 3.2.1] Enum 그대로 사용 (변환 함수 제거)
-      final newBaseline = ExerciseBaseline(
-        id: const Uuid().v4(),
-        userId: userId,
-        exerciseName: _exerciseNameController.text.trim(),
-        bodyPart: _selectedBodyPart, // Enum 직접 사용
-        movementType: _selectedMovementType, // Enum 직접 사용
-        createdAt: DateTime.now(),
-      );
-
-      await repository.addTodayWorkout(newBaseline);
-
-      ref.invalidate(baselinesProvider);
-      ref.invalidate(workoutDatesProvider);
-
-      if (!mounted) return;
-
-      widget.onExerciseAdded();
+      // 5. 성공 신호(true)를 전달하며 패널 닫기
+      Navigator.of(context).pop(true);
     } catch (e) {
-      if (!mounted) return;
+      // 실패 시: 스낵바 표시 (패널은 닫지 않음)
+      if (!mounted || !context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('오류: $e')),
       );
     }
   }
-
-  Future<bool?> _showMergeDialog(BuildContext context, String exerciseName) async {
-    return showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('중복 운동 발견'),
-        content: Text(
-          '보관함에 이미 "$exerciseName" 운동이 존재합니다.\n'
-          '기존 운동 기록에 합쳐서 저장하시겠습니까?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false), // 새로 저장
-            child: const Text('아니요 (별도 저장)'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true), // 병합
-            child: const Text('네 (합치기)'),
-          ),
-        ],
-      ),
-    );
-  }
 }
-

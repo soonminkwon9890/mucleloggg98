@@ -48,11 +48,18 @@ mixin _$WorkoutSet {
   @JsonKey(name: 'is_completed')
   bool get isCompleted =>
       throw _privateConstructorUsedError; // 입력 중인 세트와 완료된 세트 구분
+  @JsonKey(name: 'is_hidden')
+  bool get isHidden =>
+      throw _privateConstructorUsedError; // 홈 화면에서 숨김 처리된 세트 (Soft Delete)
   @JsonKey(name: 'created_at')
   DateTime? get createdAt => throw _privateConstructorUsedError;
 
+  /// Serializes this WorkoutSet to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
-  @JsonKey(ignore: true)
+
+  /// Create a copy of WorkoutSet
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
   $WorkoutSetCopyWith<WorkoutSet> get copyWith =>
       throw _privateConstructorUsedError;
 }
@@ -82,6 +89,7 @@ abstract class $WorkoutSetCopyWith<$Res> {
           name: 'performance_score', fromJson: JsonConverters.toDoubleNullable)
       double? performanceScore,
       @JsonKey(name: 'is_completed') bool isCompleted,
+      @JsonKey(name: 'is_hidden') bool isHidden,
       @JsonKey(name: 'created_at') DateTime? createdAt});
 }
 
@@ -95,6 +103,8 @@ class _$WorkoutSetCopyWithImpl<$Res, $Val extends WorkoutSet>
   // ignore: unused_field
   final $Res Function($Val) _then;
 
+  /// Create a copy of WorkoutSet
+  /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
   @override
   $Res call({
@@ -109,6 +119,7 @@ class _$WorkoutSetCopyWithImpl<$Res, $Val extends WorkoutSet>
     Object? isAiSuggested = null,
     Object? performanceScore = freezed,
     Object? isCompleted = null,
+    Object? isHidden = null,
     Object? createdAt = freezed,
   }) {
     return _then(_value.copyWith(
@@ -156,6 +167,10 @@ class _$WorkoutSetCopyWithImpl<$Res, $Val extends WorkoutSet>
           ? _value.isCompleted
           : isCompleted // ignore: cast_nullable_to_non_nullable
               as bool,
+      isHidden: null == isHidden
+          ? _value.isHidden
+          : isHidden // ignore: cast_nullable_to_non_nullable
+              as bool,
       createdAt: freezed == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
@@ -191,6 +206,7 @@ abstract class _$$WorkoutSetImplCopyWith<$Res>
           name: 'performance_score', fromJson: JsonConverters.toDoubleNullable)
       double? performanceScore,
       @JsonKey(name: 'is_completed') bool isCompleted,
+      @JsonKey(name: 'is_hidden') bool isHidden,
       @JsonKey(name: 'created_at') DateTime? createdAt});
 }
 
@@ -202,6 +218,8 @@ class __$$WorkoutSetImplCopyWithImpl<$Res>
       _$WorkoutSetImpl _value, $Res Function(_$WorkoutSetImpl) _then)
       : super(_value, _then);
 
+  /// Create a copy of WorkoutSet
+  /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
   @override
   $Res call({
@@ -216,6 +234,7 @@ class __$$WorkoutSetImplCopyWithImpl<$Res>
     Object? isAiSuggested = null,
     Object? performanceScore = freezed,
     Object? isCompleted = null,
+    Object? isHidden = null,
     Object? createdAt = freezed,
   }) {
     return _then(_$WorkoutSetImpl(
@@ -263,6 +282,10 @@ class __$$WorkoutSetImplCopyWithImpl<$Res>
           ? _value.isCompleted
           : isCompleted // ignore: cast_nullable_to_non_nullable
               as bool,
+      isHidden: null == isHidden
+          ? _value.isHidden
+          : isHidden // ignore: cast_nullable_to_non_nullable
+              as bool,
       createdAt: freezed == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
@@ -294,6 +317,7 @@ class _$WorkoutSetImpl implements _WorkoutSet {
           name: 'performance_score', fromJson: JsonConverters.toDoubleNullable)
       this.performanceScore,
       @JsonKey(name: 'is_completed') this.isCompleted = false,
+      @JsonKey(name: 'is_hidden') this.isHidden = false,
       @JsonKey(name: 'created_at') this.createdAt});
 
   factory _$WorkoutSetImpl.fromJson(Map<String, dynamic> json) =>
@@ -346,12 +370,16 @@ class _$WorkoutSetImpl implements _WorkoutSet {
   final bool isCompleted;
 // 입력 중인 세트와 완료된 세트 구분
   @override
+  @JsonKey(name: 'is_hidden')
+  final bool isHidden;
+// 홈 화면에서 숨김 처리된 세트 (Soft Delete)
+  @override
   @JsonKey(name: 'created_at')
   final DateTime? createdAt;
 
   @override
   String toString() {
-    return 'WorkoutSet(id: $id, baselineId: $baselineId, weight: $weight, reps: $reps, sets: $sets, rpe: $rpe, rpeLevel: $rpeLevel, estimated1rm: $estimated1rm, isAiSuggested: $isAiSuggested, performanceScore: $performanceScore, isCompleted: $isCompleted, createdAt: $createdAt)';
+    return 'WorkoutSet(id: $id, baselineId: $baselineId, weight: $weight, reps: $reps, sets: $sets, rpe: $rpe, rpeLevel: $rpeLevel, estimated1rm: $estimated1rm, isAiSuggested: $isAiSuggested, performanceScore: $performanceScore, isCompleted: $isCompleted, isHidden: $isHidden, createdAt: $createdAt)';
   }
 
   @override
@@ -376,11 +404,13 @@ class _$WorkoutSetImpl implements _WorkoutSet {
                 other.performanceScore == performanceScore) &&
             (identical(other.isCompleted, isCompleted) ||
                 other.isCompleted == isCompleted) &&
+            (identical(other.isHidden, isHidden) ||
+                other.isHidden == isHidden) &&
             (identical(other.createdAt, createdAt) ||
                 other.createdAt == createdAt));
   }
 
-  @JsonKey(ignore: true)
+  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   int get hashCode => Object.hash(
       runtimeType,
@@ -395,9 +425,12 @@ class _$WorkoutSetImpl implements _WorkoutSet {
       isAiSuggested,
       performanceScore,
       isCompleted,
+      isHidden,
       createdAt);
 
-  @JsonKey(ignore: true)
+  /// Create a copy of WorkoutSet
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   @pragma('vm:prefer-inline')
   _$$WorkoutSetImplCopyWith<_$WorkoutSetImpl> get copyWith =>
@@ -434,6 +467,7 @@ abstract class _WorkoutSet implements WorkoutSet {
           name: 'performance_score', fromJson: JsonConverters.toDoubleNullable)
       final double? performanceScore,
       @JsonKey(name: 'is_completed') final bool isCompleted,
+      @JsonKey(name: 'is_hidden') final bool isHidden,
       @JsonKey(name: 'created_at')
       final DateTime? createdAt}) = _$WorkoutSetImpl;
 
@@ -445,42 +479,48 @@ abstract class _WorkoutSet implements WorkoutSet {
   String get id;
   @override
   @JsonKey(name: 'baseline_id')
-  String get baselineId;
-  @override // 어떤 운동의 로그인지 연결
+  String get baselineId; // 어떤 운동의 로그인지 연결
+  @override
   @JsonKey(name: 'weight', fromJson: JsonConverters.toDouble)
-  double get weight;
-  @override // 무게 (kg)
+  double get weight; // 무게 (kg)
+  @override
   @JsonKey(name: 'reps', fromJson: JsonConverters.toInt)
-  int get reps;
-  @override // 횟수
+  int get reps; // 횟수
+  @override
   @JsonKey(name: 'sets', fromJson: JsonConverters.toInt)
-  int get sets;
-  @override // 세트 수
+  int get sets; // 세트 수
+  @override
   @JsonKey(name: 'rpe', fromJson: JsonConverters.toIntNullable)
-  int? get rpe;
-  @override // 1~10
+  int? get rpe; // 1~10
+  @override
   @JsonKey(
       name: 'rpe_level',
       fromJson: JsonConverters.rpeLevelFromCode,
       toJson: JsonConverters.rpeLevelToCode)
-  RpeLevel? get rpeLevel;
-  @override // Enum: low, medium, high
+  RpeLevel? get rpeLevel; // Enum: low, medium, high
+  @override
   @JsonKey(name: 'estimated_1rm', fromJson: JsonConverters.toDoubleNullable)
-  double? get estimated1rm;
-  @override // 계산된 1RM
+  double? get estimated1rm; // 계산된 1RM
+  @override
   @JsonKey(name: 'is_ai_suggested')
-  bool get isAiSuggested;
-  @override // AI 추천 값 수용 여부
+  bool get isAiSuggested; // AI 추천 값 수용 여부
+  @override
   @JsonKey(name: 'performance_score', fromJson: JsonConverters.toDoubleNullable)
-  double? get performanceScore;
-  @override // 추가 성능 점수
+  double? get performanceScore; // 추가 성능 점수
+  @override
   @JsonKey(name: 'is_completed')
-  bool get isCompleted;
-  @override // 입력 중인 세트와 완료된 세트 구분
+  bool get isCompleted; // 입력 중인 세트와 완료된 세트 구분
+  @override
+  @JsonKey(name: 'is_hidden')
+  bool get isHidden; // 홈 화면에서 숨김 처리된 세트 (Soft Delete)
+  @override
   @JsonKey(name: 'created_at')
   DateTime? get createdAt;
+
+  /// Create a copy of WorkoutSet
+  /// with the given fields replaced by the non-null parameter values.
   @override
-  @JsonKey(ignore: true)
+  @JsonKey(includeFromJson: false, includeToJson: false)
   _$$WorkoutSetImplCopyWith<_$WorkoutSetImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }

@@ -32,19 +32,17 @@ mixin _$RoutineItem {
       toJson: JsonConverters.bodyPartToCode)
   BodyPart? get bodyPart =>
       throw _privateConstructorUsedError; // Enum: upper, lower, full (ExerciseBaseline과 동일)
-  @JsonKey(
-      name: 'movement_type',
-      fromJson: JsonConverters.movementTypeFromCode,
-      toJson: JsonConverters.movementTypeToCode)
-  MovementType? get movementType =>
-      throw _privateConstructorUsedError; // Enum: push, pull (ExerciseBaseline과 동일)
   @JsonKey(name: 'sort_order', fromJson: JsonConverters.toInt)
   int get sortOrder => throw _privateConstructorUsedError;
   @JsonKey(name: 'created_at')
   DateTime? get createdAt => throw _privateConstructorUsedError;
 
+  /// Serializes this RoutineItem to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
-  @JsonKey(ignore: true)
+
+  /// Create a copy of RoutineItem
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
   $RoutineItemCopyWith<RoutineItem> get copyWith =>
       throw _privateConstructorUsedError;
 }
@@ -64,11 +62,6 @@ abstract class $RoutineItemCopyWith<$Res> {
           fromJson: JsonConverters.bodyPartFromCode,
           toJson: JsonConverters.bodyPartToCode)
       BodyPart? bodyPart,
-      @JsonKey(
-          name: 'movement_type',
-          fromJson: JsonConverters.movementTypeFromCode,
-          toJson: JsonConverters.movementTypeToCode)
-      MovementType? movementType,
       @JsonKey(name: 'sort_order', fromJson: JsonConverters.toInt)
       int sortOrder,
       @JsonKey(name: 'created_at') DateTime? createdAt});
@@ -84,6 +77,8 @@ class _$RoutineItemCopyWithImpl<$Res, $Val extends RoutineItem>
   // ignore: unused_field
   final $Res Function($Val) _then;
 
+  /// Create a copy of RoutineItem
+  /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
   @override
   $Res call({
@@ -91,7 +86,6 @@ class _$RoutineItemCopyWithImpl<$Res, $Val extends RoutineItem>
     Object? routineId = null,
     Object? exerciseName = null,
     Object? bodyPart = freezed,
-    Object? movementType = freezed,
     Object? sortOrder = null,
     Object? createdAt = freezed,
   }) {
@@ -112,10 +106,6 @@ class _$RoutineItemCopyWithImpl<$Res, $Val extends RoutineItem>
           ? _value.bodyPart
           : bodyPart // ignore: cast_nullable_to_non_nullable
               as BodyPart?,
-      movementType: freezed == movementType
-          ? _value.movementType
-          : movementType // ignore: cast_nullable_to_non_nullable
-              as MovementType?,
       sortOrder: null == sortOrder
           ? _value.sortOrder
           : sortOrder // ignore: cast_nullable_to_non_nullable
@@ -145,11 +135,6 @@ abstract class _$$RoutineItemImplCopyWith<$Res>
           fromJson: JsonConverters.bodyPartFromCode,
           toJson: JsonConverters.bodyPartToCode)
       BodyPart? bodyPart,
-      @JsonKey(
-          name: 'movement_type',
-          fromJson: JsonConverters.movementTypeFromCode,
-          toJson: JsonConverters.movementTypeToCode)
-      MovementType? movementType,
       @JsonKey(name: 'sort_order', fromJson: JsonConverters.toInt)
       int sortOrder,
       @JsonKey(name: 'created_at') DateTime? createdAt});
@@ -163,6 +148,8 @@ class __$$RoutineItemImplCopyWithImpl<$Res>
       _$RoutineItemImpl _value, $Res Function(_$RoutineItemImpl) _then)
       : super(_value, _then);
 
+  /// Create a copy of RoutineItem
+  /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
   @override
   $Res call({
@@ -170,7 +157,6 @@ class __$$RoutineItemImplCopyWithImpl<$Res>
     Object? routineId = null,
     Object? exerciseName = null,
     Object? bodyPart = freezed,
-    Object? movementType = freezed,
     Object? sortOrder = null,
     Object? createdAt = freezed,
   }) {
@@ -191,10 +177,6 @@ class __$$RoutineItemImplCopyWithImpl<$Res>
           ? _value.bodyPart
           : bodyPart // ignore: cast_nullable_to_non_nullable
               as BodyPart?,
-      movementType: freezed == movementType
-          ? _value.movementType
-          : movementType // ignore: cast_nullable_to_non_nullable
-              as MovementType?,
       sortOrder: null == sortOrder
           ? _value.sortOrder
           : sortOrder // ignore: cast_nullable_to_non_nullable
@@ -219,11 +201,6 @@ class _$RoutineItemImpl implements _RoutineItem {
           fromJson: JsonConverters.bodyPartFromCode,
           toJson: JsonConverters.bodyPartToCode)
       this.bodyPart,
-      @JsonKey(
-          name: 'movement_type',
-          fromJson: JsonConverters.movementTypeFromCode,
-          toJson: JsonConverters.movementTypeToCode)
-      this.movementType,
       @JsonKey(name: 'sort_order', fromJson: JsonConverters.toInt)
       this.sortOrder = 0,
       @JsonKey(name: 'created_at') this.createdAt});
@@ -248,13 +225,6 @@ class _$RoutineItemImpl implements _RoutineItem {
   final BodyPart? bodyPart;
 // Enum: upper, lower, full (ExerciseBaseline과 동일)
   @override
-  @JsonKey(
-      name: 'movement_type',
-      fromJson: JsonConverters.movementTypeFromCode,
-      toJson: JsonConverters.movementTypeToCode)
-  final MovementType? movementType;
-// Enum: push, pull (ExerciseBaseline과 동일)
-  @override
   @JsonKey(name: 'sort_order', fromJson: JsonConverters.toInt)
   final int sortOrder;
   @override
@@ -263,7 +233,7 @@ class _$RoutineItemImpl implements _RoutineItem {
 
   @override
   String toString() {
-    return 'RoutineItem(id: $id, routineId: $routineId, exerciseName: $exerciseName, bodyPart: $bodyPart, movementType: $movementType, sortOrder: $sortOrder, createdAt: $createdAt)';
+    return 'RoutineItem(id: $id, routineId: $routineId, exerciseName: $exerciseName, bodyPart: $bodyPart, sortOrder: $sortOrder, createdAt: $createdAt)';
   }
 
   @override
@@ -278,20 +248,20 @@ class _$RoutineItemImpl implements _RoutineItem {
                 other.exerciseName == exerciseName) &&
             (identical(other.bodyPart, bodyPart) ||
                 other.bodyPart == bodyPart) &&
-            (identical(other.movementType, movementType) ||
-                other.movementType == movementType) &&
             (identical(other.sortOrder, sortOrder) ||
                 other.sortOrder == sortOrder) &&
             (identical(other.createdAt, createdAt) ||
                 other.createdAt == createdAt));
   }
 
-  @JsonKey(ignore: true)
+  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode => Object.hash(runtimeType, id, routineId, exerciseName,
-      bodyPart, movementType, sortOrder, createdAt);
+  int get hashCode => Object.hash(
+      runtimeType, id, routineId, exerciseName, bodyPart, sortOrder, createdAt);
 
-  @JsonKey(ignore: true)
+  /// Create a copy of RoutineItem
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   @pragma('vm:prefer-inline')
   _$$RoutineItemImplCopyWith<_$RoutineItemImpl> get copyWith =>
@@ -315,11 +285,6 @@ abstract class _RoutineItem implements RoutineItem {
               fromJson: JsonConverters.bodyPartFromCode,
               toJson: JsonConverters.bodyPartToCode)
           final BodyPart? bodyPart,
-          @JsonKey(
-              name: 'movement_type',
-              fromJson: JsonConverters.movementTypeFromCode,
-              toJson: JsonConverters.movementTypeToCode)
-          final MovementType? movementType,
           @JsonKey(name: 'sort_order', fromJson: JsonConverters.toInt)
           final int sortOrder,
           @JsonKey(name: 'created_at') final DateTime? createdAt}) =
@@ -342,21 +307,18 @@ abstract class _RoutineItem implements RoutineItem {
       name: 'body_part',
       fromJson: JsonConverters.bodyPartFromCode,
       toJson: JsonConverters.bodyPartToCode)
-  BodyPart? get bodyPart;
-  @override // Enum: upper, lower, full (ExerciseBaseline과 동일)
-  @JsonKey(
-      name: 'movement_type',
-      fromJson: JsonConverters.movementTypeFromCode,
-      toJson: JsonConverters.movementTypeToCode)
-  MovementType? get movementType;
-  @override // Enum: push, pull (ExerciseBaseline과 동일)
+  BodyPart? get bodyPart; // Enum: upper, lower, full (ExerciseBaseline과 동일)
+  @override
   @JsonKey(name: 'sort_order', fromJson: JsonConverters.toInt)
   int get sortOrder;
   @override
   @JsonKey(name: 'created_at')
   DateTime? get createdAt;
+
+  /// Create a copy of RoutineItem
+  /// with the given fields replaced by the non-null parameter values.
   @override
-  @JsonKey(ignore: true)
+  @JsonKey(includeFromJson: false, includeToJson: false)
   _$$RoutineItemImplCopyWith<_$RoutineItemImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }

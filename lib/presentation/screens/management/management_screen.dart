@@ -164,17 +164,20 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
       // copySetsToToday 실행 (세트 복사 + Baseline 상태 업데이트)
       await repository.copySetsToToday(baseline.id, dateSets);
 
-      // Provider 갱신
-      ref.invalidate(baselinesProvider);
-      ref.invalidate(workoutDatesProvider);
+    // Provider 갱신
+    ref.invalidate(baselinesProvider);
+    ref.invalidate(workoutDatesProvider);
 
-      if (!mounted) return;
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('기록이 복사되었습니다. 홈 화면에서 확인하세요.'),
-          backgroundColor: Colors.green,
-        ),
-      );
+    // [추가] HomeViewModel 상태 갱신
+    ref.read(homeViewModelProvider.notifier).refresh();
+
+    if (!mounted) return;
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('기록이 복사되었습니다. 홈 화면에서 확인하세요.'),
+        backgroundColor: Colors.green,
+      ),
+    );
     } catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(
@@ -189,69 +192,78 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
   Future<void> _addToToday() async {
     if (_selectedBaselineIds.isEmpty) return;
 
+    // [안전핀] 로딩 인디케이터 표시 (여러 개 선택 시 작업 중임을 알림)
+    bool isLoading = true;
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: Card(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('운동을 추가하는 중...'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     try {
       final repository = ref.read(workoutRepositoryProvider);
-
-      // 1. [중요] 리포지토리에서 다시 조회하지 않고, 현재 보고 있는 화면의 데이터(Provider)를 사용
-      // (이유: 이미 보관함 탭에서 로딩된 데이터를 그대로 쓰는 것이 빠르고 정확함)
-      // [Provider 구조] FutureProvider<List<T>> → ref.read() → AsyncValue<List<T>>? → .value → List<T>?
-      // 따라서 .value 한 번만 사용하면 실제 리스트를 가져올 수 있음
       final baselines = ref.read(archivedBaselinesProvider).value ?? [];
+
+      // Fallback: 혹시라도 없으면 리포지토리에서 조회
+      if (baselines.isEmpty) {
+        final repoBaselines = await repository.getBaselines();
+        baselines.addAll(repoBaselines);
+      }
 
       var selectedBaselines =
           baselines.where((b) => _selectedBaselineIds.contains(b.id)).toList();
 
-      // Fallback: 혹시라도 없으면 리포지토리에서 조회
       if (selectedBaselines.isEmpty) {
-        final repoBaselines = await repository.getBaselines();
-        selectedBaselines = repoBaselines
-            .where((b) => _selectedBaselineIds.contains(b.id))
-            .toList();
+        if (mounted && isLoading) {
+          Navigator.pop(context); // 로딩 다이얼로그 닫기
+          isLoading = false;
+        }
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('선택된 운동을 찾을 수 없습니다.')),
+          );
+        }
+        return;
       }
 
-      final now = DateTime.now(); // 기준이 될 현재 시간
+      final now = DateTime.now();
+      int successCount = 0;
 
       for (final baseline in selectedBaselines) {
-        // [핵심 로직] 날짜 비교 (문자열 비교로 시차 문제 완전 해결)
-        final isSameDay = DateFormatter.isSameDate(baseline.createdAt, now);
+        try {
+          // 날짜 비교
+          final isSameDay = DateFormatter.isSameDate(baseline.createdAt, now);
 
-        if (isSameDay) {
-          // [조건 A] 오늘 날짜: 이미 홈 화면에 있을 가능성 높음
-          // getBaselines()가 is_hidden_from_home == false를 조회하므로
-          // 이미 홈에 있으면 아무것도 하지 않거나 토스트 메시지
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('이미 오늘의 운동에 추가된 운동입니다.')),
-            );
+          if (isSameDay) {
+            // 이미 오늘 날짜면 건너뛰기
+            continue;
           }
-          continue;
-        } else {
-          // [조건 B] 다른 날짜(과거) 운동을 오늘 운동으로 가져오기
-          // [핵심] 기존 ID 재사용, 새로운 Baseline 생성 금지
 
-          // [Step 2] 오늘 날짜의 세트 기록 조회
-          final todaySets = await repository.getTodayWorkoutSets(baseline.id);
+          // [핵심] Repository의 addTodayWorkout 사용 (0세트로 초기화)
+          await repository.addTodayWorkout(baseline);
 
-          // 오늘 세트가 있으면 그것을 포함, 없으면 빈 리스트
-          final updatedBaseline = baseline.copyWith(
-            isHiddenFromHome: false, // 홈에 보이게 변경
-            routineId: null, // 루틴 연결 해제 (단독 운동)
-            updatedAt: DateTime.now(), // [보완] 정렬 순서 상위 노출을 위해 최신 시간 갱신
-            workoutSets: todaySets, // [Step 2] 오늘 날짜의 세트 데이터 포함
-          );
-
-          // Baseline 상태 업데이트 (DB Update)
-          await repository.upsertBaseline(updatedBaseline);
-
-          // [중요] 오늘 세트 데이터가 baseline에 포함되어 있으므로,
-          // WorkoutCard는 전달받은 workoutSets로 자동 초기화됨
-
-          // [추가 팁] 사용자가 헷갈리지 않게 토스트 메시지 구체화
+          successCount++;
+        } catch (e) {
+          // 개별 운동 실패는 로그만 남기고 계속 진행
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                  content:
-                      Text('"${baseline.exerciseName}" 운동을 오늘 목록으로 가져왔습니다.')),
+              SnackBar(content: Text('"${baseline.exerciseName}" 추가 실패: $e')),
             );
           }
         }
@@ -261,22 +273,32 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
       ref.invalidate(baselinesProvider);
       ref.invalidate(workoutDatesProvider);
 
+      // [추가] HomeViewModel 상태 갱신
+      ref.read(homeViewModelProvider.notifier).refresh();
+
+      // 로딩 다이얼로그 닫기
+      if (mounted && isLoading) {
+        Navigator.pop(context);
+        isLoading = false;
+      }
+
       if (mounted) {
-        Navigator.of(context).popUntil((route) => route.isFirst);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${selectedBaselines.length}개 운동을 불러왔습니다'),
-            backgroundColor: Colors.green,
+            content: Text('$successCount개 운동을 오늘 목록에 추가했습니다.'),
           ),
         );
       }
     } catch (e) {
+      // 로딩 다이얼로그 닫기
+      if (mounted && isLoading) {
+        Navigator.pop(context);
+        isLoading = false;
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('오류: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('오류: $e')),
         );
       }
     }
@@ -428,7 +450,6 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
           routineId: routine.id,
           exerciseName: baseline.exerciseName,
           bodyPart: baseline.bodyPart,
-          movementType: baseline.movementType,
           sortOrder: index,
           createdAt: DateTime.now(),
         );
@@ -437,6 +458,9 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
       await repository.saveRoutine(routine, items);
 
       if (mounted) {
+        // 루틴 목록 즉시 갱신 (루틴 관리 탭)
+        ref.invalidate(routinesProvider);
+
         setState(() {
           _selectedBaselineIds.clear();
           _isSelectionMode = false;
@@ -484,6 +508,16 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
                       final baseline = filtered[index];
                       final isSelected =
                           _selectedBaselineIds.contains(baseline.id);
+                      final targetMusclesText =
+                          (baseline.targetMuscles != null &&
+                                  baseline.targetMuscles!.isNotEmpty)
+                              ? baseline.targetMuscles!.join(', ')
+                              : '부위 미설정';
+                      final bodyPartLabel = baseline.bodyPart?.label;
+                      final subtitleText = (bodyPartLabel == null ||
+                              bodyPartLabel.trim().isEmpty)
+                          ? targetMusclesText
+                          : '$bodyPartLabel · $targetMusclesText';
 
                       return Card(
                         color: isSelected
@@ -498,10 +532,9 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
                                 ),
                                 title: Text(baseline.exerciseName),
                                 subtitle: Text(
-                                  (baseline.bodyPart?.label ?? '') +
-                                      (baseline.movementType != null
-                                          ? ' (${baseline.movementType!.label})'
-                                          : ''),
+                                  subtitleText,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                                 onTap: () => _toggleSelection(baseline.id),
                               )
@@ -534,10 +567,9 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
                                           size: 50),
                                   title: Text(baseline.exerciseName),
                                   subtitle: Text(
-                                    (baseline.bodyPart?.label ?? '') +
-                                        (baseline.movementType != null
-                                            ? ' (${baseline.movementType!.label})'
-                                            : ''),
+                                    subtitleText,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                   trailing: IconButton(
                                     icon: const Icon(Icons.delete),
@@ -783,7 +815,7 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab> {
                 Expanded(
                   child: Consumer(
                     builder: (context, ref, child) {
-                      final baselinesAsync = ref.watch(baselinesProvider);
+                      final baselinesAsync = ref.watch(archivedBaselinesProvider);
                       return baselinesAsync.when(
                         data: (baselines) {
                           final selectedBodyPartEnum = BodyPartParsing.fromKorean(selectedBodyPart);
@@ -818,10 +850,14 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab> {
                                 },
                                 title: Text(baseline.exerciseName),
                                 subtitle: Text(
-                                  (baseline.bodyPart?.label ?? '') +
-                                      (baseline.movementType != null
-                                          ? ' (${baseline.movementType!.label})'
-                                          : ''),
+                                  ((baseline.targetMuscles != null &&
+                                              baseline.targetMuscles!
+                                                  .isNotEmpty)
+                                          ? baseline.targetMuscles!.join(', ')
+                                          : '부위 미설정')
+                                      .toString(),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                                 secondary: baseline.thumbnailUrl != null &&
                                         baseline.thumbnailUrl!.isNotEmpty
@@ -939,7 +975,7 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab> {
 
     try {
       final repository = ref.read(workoutRepositoryProvider);
-      final baselines = await repository.getBaselines();
+      final baselines = await repository.getArchivedBaselines();
       final selectedBaselines =
           baselines.where((b) => selectedBaselineIds.contains(b.id)).toList();
 
@@ -971,7 +1007,6 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab> {
           routineId: routine.id,
           exerciseName: baseline.exerciseName,
           bodyPart: baseline.bodyPart,
-          movementType: baseline.movementType,
           sortOrder: index,
           createdAt: DateTime.now(),
         );
@@ -984,7 +1019,7 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab> {
 
       if (!mounted) return;
       messenger.showSnackBar(
-        const SnackBar(content: Text('루틴이 생성되었습니다.')),
+        const SnackBar(content: Text('루틴이 저장되었습니다.')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -1147,7 +1182,7 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab> {
                 Expanded(
                   child: Consumer(
                     builder: (context, ref, child) {
-                      final baselinesAsync = ref.watch(baselinesProvider);
+                      final baselinesAsync = ref.watch(archivedBaselinesProvider);
                       return baselinesAsync.when(
                         data: (baselines) {
                           final selectedBodyPartEnum = BodyPartParsing.fromKorean(selectedBodyPart);
@@ -1182,10 +1217,14 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab> {
                                 },
                                 title: Text(baseline.exerciseName),
                                 subtitle: Text(
-                                  (baseline.bodyPart?.label ?? '') +
-                                      (baseline.movementType != null
-                                          ? ' (${baseline.movementType!.label})'
-                                          : ''),
+                                  ((baseline.targetMuscles != null &&
+                                              baseline.targetMuscles!
+                                                  .isNotEmpty)
+                                          ? baseline.targetMuscles!.join(', ')
+                                          : '부위 미설정')
+                                      .toString(),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               );
                             },
@@ -1254,43 +1293,8 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab> {
     final navigator = Navigator.of(context);
 
     try {
-      final repository = ref.read(workoutRepositoryProvider);
-      final baselines = await repository.getBaselines();
-
-      // RoutineItem의 exerciseName으로 ExerciseBaseline 찾기
-      for (final item in routine.routineItems!) {
-        final existingBaseline = baselines.firstWhere(
-          (b) =>
-              b.exerciseName == item.exerciseName &&
-              b.bodyPart == item.bodyPart &&
-              b.movementType == item.movementType,
-          orElse: () {
-            // 없으면 새로 생성
-            final userId = SupabaseService.currentUser?.id;
-            if (userId == null) {
-              throw Exception('로그인이 필요합니다.');
-            }
-            return ExerciseBaseline(
-              id: const Uuid().v4(),
-              userId: userId,
-              exerciseName: item.exerciseName,
-              bodyPart: item.bodyPart,
-              movementType: item.movementType,
-              routineId: routine.id, // routineId 전달
-              createdAt: DateTime.now(),
-            );
-          },
-        );
-
-        // [중복 키 오류 방지] 기존 baseline을 찾았더라도 새로운 ID로 생성
-        final newBaseline = existingBaseline.copyWith(
-          id: const Uuid().v4(),
-          routineId: routine.id, // routineId 전달
-          createdAt: DateTime.now(),
-        );
-
-        await repository.addTodayWorkout(newBaseline, routineId: routine.id);
-      }
+      // 루틴 시작 로직은 HomeViewModel로 캡슐화 (ensureExerciseVisible → addTodayWorkout)
+      await ref.read(homeViewModelProvider.notifier).startRoutine(routine);
 
       // Provider 갱신: invalidate 후 refresh로 즉시 갱신 보장
       ref.invalidate(baselinesProvider);

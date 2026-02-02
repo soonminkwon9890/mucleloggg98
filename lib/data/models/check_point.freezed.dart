@@ -32,8 +32,12 @@ mixin _$CheckPoint {
   @JsonKey(name: 'created_at')
   DateTime? get createdAt => throw _privateConstructorUsedError;
 
+  /// Serializes this CheckPoint to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
-  @JsonKey(ignore: true)
+
+  /// Create a copy of CheckPoint
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
   $CheckPointCopyWith<CheckPoint> get copyWith =>
       throw _privateConstructorUsedError;
 }
@@ -62,6 +66,8 @@ class _$CheckPointCopyWithImpl<$Res, $Val extends CheckPoint>
   // ignore: unused_field
   final $Res Function($Val) _then;
 
+  /// Create a copy of CheckPoint
+  /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
   @override
   $Res call({
@@ -120,6 +126,8 @@ class __$$CheckPointImplCopyWithImpl<$Res>
       _$CheckPointImpl _value, $Res Function(_$CheckPointImpl) _then)
       : super(_value, _then);
 
+  /// Create a copy of CheckPoint
+  /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
   @override
   $Res call({
@@ -206,12 +214,14 @@ class _$CheckPointImpl implements _CheckPoint {
                 other.createdAt == createdAt));
   }
 
-  @JsonKey(ignore: true)
+  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   int get hashCode => Object.hash(
       runtimeType, id, baselineId, videoUrl, analysisResult, createdAt);
 
-  @JsonKey(ignore: true)
+  /// Create a copy of CheckPoint
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   @pragma('vm:prefer-inline')
   _$$CheckPointImplCopyWith<_$CheckPointImpl> get copyWith =>
@@ -245,15 +255,18 @@ abstract class _CheckPoint implements CheckPoint {
   String get baselineId;
   @override
   @JsonKey(name: 'video_url')
-  String get videoUrl;
-  @override // 중간 검사 영상 URL
+  String get videoUrl; // 중간 검사 영상 URL
+  @override
   @JsonKey(name: 'analysis_result')
-  String? get analysisResult;
-  @override // AI 분석 결과 (JSON 형태 or 텍스트)
+  String? get analysisResult; // AI 분석 결과 (JSON 형태 or 텍스트)
+  @override
   @JsonKey(name: 'created_at')
   DateTime? get createdAt;
+
+  /// Create a copy of CheckPoint
+  /// with the given fields replaced by the non-null parameter values.
   @override
-  @JsonKey(ignore: true)
+  @JsonKey(includeFromJson: false, includeToJson: false)
   _$$CheckPointImplCopyWith<_$CheckPointImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }

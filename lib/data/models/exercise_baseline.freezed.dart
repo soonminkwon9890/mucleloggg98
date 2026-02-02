@@ -27,21 +27,18 @@ mixin _$ExerciseBaseline {
   @JsonKey(name: 'exercise_name')
   String get exerciseName =>
       throw _privateConstructorUsedError; // 'BENCH_PRESS', 'SQUAT' 등
-  @JsonKey(name: 'target_muscle')
-  String? get targetMuscle =>
-      throw _privateConstructorUsedError; // 'CHEST', 'LEGS'
+  @JsonKey(
+      name: 'target_muscles',
+      fromJson: _targetMusclesFromJson,
+      toJson: _targetMusclesToJson)
+  List<String>? get targetMuscles =>
+      throw _privateConstructorUsedError; // ['가슴', '등', '어깨'] 등
   @JsonKey(
       name: 'body_part',
       fromJson: JsonConverters.bodyPartFromCode,
       toJson: JsonConverters.bodyPartToCode)
   BodyPart? get bodyPart =>
       throw _privateConstructorUsedError; // Enum: upper, lower, full
-  @JsonKey(
-      name: 'movement_type',
-      fromJson: JsonConverters.movementTypeFromCode,
-      toJson: JsonConverters.movementTypeToCode)
-  MovementType? get movementType =>
-      throw _privateConstructorUsedError; // Enum: push, pull
   @JsonKey(name: 'video_url')
   String? get videoUrl => throw _privateConstructorUsedError; // 원본/압축 영상 경로
   @JsonKey(name: 'thumbnail_url')
@@ -65,8 +62,12 @@ mixin _$ExerciseBaseline {
   @JsonKey(name: 'updated_at')
   DateTime? get updatedAt => throw _privateConstructorUsedError;
 
+  /// Serializes this ExerciseBaseline to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
-  @JsonKey(ignore: true)
+
+  /// Create a copy of ExerciseBaseline
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
   $ExerciseBaselineCopyWith<ExerciseBaseline> get copyWith =>
       throw _privateConstructorUsedError;
 }
@@ -81,17 +82,16 @@ abstract class $ExerciseBaselineCopyWith<$Res> {
       {@JsonKey(name: 'id') String id,
       @JsonKey(name: 'user_id') String userId,
       @JsonKey(name: 'exercise_name') String exerciseName,
-      @JsonKey(name: 'target_muscle') String? targetMuscle,
+      @JsonKey(
+          name: 'target_muscles',
+          fromJson: _targetMusclesFromJson,
+          toJson: _targetMusclesToJson)
+      List<String>? targetMuscles,
       @JsonKey(
           name: 'body_part',
           fromJson: JsonConverters.bodyPartFromCode,
           toJson: JsonConverters.bodyPartToCode)
       BodyPart? bodyPart,
-      @JsonKey(
-          name: 'movement_type',
-          fromJson: JsonConverters.movementTypeFromCode,
-          toJson: JsonConverters.movementTypeToCode)
-      MovementType? movementType,
       @JsonKey(name: 'video_url') String? videoUrl,
       @JsonKey(name: 'thumbnail_url') String? thumbnailUrl,
       @JsonKey(name: 'skeleton_data') Map<String, dynamic>? skeletonData,
@@ -114,15 +114,16 @@ class _$ExerciseBaselineCopyWithImpl<$Res, $Val extends ExerciseBaseline>
   // ignore: unused_field
   final $Res Function($Val) _then;
 
+  /// Create a copy of ExerciseBaseline
+  /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
   @override
   $Res call({
     Object? id = null,
     Object? userId = null,
     Object? exerciseName = null,
-    Object? targetMuscle = freezed,
+    Object? targetMuscles = freezed,
     Object? bodyPart = freezed,
-    Object? movementType = freezed,
     Object? videoUrl = freezed,
     Object? thumbnailUrl = freezed,
     Object? skeletonData = freezed,
@@ -146,18 +147,14 @@ class _$ExerciseBaselineCopyWithImpl<$Res, $Val extends ExerciseBaseline>
           ? _value.exerciseName
           : exerciseName // ignore: cast_nullable_to_non_nullable
               as String,
-      targetMuscle: freezed == targetMuscle
-          ? _value.targetMuscle
-          : targetMuscle // ignore: cast_nullable_to_non_nullable
-              as String?,
+      targetMuscles: freezed == targetMuscles
+          ? _value.targetMuscles
+          : targetMuscles // ignore: cast_nullable_to_non_nullable
+              as List<String>?,
       bodyPart: freezed == bodyPart
           ? _value.bodyPart
           : bodyPart // ignore: cast_nullable_to_non_nullable
               as BodyPart?,
-      movementType: freezed == movementType
-          ? _value.movementType
-          : movementType // ignore: cast_nullable_to_non_nullable
-              as MovementType?,
       videoUrl: freezed == videoUrl
           ? _value.videoUrl
           : videoUrl // ignore: cast_nullable_to_non_nullable
@@ -210,17 +207,16 @@ abstract class _$$ExerciseBaselineImplCopyWith<$Res>
       {@JsonKey(name: 'id') String id,
       @JsonKey(name: 'user_id') String userId,
       @JsonKey(name: 'exercise_name') String exerciseName,
-      @JsonKey(name: 'target_muscle') String? targetMuscle,
+      @JsonKey(
+          name: 'target_muscles',
+          fromJson: _targetMusclesFromJson,
+          toJson: _targetMusclesToJson)
+      List<String>? targetMuscles,
       @JsonKey(
           name: 'body_part',
           fromJson: JsonConverters.bodyPartFromCode,
           toJson: JsonConverters.bodyPartToCode)
       BodyPart? bodyPart,
-      @JsonKey(
-          name: 'movement_type',
-          fromJson: JsonConverters.movementTypeFromCode,
-          toJson: JsonConverters.movementTypeToCode)
-      MovementType? movementType,
       @JsonKey(name: 'video_url') String? videoUrl,
       @JsonKey(name: 'thumbnail_url') String? thumbnailUrl,
       @JsonKey(name: 'skeleton_data') Map<String, dynamic>? skeletonData,
@@ -241,15 +237,16 @@ class __$$ExerciseBaselineImplCopyWithImpl<$Res>
       $Res Function(_$ExerciseBaselineImpl) _then)
       : super(_value, _then);
 
+  /// Create a copy of ExerciseBaseline
+  /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
   @override
   $Res call({
     Object? id = null,
     Object? userId = null,
     Object? exerciseName = null,
-    Object? targetMuscle = freezed,
+    Object? targetMuscles = freezed,
     Object? bodyPart = freezed,
-    Object? movementType = freezed,
     Object? videoUrl = freezed,
     Object? thumbnailUrl = freezed,
     Object? skeletonData = freezed,
@@ -273,18 +270,14 @@ class __$$ExerciseBaselineImplCopyWithImpl<$Res>
           ? _value.exerciseName
           : exerciseName // ignore: cast_nullable_to_non_nullable
               as String,
-      targetMuscle: freezed == targetMuscle
-          ? _value.targetMuscle
-          : targetMuscle // ignore: cast_nullable_to_non_nullable
-              as String?,
+      targetMuscles: freezed == targetMuscles
+          ? _value._targetMuscles
+          : targetMuscles // ignore: cast_nullable_to_non_nullable
+              as List<String>?,
       bodyPart: freezed == bodyPart
           ? _value.bodyPart
           : bodyPart // ignore: cast_nullable_to_non_nullable
               as BodyPart?,
-      movementType: freezed == movementType
-          ? _value.movementType
-          : movementType // ignore: cast_nullable_to_non_nullable
-              as MovementType?,
       videoUrl: freezed == videoUrl
           ? _value.videoUrl
           : videoUrl // ignore: cast_nullable_to_non_nullable
@@ -332,17 +325,16 @@ class _$ExerciseBaselineImpl implements _ExerciseBaseline {
       {@JsonKey(name: 'id') required this.id,
       @JsonKey(name: 'user_id') required this.userId,
       @JsonKey(name: 'exercise_name') required this.exerciseName,
-      @JsonKey(name: 'target_muscle') this.targetMuscle,
+      @JsonKey(
+          name: 'target_muscles',
+          fromJson: _targetMusclesFromJson,
+          toJson: _targetMusclesToJson)
+      final List<String>? targetMuscles,
       @JsonKey(
           name: 'body_part',
           fromJson: JsonConverters.bodyPartFromCode,
           toJson: JsonConverters.bodyPartToCode)
       this.bodyPart,
-      @JsonKey(
-          name: 'movement_type',
-          fromJson: JsonConverters.movementTypeFromCode,
-          toJson: JsonConverters.movementTypeToCode)
-      this.movementType,
       @JsonKey(name: 'video_url') this.videoUrl,
       @JsonKey(name: 'thumbnail_url') this.thumbnailUrl,
       @JsonKey(name: 'skeleton_data') final Map<String, dynamic>? skeletonData,
@@ -353,7 +345,8 @@ class _$ExerciseBaselineImpl implements _ExerciseBaseline {
       @JsonKey(name: 'is_hidden_from_home') this.isHiddenFromHome = false,
       @JsonKey(name: 'created_at') this.createdAt,
       @JsonKey(name: 'updated_at') this.updatedAt})
-      : _skeletonData = skeletonData,
+      : _targetMuscles = targetMuscles,
+        _skeletonData = skeletonData,
         _workoutSets = workoutSets;
 
   factory _$ExerciseBaselineImpl.fromJson(Map<String, dynamic> json) =>
@@ -369,10 +362,22 @@ class _$ExerciseBaselineImpl implements _ExerciseBaseline {
   @JsonKey(name: 'exercise_name')
   final String exerciseName;
 // 'BENCH_PRESS', 'SQUAT' 등
+  final List<String>? _targetMuscles;
+// 'BENCH_PRESS', 'SQUAT' 등
   @override
-  @JsonKey(name: 'target_muscle')
-  final String? targetMuscle;
-// 'CHEST', 'LEGS'
+  @JsonKey(
+      name: 'target_muscles',
+      fromJson: _targetMusclesFromJson,
+      toJson: _targetMusclesToJson)
+  List<String>? get targetMuscles {
+    final value = _targetMuscles;
+    if (value == null) return null;
+    if (_targetMuscles is EqualUnmodifiableListView) return _targetMuscles;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(value);
+  }
+
+// ['가슴', '등', '어깨'] 등
   @override
   @JsonKey(
       name: 'body_part',
@@ -380,13 +385,6 @@ class _$ExerciseBaselineImpl implements _ExerciseBaseline {
       toJson: JsonConverters.bodyPartToCode)
   final BodyPart? bodyPart;
 // Enum: upper, lower, full
-  @override
-  @JsonKey(
-      name: 'movement_type',
-      fromJson: JsonConverters.movementTypeFromCode,
-      toJson: JsonConverters.movementTypeToCode)
-  final MovementType? movementType;
-// Enum: push, pull
   @override
   @JsonKey(name: 'video_url')
   final String? videoUrl;
@@ -442,7 +440,7 @@ class _$ExerciseBaselineImpl implements _ExerciseBaseline {
 
   @override
   String toString() {
-    return 'ExerciseBaseline(id: $id, userId: $userId, exerciseName: $exerciseName, targetMuscle: $targetMuscle, bodyPart: $bodyPart, movementType: $movementType, videoUrl: $videoUrl, thumbnailUrl: $thumbnailUrl, skeletonData: $skeletonData, feedbackPrompt: $feedbackPrompt, workoutSets: $workoutSets, routineId: $routineId, isHiddenFromHome: $isHiddenFromHome, createdAt: $createdAt, updatedAt: $updatedAt)';
+    return 'ExerciseBaseline(id: $id, userId: $userId, exerciseName: $exerciseName, targetMuscles: $targetMuscles, bodyPart: $bodyPart, videoUrl: $videoUrl, thumbnailUrl: $thumbnailUrl, skeletonData: $skeletonData, feedbackPrompt: $feedbackPrompt, workoutSets: $workoutSets, routineId: $routineId, isHiddenFromHome: $isHiddenFromHome, createdAt: $createdAt, updatedAt: $updatedAt)';
   }
 
   @override
@@ -454,12 +452,10 @@ class _$ExerciseBaselineImpl implements _ExerciseBaseline {
             (identical(other.userId, userId) || other.userId == userId) &&
             (identical(other.exerciseName, exerciseName) ||
                 other.exerciseName == exerciseName) &&
-            (identical(other.targetMuscle, targetMuscle) ||
-                other.targetMuscle == targetMuscle) &&
+            const DeepCollectionEquality()
+                .equals(other._targetMuscles, _targetMuscles) &&
             (identical(other.bodyPart, bodyPart) ||
                 other.bodyPart == bodyPart) &&
-            (identical(other.movementType, movementType) ||
-                other.movementType == movementType) &&
             (identical(other.videoUrl, videoUrl) ||
                 other.videoUrl == videoUrl) &&
             (identical(other.thumbnailUrl, thumbnailUrl) ||
@@ -480,16 +476,15 @@ class _$ExerciseBaselineImpl implements _ExerciseBaseline {
                 other.updatedAt == updatedAt));
   }
 
-  @JsonKey(ignore: true)
+  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   int get hashCode => Object.hash(
       runtimeType,
       id,
       userId,
       exerciseName,
-      targetMuscle,
+      const DeepCollectionEquality().hash(_targetMuscles),
       bodyPart,
-      movementType,
       videoUrl,
       thumbnailUrl,
       const DeepCollectionEquality().hash(_skeletonData),
@@ -500,7 +495,9 @@ class _$ExerciseBaselineImpl implements _ExerciseBaseline {
       createdAt,
       updatedAt);
 
-  @JsonKey(ignore: true)
+  /// Create a copy of ExerciseBaseline
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   @pragma('vm:prefer-inline')
   _$$ExerciseBaselineImplCopyWith<_$ExerciseBaselineImpl> get copyWith =>
@@ -520,17 +517,16 @@ abstract class _ExerciseBaseline implements ExerciseBaseline {
       {@JsonKey(name: 'id') required final String id,
       @JsonKey(name: 'user_id') required final String userId,
       @JsonKey(name: 'exercise_name') required final String exerciseName,
-      @JsonKey(name: 'target_muscle') final String? targetMuscle,
+      @JsonKey(
+          name: 'target_muscles',
+          fromJson: _targetMusclesFromJson,
+          toJson: _targetMusclesToJson)
+      final List<String>? targetMuscles,
       @JsonKey(
           name: 'body_part',
           fromJson: JsonConverters.bodyPartFromCode,
           toJson: JsonConverters.bodyPartToCode)
       final BodyPart? bodyPart,
-      @JsonKey(
-          name: 'movement_type',
-          fromJson: JsonConverters.movementTypeFromCode,
-          toJson: JsonConverters.movementTypeToCode)
-      final MovementType? movementType,
       @JsonKey(name: 'video_url') final String? videoUrl,
       @JsonKey(name: 'thumbnail_url') final String? thumbnailUrl,
       @JsonKey(name: 'skeleton_data') final Map<String, dynamic>? skeletonData,
@@ -554,51 +550,51 @@ abstract class _ExerciseBaseline implements ExerciseBaseline {
   String get userId;
   @override
   @JsonKey(name: 'exercise_name')
-  String get exerciseName;
-  @override // 'BENCH_PRESS', 'SQUAT' 등
-  @JsonKey(name: 'target_muscle')
-  String? get targetMuscle;
-  @override // 'CHEST', 'LEGS'
+  String get exerciseName; // 'BENCH_PRESS', 'SQUAT' 등
+  @override
+  @JsonKey(
+      name: 'target_muscles',
+      fromJson: _targetMusclesFromJson,
+      toJson: _targetMusclesToJson)
+  List<String>? get targetMuscles; // ['가슴', '등', '어깨'] 등
+  @override
   @JsonKey(
       name: 'body_part',
       fromJson: JsonConverters.bodyPartFromCode,
       toJson: JsonConverters.bodyPartToCode)
-  BodyPart? get bodyPart;
-  @override // Enum: upper, lower, full
-  @JsonKey(
-      name: 'movement_type',
-      fromJson: JsonConverters.movementTypeFromCode,
-      toJson: JsonConverters.movementTypeToCode)
-  MovementType? get movementType;
-  @override // Enum: push, pull
+  BodyPart? get bodyPart; // Enum: upper, lower, full
+  @override
   @JsonKey(name: 'video_url')
-  String? get videoUrl;
-  @override // 원본/압축 영상 경로
+  String? get videoUrl; // 원본/압축 영상 경로
+  @override
   @JsonKey(name: 'thumbnail_url')
-  String? get thumbnailUrl;
-  @override // 리스트 표시용 썸네일
+  String? get thumbnailUrl; // 리스트 표시용 썸네일
+  @override
   @JsonKey(name: 'skeleton_data')
-  Map<String, dynamic>? get skeletonData;
-  @override // JSONB: 기준 자세의 관절 좌표 데이터 캐싱
+  Map<String, dynamic>? get skeletonData; // JSONB: 기준 자세의 관절 좌표 데이터 캐싱
+  @override
   @JsonKey(name: 'feedback_prompt')
-  String? get feedbackPrompt;
-  @override // "어깨 관절 개입 과다" 등 분석 내용
+  String? get feedbackPrompt; // "어깨 관절 개입 과다" 등 분석 내용
+  @override
   @JsonKey(name: 'workout_sets', includeToJson: false)
-  List<WorkoutSet>? get workoutSets;
-  @override // 조인 쿼리 결과 매핑용 (읽기 전용)
+  List<WorkoutSet>? get workoutSets; // 조인 쿼리 결과 매핑용 (읽기 전용)
+  @override
   @JsonKey(name: 'routine_id')
-  String? get routineId;
-  @override // 루틴 실행 이력 추적용
+  String? get routineId; // 루틴 실행 이력 추적용
+  @override
   @JsonKey(name: 'is_hidden_from_home')
-  bool get isHiddenFromHome;
-  @override // 홈 화면에서 숨김 여부
+  bool get isHiddenFromHome; // 홈 화면에서 숨김 여부
+  @override
   @JsonKey(name: 'created_at')
   DateTime? get createdAt;
   @override
   @JsonKey(name: 'updated_at')
   DateTime? get updatedAt;
+
+  /// Create a copy of ExerciseBaseline
+  /// with the given fields replaced by the non-null parameter values.
   @override
-  @JsonKey(ignore: true)
+  @JsonKey(includeFromJson: false, includeToJson: false)
   _$$ExerciseBaselineImplCopyWith<_$ExerciseBaselineImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }

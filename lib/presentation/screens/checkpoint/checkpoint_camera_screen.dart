@@ -18,8 +18,9 @@ class CheckpointCameraScreen extends ConsumerWidget {
       appBar: AppBar(
         title: Text('${baseline.exerciseName} 중간 점검'),
       ),
-      body: Center(
-        child: ElevatedButton.icon(
+      body: SafeArea(
+        child: Center(
+          child: ElevatedButton.icon(
           onPressed: () {
             Navigator.push(
               context,
@@ -33,10 +34,11 @@ class CheckpointCameraScreen extends ConsumerWidget {
           },
           icon: const Icon(Icons.camera_alt),
           label: const Text('영상 업로드 시작'),
-          style: ElevatedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 32,
-              vertical: 16,
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 32,
+                vertical: 16,
+              ),
             ),
           ),
         ),

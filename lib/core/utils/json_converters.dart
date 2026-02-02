@@ -35,18 +35,6 @@ class JsonConverters {
   /// BodyPart Enum 변환 (toJson)
   static String? bodyPartToCode(BodyPart? val) => val?.code;
 
-  /// MovementType Enum 변환 (fromJson)
-  /// String이 아니면 null 반환 (안전 처리)
-  static MovementType? movementTypeFromCode(dynamic value) {
-    if (value is String) {
-      return MovementTypeParsing.fromCode(value);
-    }
-    return null; // String이 아니면 null 반환 (안전 처리)
-  }
-
-  /// MovementType Enum 변환 (toJson)
-  static String? movementTypeToCode(MovementType? val) => val?.code;
-
   /// RpeLevel Enum 변환 (fromJson)
   /// String이 아니면 null 반환 (안전 처리)
   static RpeLevel? rpeLevelFromCode(dynamic value) {

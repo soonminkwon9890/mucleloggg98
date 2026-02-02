@@ -1,3 +1,4 @@
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -5,6 +6,7 @@ import '../../../data/models/exercise_baseline.dart';
 import '../../../data/models/workout_set.dart';
 import '../../../domain/algorithms/one_rm_calculator.dart';
 import '../../../core/enums/exercise_enums.dart';
+import '../../../core/utils/adaptive_widgets.dart';
 import '../../widgets/common/rpe_selector.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/workout_provider.dart';
@@ -35,7 +37,37 @@ class _ExerciseInputScreenState extends ConsumerState<ExerciseInputScreen> {
 
   // 운동 분류 선택 상태
   BodyPart? _selectedBodyPart;
-  MovementType? _selectedMovementType;
+  List<String> _selectedTargetMuscles = [];
+
+  /// 저장되지 않은 변경사항이 있는지 확인
+  bool get _hasUnsavedChanges {
+    if (_exerciseTitleController.text.trim().isNotEmpty) return true;
+    for (var c in _weightControllers) {
+      if (c.text.isNotEmpty) return true;
+    }
+    for (var c in _repsControllers) {
+      if (c.text.isNotEmpty) return true;
+    }
+    return false;
+  }
+
+  /// 저장되지 않은 변경사항 확인 다이얼로그 (플랫폼별 적응형)
+  Future<bool> _showUnsavedChangesDialog() async {
+    final result = await AdaptiveWidgets.showAdaptiveDialog<bool>(
+      context: context,
+      title: '저장되지 않은 변경사항',
+      content: '입력한 내용이 저장되지 않았습니다. 정말 나가시겠습니까?',
+      confirmText: '나가기',
+      cancelText: '취소',
+    );
+    return result ?? false;
+  }
+
+  static const Map<BodyPart, List<String>> _targetMusclesByBodyPart = {
+    BodyPart.upper: ['가슴', '등', '어깨', '팔', '복근'],
+    BodyPart.lower: ['대퇴사두(앞)', '햄스트링(뒤)', '둔근(힙)'],
+    BodyPart.full: [], // 전신은 하위 선택 없음
+  };
 
   @override
   void initState() {
@@ -47,7 +79,7 @@ class _ExerciseInputScreenState extends ConsumerState<ExerciseInputScreen> {
     // 재기록 시 기존 분류 정보를 Enum으로 자동 선택
     if (widget.initialBaseline != null) {
       _selectedBodyPart = widget.initialBaseline!.bodyPart;
-      _selectedMovementType = widget.initialBaseline!.movementType;
+      _selectedTargetMuscles = widget.initialBaseline!.targetMuscles ?? [];
     }
 
     // 첫 세트 추가
@@ -123,9 +155,9 @@ class _ExerciseInputScreenState extends ConsumerState<ExerciseInputScreen> {
         id: baselineId,
         userId: userId,
         exerciseName: _exerciseTitleController.text.trim(),
-        targetMuscle: null,
+        targetMuscles:
+            _selectedTargetMuscles.isEmpty ? null : _selectedTargetMuscles,
         bodyPart: _selectedBodyPart, // Enum 직접 사용
-        movementType: _selectedMovementType, // Enum 직접 사용
         videoUrl: videoUrl,
         thumbnailUrl: thumbnailUrl,
         skeletonData: null, // 영상 로직은 PostureAnalysisScreen으로 이동됨
@@ -189,13 +221,27 @@ class _ExerciseInputScreenState extends ConsumerState<ExerciseInputScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('운동 정보 입력'),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Form(
+    return PopScope(
+      // iOS에서는 Swipe Back 허용, Android에서만 뒤로 가기 제어
+      canPop: Platform.isIOS ? true : !_hasUnsavedChanges,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        // 데이터 저장이 필수인 경우에만 커스텀 다이얼로그 표시
+        final shouldPop = await _showUnsavedChangesDialog();
+        if (shouldPop && context.mounted) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: Scaffold(
+          appBar: AppBar(
+            title: const Text('운동 정보 입력'),
+          ),
+          body: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Form(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -259,13 +305,11 @@ class _ExerciseInputScreenState extends ConsumerState<ExerciseInputScreen> {
                       setState(() {
                         if (selected) {
                           _selectedBodyPart = bodyPart;
-                          // 하체나 전신으로 변경 시 movementType을 null로 초기화
-                          if (bodyPart != BodyPart.upper) {
-                            _selectedMovementType = null;
-                          }
+                          // [중요] 상위 부위가 변경되면 하위 타겟 근육 선택을 반드시 초기화
+                          _selectedTargetMuscles.clear();
                         } else {
                           _selectedBodyPart = null;
-                          _selectedMovementType = null;
+                          _selectedTargetMuscles.clear();
                         }
                       });
                     },
@@ -273,26 +317,35 @@ class _ExerciseInputScreenState extends ConsumerState<ExerciseInputScreen> {
                 }).toList(),
               ),
 
-              // 상체 선택 시에만 밀기/당기기 칩 표시
-              if (_selectedBodyPart == BodyPart.upper) ...[
-                const SizedBox(height: 16),
+              // 타겟 근육 선택 (상체/하체 선택 시에만 표시)
+              if (_selectedBodyPart != null &&
+                  _targetMusclesByBodyPart[_selectedBodyPart]!.isNotEmpty) ...[
+                const SizedBox(height: 24),
+                const Text(
+                  '타겟 근육 선택',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
-                  children: MovementType.values.map((movementType) {
-                    return FilterChip(
-                      label: Text(movementType.label),
-                      selected: _selectedMovementType == movementType,
-                      onSelected: (selected) {
-                        setState(() {
-                          if (selected) {
-                            _selectedMovementType = movementType;
-                          } else {
-                            _selectedMovementType = null;
-                          }
-                        });
-                      },
-                    );
-                  }).toList(),
+                  children: _targetMusclesByBodyPart[_selectedBodyPart]!
+                      .map((muscle) => FilterChip(
+                            label: Text(muscle),
+                            selected: _selectedTargetMuscles.contains(muscle),
+                            onSelected: (selected) {
+                              setState(() {
+                                if (selected) {
+                                  _selectedTargetMuscles.add(muscle);
+                                } else {
+                                  _selectedTargetMuscles.remove(muscle);
+                                }
+                              });
+                            },
+                          ))
+                      .toList(),
                 ),
               ],
               const SizedBox(height: 24),
@@ -379,16 +432,15 @@ class _ExerciseInputScreenState extends ConsumerState<ExerciseInputScreen> {
                 child: ElevatedButton(
                   onPressed: _isSaving ? null : _saveExercise,
                   child: _isSaving
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
+                      ? AdaptiveWidgets.buildSmallLoadingIndicator()
                       : const Text('저장'),
                 ),
               ),
-            ],
+              ],
+            ),
           ),
+        ),
+      ),
         ),
       ),
     );

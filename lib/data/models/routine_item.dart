@@ -20,12 +20,6 @@ class RoutineItem with _$RoutineItem {
     )
     BodyPart? bodyPart, // Enum: upper, lower, full (ExerciseBaseline과 동일)
     @JsonKey(
-      name: 'movement_type',
-      fromJson: JsonConverters.movementTypeFromCode,
-      toJson: JsonConverters.movementTypeToCode,
-    )
-    MovementType? movementType, // Enum: push, pull (ExerciseBaseline과 동일)
-    @JsonKey(
       name: 'sort_order',
       fromJson: JsonConverters.toInt,
     )
