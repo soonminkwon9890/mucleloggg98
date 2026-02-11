@@ -7,11 +7,13 @@ import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../providers/auth_provider.dart';
+import '../../providers/subscription_provider.dart';
 import '../../providers/workout_provider.dart';
 import '../../../data/models/planned_workout.dart';
 import '../../../data/models/planned_workout_dto.dart';
 import '../../../domain/algorithms/workout_recommendation_service.dart';
 import '../../widgets/workout/routine_generation_dialog.dart';
+import '../subscription/subscription_screen.dart';
 import 'workout_history_screen.dart';
 
 /// 운동 분석 탭 메인 화면 (대시보드)
@@ -23,13 +25,68 @@ class WorkoutLogScreen extends ConsumerStatefulWidget {
 }
 
 class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
-  final bool _isPremium = true; // TODO: Premium 연동 전 테스트 플래그
   bool _isGeneratingRoutine = false;
+  late DateTime _selectedWeekStart;
+
+  /// Provider 캐시 일관성을 위해 주 시작일을 날짜(00:00:00)만 남겨 반환
+  static DateTime _normalizeWeekStart(DateTime d) {
+    return DateTime(d.year, d.month, d.day);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // 초기값: 이번 주 월요일 (날짜만 사용해 캐시/중복 호출 방지)
+    final now = DateTime.now();
+    final todayLocal = DateTime(now.year, now.month, now.day);
+    _selectedWeekStart = _normalizeWeekStart(
+        todayLocal.subtract(Duration(days: now.weekday - 1)));
+  }
+
+  /// 시분초를 무시하고 날짜 단위로만 비교하여 현재 주인지 확인
+  bool _isCurrentWeek(DateTime date) {
+    final now = DateTime.now();
+    final todayLocal = DateTime(now.year, now.month, now.day);
+    final currentWeekStart = todayLocal.subtract(Duration(days: now.weekday - 1));
+
+    // 날짜 단위로만 비교 (시분초 무시)
+    final dateNormalized = DateTime(date.year, date.month, date.day);
+    final currentWeekStartNormalized = DateTime(
+      currentWeekStart.year,
+      currentWeekStart.month,
+      currentWeekStart.day,
+    );
+
+    return dateNormalized.year == currentWeekStartNormalized.year &&
+        dateNormalized.month == currentWeekStartNormalized.month &&
+        dateNormalized.day == currentWeekStartNormalized.day;
+  }
+
+  /// 주 표시 포맷팅을 위한 유틸리티 함수
+  String _formatWeekRange(DateTime weekStart) {
+    final weekEnd = weekStart.add(const Duration(days: 6));
+    final startFormatted = DateFormat('yyyy년 M월 d일', 'ko_KR').format(weekStart);
+    final endFormatted = DateFormat('M월 d일', 'ko_KR').format(weekEnd);
+    return '$startFormatted ~ $endFormatted';
+  }
+
+  /// 미래 주차 이동 제한 로직
+  bool _canMoveToNextWeek() {
+    final now = DateTime.now();
+    final todayLocal = DateTime(now.year, now.month, now.day);
+    final currentWeekStart = todayLocal.subtract(Duration(days: now.weekday - 1));
+
+    // _selectedWeekStart가 현재 주 이전인지 확인
+    return _selectedWeekStart.isBefore(currentWeekStart);
+  }
 
   @override
   Widget build(BuildContext context) {
+    final normalizedWeekStart = _normalizeWeekStart(_selectedWeekStart);
     final authStateAsync = ref.watch(authStateProvider);
-    final statsAsync = ref.watch(dashboardStatsProvider);
+    final statsAsync = ref.watch(dashboardStatsProvider(normalizedWeekStart));
+    final isPremium = ref.watch(subscriptionProvider).isPremium;
+    final isCurrentWeek = _isCurrentWeek(_selectedWeekStart);
 
     return Scaffold(
       appBar: AppBar(
@@ -47,13 +104,17 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
               data: (stats) {
                 final weeklyVolume = stats.weeklyVolume;
                 final bodyBalance = stats.bodyBalance;
+                // 날짜 변경 시 bodyBalance가 바뀌는지 검증용 (필요 시 주석 해제)
+                // debugPrint('BodyBalance Hash: ${bodyBalance.hashCode}');
 
                 final aiComment = _buildAiComment(bodyBalance);
 
                 return RefreshIndicator(
                   onRefresh: () async {
-                    ref.invalidate(dashboardStatsProvider);
-                    await ref.read(dashboardStatsProvider.future);
+                    ref.invalidate(
+                        dashboardStatsProvider(normalizedWeekStart));
+                    await ref
+                        .read(dashboardStatsProvider(normalizedWeekStart).future);
                   },
                   child: SingleChildScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
@@ -61,31 +122,100 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        // 주 선택기 UI
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8.0),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.chevron_left),
+                                onPressed: () {
+                                  setState(() {
+                                    final next = _selectedWeekStart
+                                        .subtract(const Duration(days: 7));
+                                    _selectedWeekStart =
+                                        _normalizeWeekStart(next);
+                                  });
+                                },
+                              ),
+                              Text(
+                                _formatWeekRange(_selectedWeekStart),
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              IconButton(
+                                icon: Icon(
+                                  Icons.chevron_right,
+                                  color: _canMoveToNextWeek()
+                                      ? Theme.of(context).iconTheme.color
+                                      : Theme.of(context).disabledColor,
+                                ),
+                                onPressed: _canMoveToNextWeek()
+                                    ? () {
+                                        setState(() {
+                                          final next = _selectedWeekStart
+                                              .add(const Duration(days: 7));
+                                          _selectedWeekStart =
+                                              _normalizeWeekStart(next);
+                                        });
+                                      }
+                                    : null, // 미래 주는 비활성화
+                              ),
+                            ],
+                          ),
+                        ),
                         _PremiumGate(
-                          isPremium: _isPremium,
+                          isPremium: isPremium,
+                          isCurrentWeek: isCurrentWeek,
+                          icon: Icons.show_chart, // 추가
+                          message: '지난 성장 그래프를 확인하고 정체기를 돌파하세요!', // 추가
                           child:
                               WeeklyVolumeChartCard(weeklyVolume: weeklyVolume),
                         ),
                         const SizedBox(height: 12),
                         _PremiumGate(
-                          isPremium: _isPremium,
-                          child: BodyBalanceChartCard(bodyBalance: bodyBalance),
+                          isPremium: isPremium,
+                          isCurrentWeek: isCurrentWeek,
+                          icon: Icons.pie_chart, // 추가
+                          message: '신체 불균형을 분석하여 완벽한 밸런스를 찾으세요.', // 추가
+                          child: BodyBalanceChartCard(
+                            key: ValueKey(
+                                'balance_${normalizedWeekStart.toIso8601String()}'),
+                            bodyBalance: bodyBalance,
+                          ),
                         ),
                         const SizedBox(height: 16),
-                        Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Text(
-                              aiComment,
-                              style: const TextStyle(fontSize: 15),
-                            ),
-                          ),
+                        _buildAiCommentCard(
+                          context,
+                          aiComment: aiComment,
+                          isPremium: isPremium,
                         ),
                         const SizedBox(height: 16),
                         ElevatedButton.icon(
                           onPressed: _isGeneratingRoutine
                               ? null
-                              : _generateWeeklyRoutine,
+                              : (isPremium
+                                  ? _generateWeeklyRoutine
+                                  : () {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        SnackBar(
+                                          content: const Text('프리미엄이 필요합니다'),
+                                          action: SnackBarAction(
+                                            label: '멤버십 보기',
+                                            onPressed: () {
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (_) =>
+                                                      const SubscriptionScreen(),
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                      );
+                                    }),
                           icon: _isGeneratingRoutine
                               ? const SizedBox(
                                   width: 16,
@@ -102,7 +232,8 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => const WorkoutHistoryScreen(),
+                                builder: (_) =>
+                                    const WorkoutHistoryScreen(),
                               ),
                             );
                           },
@@ -116,7 +247,43 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
               },
               loading: () =>
                   const Center(child: CircularProgressIndicator()),
-              error: (error, _) => Center(child: Text('오류: $error')),
+              error: (error, stackTrace) {
+                // 에러 UI: 재시도 버튼 포함
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.error_outline,
+                            size: 48, color: Colors.red),
+                        const SizedBox(height: 16),
+                        Text(
+                          '데이터를 불러오는 중 오류가 발생했습니다.',
+                          style: Theme.of(context).textTheme.titleMedium,
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          error.toString(),
+                          style: Theme.of(context).textTheme.bodySmall,
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 24),
+                        FilledButton.icon(
+                          onPressed: () {
+                            // 재시도: provider를 invalidate하여 다시 로드
+                            ref.invalidate(
+                                dashboardStatsProvider(normalizedWeekStart));
+                          },
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('재시도'),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
             );
           },
           loading: () => const Center(child: CircularProgressIndicator()),
@@ -124,6 +291,98 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
             child: Text('인증 오류: $error'),
           ),
         ),
+      ),
+    );
+  }
+
+  /// AI 코멘트 카드. 무료 유저는 Blur + 더미 텍스트(빈 경우) + AbsorbPointer 적용.
+  static const _aiBlurDummyText =
+      '회원님의 운동 데이터를 기반으로 AI가 정밀 분석 중입니다. '
+      'Pro 버전에서 상세한 강도 분석과 맞춤 코멘트를 확인하실 수 있습니다.';
+
+  Widget _buildAiCommentCard(
+    BuildContext context, {
+    required String aiComment,
+    required bool isPremium,
+  }) {
+    if (isPremium) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            aiComment,
+            style: const TextStyle(fontSize: 15),
+          ),
+        ),
+      );
+    }
+
+    // 무료: 블러가 잘 보이도록 비어 있으면 긴 더미 텍스트 사용
+    final displayText = aiComment.trim().isEmpty ? _aiBlurDummyText : aiComment;
+    final cardChild = Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Text(
+          displayText,
+          style: const TextStyle(fontSize: 15),
+        ),
+      ),
+    );
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          AbsorbPointer(
+            child: cardChild,
+          ),
+          Positioned.fill(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+              child: Container(
+                color: Colors.black38,
+                alignment: Alignment.center,
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.lock, size: 40, color: Colors.white),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Pro 버전에서 확인 가능',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            shadows: [
+                              Shadow(
+                                offset: const Offset(0, 1),
+                                blurRadius: 2,
+                                color: Colors.black.withValues(alpha: 0.5),
+                              ),
+                            ],
+                          ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    FilledButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const SubscriptionScreen(),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.star, size: 18),
+                      label: const Text('구독하기'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -289,6 +548,10 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
           )
           .toList();
       await repository.savePlannedWorkouts(plans);
+      
+      // ProfileScreen 캘린더 즉시 갱신 (저장 성공 시)
+      ref.read(plannedWorkoutsRefreshProvider.notifier).state++;
+      
       if (mounted) {
         final dateLabel = DateFormat('M월 d일', 'ko_KR').format(routines.first.scheduledDate);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -344,15 +607,31 @@ class WeeklyVolumeChartCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final days = List.generate(
-      7,
-      (i) => DateTime(today.year, today.month, today.day)
-          .subtract(Duration(days: 6 - i)),
-    );
+    // weeklyVolume의 키에서 주의 시작일을 찾거나, 첫 번째 키를 사용
+    final weekStartKeys = weeklyVolume.keys.toList()..sort();
+    if (weekStartKeys.isEmpty) {
+      // 데이터가 없는 경우 빈 차트 표시
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final startOfWeek =
+          today.subtract(Duration(days: now.weekday - 1));
+      final days =
+          List.generate(7, (i) => startOfWeek.add(Duration(days: i)));
+      final values = List.filled(7, 0.0);
+      return _buildChart(context, days, values);
+    }
+    
+    // 주의 시작일(월요일) 찾기
+    final firstKey = weekStartKeys.first;
+    final startOfWeek = DateTime(firstKey.year, firstKey.month, firstKey.day);
+    final days =
+        List.generate(7, (i) => startOfWeek.add(Duration(days: i)));
 
     final values = days.map((d) => weeklyVolume[d] ?? 0.0).toList();
+    return _buildChart(context, days, values);
+  }
+
+  Widget _buildChart(BuildContext context, List<DateTime> days, List<double> values) {
     final maxY = values.fold<double>(0.0, (p, c) => c > p ? c : p);
 
     final barGroups = <BarChartGroupData>[];
@@ -557,17 +836,26 @@ class BodyBalanceChartCard extends StatelessWidget {
 
 class _PremiumGate extends StatelessWidget {
   final bool isPremium;
+  final bool isCurrentWeek;
   final Widget child;
+  final IconData icon; // 추가
+  final String message; // 추가
 
   const _PremiumGate({
     required this.isPremium,
+    required this.isCurrentWeek,
     required this.child,
+    this.icon = Icons.lock, // 기본값
+    this.message = '과거 기록 분석은 프리미엄 기능입니다.', // 기본값
   });
 
   @override
   Widget build(BuildContext context) {
-    if (isPremium) return child;
+    // 잠금 조건: !isPremium && !isCurrentWeek
+    // 이번 주이거나 프리미엄이면 차트 표시
+    if (isPremium || isCurrentWeek) return child;
 
+    // 과거 주이고 프리미엄이 아니면 잠금 UI 표시
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: Stack(
@@ -577,20 +865,42 @@ class _PremiumGate extends StatelessWidget {
           BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
             child: Container(
-              color: Colors.black12,
+              color: Colors.black45, // 약간 더 진한 오버레이
               alignment: Alignment.center,
               padding: const EdgeInsets.all(16),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.lock, size: 28),
-                  const SizedBox(height: 8),
+                  Icon(icon, size: 32, color: Colors.white), // 맞춤형 아이콘
+                  const SizedBox(height: 12),
                   Text(
-                    'Premium 결제 시 확인 가능',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    message, // 맞춤형 메시지
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                           fontWeight: FontWeight.bold,
+                          color: Colors.white, // 흰색 텍스트
+                          shadows: [
+                            Shadow(
+                              offset: const Offset(0, 1),
+                              blurRadius: 2,
+                              color: Colors.black.withValues(alpha: 0.5),
+                            ),
+                          ], // 옅은 그림자 추가
                         ),
                     textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  // CTA 버튼: "프리미엄 구독하고 전체 기록 보기"
+                  FilledButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const SubscriptionScreen(),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.star, size: 18),
+                    label: const Text('프리미엄 구독하고 전체 기록 보기'),
                   ),
                 ],
               ),

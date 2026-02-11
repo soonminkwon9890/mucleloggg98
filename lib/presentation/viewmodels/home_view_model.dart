@@ -1,10 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 import '../../../data/repositories/workout_repository.dart';
 import '../../../data/models/exercise_baseline.dart';
-import '../../../data/models/routine.dart';
+import '../../../data/services/supabase_service.dart';
 import '../../../core/utils/date_formatter.dart';
 import '../../../core/enums/exercise_enums.dart';
 import 'home_state.dart';
+
+const _uuid = Uuid();
 
 /// 홈 화면 ViewModel
 class HomeViewModel extends StateNotifier<HomeState> {
@@ -16,21 +19,49 @@ class HomeViewModel extends StateNotifier<HomeState> {
   }
 
   /// 데이터 로드
-  Future<void> loadBaselines() async {
+  /// 
+  /// [forceRefresh]: true일 때만 DB에서 강제로 가져옵니다.
+  /// false일 때는 같은 날짜이고 state에 데이터가 있으면 Draft를 보존하기 위해 DB 조회를 스킵합니다.
+  Future<void> loadBaselines({bool forceRefresh = false}) async {
+    final today = DateTime.now();
+    
+    // Draft 보존 로직: 같은 날짜이고 state에 데이터가 있고 강제 새로고침이 아니면 스킵
+    if (!forceRefresh && 
+        state.baselines.isNotEmpty && 
+        _lastLoadedDate != null &&
+        DateFormatter.isSameDate(_lastLoadedDate!, today)) {
+      // 같은 날짜이고 Draft가 있으면 DB 조회를 스킵하여 Draft 보존
+      return;
+    }
+
     state = state.copyWith(isLoading: true, errorMessage: null);
 
     try {
-      final baselines = await _repository.getTodayBaselines();
+      final dbBaselines = await _repository.getTodayBaselines();
       _lastLoadedDate = DateTime.now();
 
-      final groupedWorkouts = _groupWorkouts(baselines);
+      // Draft 병합: 현재 state의 baselines 중에서 DB에 없는 것들 (Draft)을 찾아서 병합
+      final dbBaselineIds = dbBaselines.map((b) => b.id).toSet();
+      final draftBaselines = state.baselines.where((b) {
+        // DB에 없고 오늘 날짜인 것만 Draft로 간주
+        return !dbBaselineIds.contains(b.id) && 
+               b.createdAt != null &&
+               DateFormatter.isSameDate(b.createdAt!, today);
+      }).toList();
+
+      // DB 데이터와 기존 로컬 상태(state.baselines)를 먼저 병합하여 Draft 세트 보존
+      final mergedFromDb = _mergeDraftSets(dbBaselines, state.baselines);
+      // 병합된 DB 데이터와 완전한 Draft 항목들을 합침
+      final mergedBaselines = [...mergedFromDb, ...draftBaselines];
+
+      final groupedWorkouts = _groupWorkouts(mergedBaselines);
       final allTodayWorkouts =
           groupedWorkouts.values.expand((list) => list).toList();
       final totalVolume = _calculateVolume(allTodayWorkouts);
       final mainFocusArea = _getFocusArea(allTodayWorkouts);
 
       state = state.copyWith(
-        baselines: baselines,
+        baselines: mergedBaselines,
         groupedWorkouts: groupedWorkouts,
         totalVolume: totalVolume,
         mainFocusArea: mainFocusArea,
@@ -44,9 +75,10 @@ class HomeViewModel extends StateNotifier<HomeState> {
     }
   }
 
-  /// 데이터 새로고침
+  /// 데이터 새로고침 (Pull-to-refresh 등 명시적 새로고침)
+  /// Draft를 무시하고 DB에서 최신 데이터를 가져옵니다.
   Future<void> refresh() async {
-    await loadBaselines();
+    await loadBaselines(forceRefresh: true);
   }
 
   /// 운동 삭제 후 데이터 갱신
@@ -54,27 +86,64 @@ class HomeViewModel extends StateNotifier<HomeState> {
   Future<void> refreshAfterDeletion() async {
     // 약간의 텀을 줌 (DB 반영 시간 확보)
     await Future.delayed(const Duration(milliseconds: 50));
-    
-    // 확실하게 새로고침
-    await loadBaselines();
+
+    // 확실하게 새로고침 (forceRefresh로 DB에서 최신 데이터 가져옴)
+    await loadBaselines(forceRefresh: true);
   }
 
-  /// 운동 삭제 (Soft Delete)
-  /// 홈 화면에서 운동을 숨김 처리하고 리스트를 새로고침합니다.
+  /// 운동 삭제 (Draft 안전 처리 포함)
+  /// - Draft(미저장): 메모리에서만 제거 (DB 호출 X)
+  /// - DB 저장됨: Repository 호출 후 새로고침
   Future<void> deleteWorkout(String baselineId) async {
-    // 로딩 상태(isLoading)를 켜지 않습니다. (삭제는 즉각적인 느낌을 주기 위해)
+    // 1. 삭제 대상 존재 확인
+    final existsInState = state.baselines.any((b) => b.id == baselineId);
+    if (!existsInState) {
+      state = state.copyWith(errorMessage: '삭제 대상을 찾을 수 없습니다.');
+      return;
+    }
+
+    // 2. Draft 판별: DB에서 해당 ID가 존재하는지 확인
+    final dbBaselines = await _repository.getTodayBaselines();
+    final isInDb = dbBaselines.any((db) => db.id == baselineId);
+
+    if (!isInDb) {
+      // Case A: Draft (메모리 전용) - DB 호출 없이 state에서만 제거
+      final updatedBaselines = state.baselines
+          .where((b) => b.id != baselineId)
+          .toList();
+
+      final groupedWorkouts = _groupWorkouts(updatedBaselines);
+      final allWorkouts = groupedWorkouts.values.expand((list) => list).toList();
+
+      state = state.copyWith(
+        baselines: updatedBaselines,
+        groupedWorkouts: groupedWorkouts,
+        totalVolume: _calculateVolume(allWorkouts),
+        mainFocusArea: _getFocusArea(allWorkouts),
+      );
+      return;
+    }
+
+    // Case B: DB에 저장된 항목 - Repository 호출
     try {
-      // 1. Repository 호출 (Soft Delete)
       await _repository.deleteTodayWorkoutsByBaseline(baselineId);
 
-      // 2. [필수] DB 반영 시간 확보 (프레임 드랍 방지 및 동기화)
-      await Future.delayed(const Duration(milliseconds: 50));
+      // Optimistic Update: 로컬 상태에서 해당 항목만 제거하여 즉시 갱신
+      // (다른 항목의 Draft 상태를 보존하기 위해 전체 새로고침하지 않음)
+      final updatedBaselines = state.baselines
+          .where((b) => b.id != baselineId)
+          .toList();
 
-      // 3. 리스트 새로고침 (최적화된 로직 사용)
-      await loadBaselines();
-      
+      final groupedWorkouts = _groupWorkouts(updatedBaselines);
+      final allWorkouts = groupedWorkouts.values.expand((list) => list).toList();
+
+      state = state.copyWith(
+        baselines: updatedBaselines,
+        groupedWorkouts: groupedWorkouts,
+        totalVolume: _calculateVolume(allWorkouts),
+        mainFocusArea: _getFocusArea(allWorkouts),
+      );
     } catch (e) {
-      // 에러 발생 시에만 상태 업데이트
       state = state.copyWith(errorMessage: '삭제 실패: $e');
     }
   }
@@ -88,42 +157,59 @@ class HomeViewModel extends StateNotifier<HomeState> {
       return;
     }
 
-    // 날짜가 변경되었는지 확인
+    // 날짜가 변경되었는지 확인 (날짜 변경 시에는 강제 새로고침)
     if (!DateFormatter.isSameDate(_lastLoadedDate!, today)) {
-      await loadBaselines();
+      await loadBaselines(forceRefresh: true);
     }
   }
 
-  /// 신규 운동 추가
-  /// UI 요청을 Repository로 전달하고 화면을 갱신합니다.
-  Future<void> addNewExercise(
+  /// 신규 운동 추가 (메모리 전용, DB 저장 X)
+  /// 사용자가 입력한 운동을 Draft로 추가합니다.
+  /// 실제 DB 저장은 홈 화면에서 "운동 완료" 또는 "저장" 버튼을 눌렀을 때 수행됩니다.
+  void addNewExercise(
     String name,
     String bodyPartCode,
     List<String> targetMuscles,
-  ) async {
-    // 로딩 상태 시작
-    state = state.copyWith(isLoading: true, errorMessage: null);
+  ) {
+    final now = DateTime.now();
+    final userId = SupabaseService.currentUser?.id ?? '';
 
+    // BodyPart enum 변환
+    BodyPart? bodyPart;
     try {
-      // 1. DB 저장만 수행 (절대 여기서 loadBaselines() 호출 금지!)
-      // 오늘 날짜 기준으로만 동작 (DateTime.now() 사용)
-      await _repository.ensureExerciseVisible(
-        name,
-        bodyPartCode,
-        targetMuscles,
+      bodyPart = BodyPart.values.firstWhere(
+        (bp) => bp.code == bodyPartCode,
+        orElse: () => BodyPart.full,
       );
-
-      // 2. 로딩 상태 끝 (성공) - 화면 갱신은 하지 않음
-      //    loadBaselines() 삭제!! (패널이 닫힌 후 HomeScreen에서 호출됨)
-      state = state.copyWith(isLoading: false);
     } catch (e) {
-      // 실패 시 에러 상태 업데이트 및 로딩 상태 해제
-      state = state.copyWith(
-        isLoading: false,
-        errorMessage: e.toString(),
-      );
-      rethrow; // UI가 알 수 있도록 rethrow
+      bodyPart = BodyPart.full;
     }
+
+    // 새로운 Draft baseline 생성
+    final newBaseline = ExerciseBaseline(
+      id: _uuid.v4(), // 새 UUID 생성
+      userId: userId,
+      exerciseName: name,
+      targetMuscles: targetMuscles,
+      bodyPart: bodyPart,
+      workoutSets: const [], // 빈 세트 (사용자가 입력할 예정)
+      routineId: null, // 신규 운동은 routineId 없음
+      isHiddenFromHome: false, // 홈에 표시
+      createdAt: now,
+      updatedAt: now,
+    );
+
+    // 현재 state에 추가 (메모리 전용)
+    final updatedBaselines = [...state.baselines, newBaseline];
+    final groupedWorkouts = _groupWorkouts(updatedBaselines);
+    final allWorkouts = groupedWorkouts.values.expand((list) => list).toList();
+
+    state = state.copyWith(
+      baselines: updatedBaselines,
+      groupedWorkouts: groupedWorkouts,
+      totalVolume: _calculateVolume(allWorkouts),
+      mainFocusArea: _getFocusArea(allWorkouts),
+    );
   }
 
   /// 루틴 저장
@@ -135,49 +221,98 @@ class HomeViewModel extends StateNotifier<HomeState> {
 
     try {
       await _repository.saveRoutineFromWorkouts(name, workouts);
-      await loadBaselines(); // 데이터 새로고침
+      await loadBaselines(forceRefresh: true); // 루틴 저장 후 강제 새로고침
     } catch (e) {
       state = state.copyWith(errorMessage: e.toString());
     }
   }
 
-  /// 루틴 시작: 루틴의 운동들을 오늘 홈 화면에 추가
+  /// 보관함/루틴에서 홈 화면에 운동 추가 (메모리 전용, DB 저장 X)
   ///
-  /// Strict sequence:
-  /// 1) ensureExerciseVisible (DB에 운동 존재/활성화 보장)
-  /// 2) addTodayWorkout (오늘 운동으로 추가)
-  /// 3) loadBaselines (홈 화면 상태 갱신)
-  Future<void> startRoutine(Routine routine) async {
-    state = state.copyWith(errorMessage: null);
+  /// [Critical Requirement] 데이터 리셋:
+  /// - 유지: exerciseName, bodyPart, targetMuscles
+  /// - 리셋: workoutSets → 빈 리스트, isHiddenFromHome → false
+  /// - 새 UUID 생성 (DB 충돌 방지)
+  ///
+  /// [routineId]: 루틴에서 시작할 경우 루틴 ID 전달, 보관함에서는 null
+  void addFromArchiveOrRoutine(
+    List<ExerciseBaseline> baselines, {
+    String? routineId,
+  }) {
+    if (baselines.isEmpty) return;
 
-    final items = routine.routineItems ?? const [];
-    if (items.isEmpty) {
-      state = state.copyWith(errorMessage: '루틴에 운동이 없습니다.');
-      return;
-    }
+    final now = DateTime.now();
 
-    try {
-      for (final item in items) {
-        final bodyPartCode = item.bodyPart?.code ?? BodyPart.full.code;
+    // 새로운 baseline 생성 (데이터 리셋 + 새 UUID)
+    final newBaselines = baselines.map((original) {
+      return ExerciseBaseline(
+        id: _uuid.v4(), // 새 UUID 생성
+        userId: original.userId,
+        exerciseName: original.exerciseName,
+        targetMuscles: original.targetMuscles,
+        bodyPart: original.bodyPart,
+        videoUrl: original.videoUrl,
+        thumbnailUrl: original.thumbnailUrl,
+        skeletonData: original.skeletonData,
+        feedbackPrompt: original.feedbackPrompt,
+        workoutSets: const [], // 리셋: 빈 리스트
+        routineId: routineId, // 루틴 ID 또는 null
+        isHiddenFromHome: false, // 홈에 표시
+        createdAt: now,
+        updatedAt: now,
+      );
+    }).toList();
 
-        // RoutineItem에는 targetMuscles가 없으므로 빈 리스트로 시작
-        final baseline = await _repository.ensureExerciseVisible(
-          item.exerciseName,
-          bodyPartCode,
-          const [],
-        );
+    // 현재 state에 추가 (메모리 전용)
+    final updatedBaselines = [...state.baselines, ...newBaselines];
+    final groupedWorkouts = _groupWorkouts(updatedBaselines);
+    final allWorkouts = groupedWorkouts.values.expand((list) => list).toList();
 
-        await _repository.addTodayWorkout(
-          baseline,
-          routineId: routine.id,
-        );
+    state = state.copyWith(
+      baselines: updatedBaselines,
+      groupedWorkouts: groupedWorkouts,
+      totalVolume: _calculateVolume(allWorkouts),
+      mainFocusArea: _getFocusArea(allWorkouts),
+    );
+  }
+
+  /// Draft 세트 리스트 병합 (Full Replacement)
+  /// newBaselines의 각 항목에 대해 oldBaselines에서 같은 id를 찾아,
+  /// Draft 상태(세트 개수 변경 또는 입력값 존재)면 old의 workoutSets 전체를 덮어씌움.
+  List<ExerciseBaseline> _mergeDraftSets(
+    List<ExerciseBaseline> newBaselines,
+    List<ExerciseBaseline> oldBaselines,
+  ) {
+    return newBaselines.map((newItem) {
+      // oldBaselines에서 같은 id를 가진 항목 찾기
+      final oldItemIndex = oldBaselines.indexWhere((old) => old.id == newItem.id);
+      
+      // oldItem이 없으면 newItem 그대로 반환
+      if (oldItemIndex == -1) {
+        return newItem;
       }
 
-      await loadBaselines();
-    } catch (e) {
-      state = state.copyWith(errorMessage: '루틴 시작 실패: $e');
-      rethrow;
-    }
+      final oldItem = oldBaselines[oldItemIndex];
+
+      // null 방지: 빈 리스트로 처리
+      final oldSets = oldItem.workoutSets ?? [];
+      final newSets = newItem.workoutSets ?? [];
+
+      // 조건 A: 세트 개수가 다름 (구조 변경)
+      final hasStructureChange = oldSets.length != newSets.length;
+
+      // 조건 B: old에 입력값이 존재 (weight > 0 또는 reps > 0)
+      final hasInputValue = oldSets.any((set) => set.weight > 0 || set.reps > 0);
+
+      // Draft 상태(Dirty) 판단: 둘 중 하나라도 참이면
+      if (hasStructureChange || hasInputValue) {
+        // Full Replacement: old의 workoutSets 리스트 전체를 덮어씌움
+        return newItem.copyWith(workoutSets: oldItem.workoutSets);
+      }
+
+      // 조건이 거짓이면 newItem 그대로 반환
+      return newItem;
+    }).toList();
   }
 
   /// 운동 그룹화 및 정렬
@@ -233,30 +368,6 @@ class HomeViewModel extends StateNotifier<HomeState> {
     return totalVolume;
   }
 
-  /// 입력값 메모리 업데이트 (DB 호출 X, 화면 갱신만 수행)
-  /// 포커스가 해제될 때 호출되어 사용자 입력을 메모리에 반영합니다.
-  void updateSetInMemory(String setId, {double? weight, int? reps}) {
-    final updatedBaselines = state.baselines.map((baseline) {
-      if (baseline.workoutSets == null) return baseline;
-
-      final updatedSets = baseline.workoutSets!.map((set) {
-        if (set.id == setId) {
-          // 값이 변경된 경우에만 객체 복사
-          return set.copyWith(
-            weight: weight ?? set.weight,
-            reps: reps ?? set.reps,
-          );
-        }
-        return set;
-      }).toList();
-
-      return baseline.copyWith(workoutSets: updatedSets);
-    }).toList();
-
-    // 상태 업데이트 (화면에는 반영되지만 DB는 안 감)
-    state = state.copyWith(baselines: updatedBaselines);
-  }
-
   /// 주요 타겟 부위 계산
   String _getFocusArea(List<ExerciseBaseline> workouts) {
     // 오늘 수행한 운동들의 targetMuscles를 집계 (MovementType 제거)
@@ -287,5 +398,60 @@ class HomeViewModel extends StateNotifier<HomeState> {
 
     final top = sorted.take(2).map((e) => e.key).toList();
     return top.join(', ');
+  }
+
+  /// 입력값 메모리 업데이트 (DB 호출 X, 화면 갱신만 수행)
+  /// 포커스가 해제될 때 호출되어 사용자 입력을 메모리에 반영합니다.
+  void updateSetInMemory(String setId, {double? weight, int? reps}) {
+    final updatedBaselines = state.baselines.map((baseline) {
+      if (baseline.workoutSets == null) return baseline;
+
+      final updatedSets = baseline.workoutSets!.map((set) {
+        if (set.id == setId) {
+          // 값이 변경된 경우에만 객체 복사
+          return set.copyWith(
+            weight: weight ?? set.weight,
+            reps: reps ?? set.reps,
+          );
+        }
+        return set;
+      }).toList();
+
+      return baseline.copyWith(workoutSets: updatedSets);
+    }).toList();
+
+    // 상태 업데이트 (화면에는 반영되지만 DB는 안 감)
+    state = state.copyWith(baselines: updatedBaselines);
+  }
+
+  /// 저장 후 해당 카드만 교체 (전체 새로고침 없이 순서 유지)
+  /// [Preserve List Order] map을 사용하여 기존 인덱스(순서)가 유지되도록 교체합니다.
+  void replaceBaselineAfterSave(
+    String oldBaselineId,
+    ExerciseBaseline persistedBaseline,
+  ) {
+    // 1. 저장된 항목 교체 (기존 로직)
+    final newBaselines = state.baselines
+        .map((b) => b.id == oldBaselineId ? persistedBaseline : b)
+        .toList();
+
+    // 2. 나머지 항목들의 Draft 보존 (수정된 로직)
+    // 중요: oldBaselineId는 이미 DB 최신값(persistedBaseline)이므로,
+    // 병합 대상(old)에서 제외하여 persistedBaseline이 덮어씌워지지 않도록 함.
+    final mergedBaselines = _mergeDraftSets(
+      newBaselines,
+      state.baselines.where((b) => b.id != oldBaselineId).toList(),
+    );
+
+    // 3. 상태 갱신
+    final groupedWorkouts = _groupWorkouts(mergedBaselines);
+    final allTodayWorkouts =
+        groupedWorkouts.values.expand((list) => list).toList();
+    state = state.copyWith(
+      baselines: mergedBaselines,
+      groupedWorkouts: groupedWorkouts,
+      totalVolume: _calculateVolume(allTodayWorkouts),
+      mainFocusArea: _getFocusArea(allTodayWorkouts),
+    );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
+import '../../../core/enums/exercise_enums.dart';
 import '../../../data/models/exercise_baseline.dart';
 import '../../../data/models/workout_set.dart';
 import '../../../core/utils/date_formatter.dart';
@@ -9,10 +10,16 @@ import '../../providers/workout_provider.dart';
 import '../../screens/workout/workout_analysis_screen.dart';
 import 'workout_finish_dialog.dart';
 
+/// 저장 완료 시 호출되는 콜백: (저장 반영된 baseline, 기존 draft id)
+typedef OnWorkoutUpdated = void Function(
+  ExerciseBaseline? savedItem,
+  String? oldId,
+);
+
 /// 운동 카드 위젯 (AutomaticKeepAliveClientMixin 적용)
 class WorkoutCard extends ConsumerStatefulWidget {
   final ExerciseBaseline baseline;
-  final VoidCallback onUpdated;
+  final OnWorkoutUpdated onUpdated;
 
   const WorkoutCard({
     super.key,
@@ -36,6 +43,15 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
   @override
   bool get wantKeepAlive => true;
 
+  /// 로컬 데이터가 Dirty 상태인지 판단 (세트 추가 또는 입력값 존재)
+  bool get _isLocalDirty {
+    // 조건 1: 세트가 2개 이상 (세트 추가됨)
+    if (_sets.length > 1) return true;
+
+    // 조건 2: 세트 중 하나라도 입력값이 있음 (weight > 0 또는 reps > 0)
+    return _sets.values.any((set) => set.weight > 0 || set.reps > 0);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -45,6 +61,21 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
   @override
   void didUpdateWidget(WorkoutCard oldWidget) {
     super.didUpdateWidget(oldWidget);
+
+    // Guard Clause: 로컬 데이터가 소중하고(Dirty), 들어온 데이터가 초기 상태라면 동기화 차단
+    if (_isLocalDirty) {
+      final incomingSets = widget.baseline.workoutSets ?? [];
+      // 들어온 데이터가 초기 상태인지 확인 (1세트 & 무게 0)
+      final isIncomingInitialState = incomingSets.length == 1 &&
+          incomingSets.first.weight == 0 &&
+          incomingSets.first.reps == 0;
+
+      if (isIncomingInitialState) {
+        // 동기화 차단: _syncFromBaseline을 호출하지 않고 종료
+        return;
+      }
+    }
+
     // widget.baseline이 변경되었을 때 로컬 상태 동기화
     if (oldWidget.baseline.id != widget.baseline.id ||
         oldWidget.baseline.workoutSets != widget.baseline.workoutSets) {
@@ -54,32 +85,54 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
   }
 
   /// widget.baseline 기준으로 _sets, _controllers 동기화. 포커스 있는 필드는 스킵.
+  /// [방어 로직] 이미 해당 Set ID의 컨트롤러가 있으면 텍스트를 덮어쓰지 않음 (다른 카드 입력값 보존).
   void _syncFromBaseline(ExerciseBaseline baseline) {
     final sets = baseline.workoutSets ?? [];
     final today = DateTime.now();
-    
+
     for (final set in sets) {
       // 오늘 날짜가 아니면 스킵
-      if (set.createdAt == null || !DateFormatter.isSameDate(set.createdAt!, today)) {
+      if (set.createdAt == null ||
+          !DateFormatter.isSameDate(set.createdAt!, today)) {
         continue;
       }
-      
+
       // 입력 중인 필드는 건드리지 않음
-      if (_weightFocusNodes[set.id]?.hasFocus == true || 
+      if (_weightFocusNodes[set.id]?.hasFocus == true ||
           _repsFocusNodes[set.id]?.hasFocus == true) {
         continue;
       }
-      
+
+      // 방어 로직: 컨트롤러가 이미 존재하는 경우에만 수행
+      final weightKey = 'weight_${set.id}';
+      final repsKey = 'reps_${set.id}';
+      if (_controllers.containsKey(weightKey) && _controllers.containsKey(repsKey)) {
+        final weightController = _controllers[weightKey]!;
+        final repsController = _controllers[repsKey]!;
+
+        // 로컬에 값이 있는데 서버에서 0이 들어오면 건드리지 않음 (Draft 보존)
+        final localHasValue = weightController.text.isNotEmpty || repsController.text.isNotEmpty;
+        final serverIsZero = set.weight == 0 || set.reps == 0;
+
+        if (localHasValue && serverIsZero) {
+          continue; // controller 업데이트와 _sets 갱신을 스킵
+        }
+      }
+
       _sets[set.id] = set;
-      _controllers['weight_${set.id}']?.text = set.weight.toString();
-      _controllers['reps_${set.id}']?.text = set.reps.toString();
-      
-      // FocusNode가 없으면 생성 (새로 추가된 세트)
-      if (!_weightFocusNodes.containsKey(set.id)) {
+
+      // 컨트롤러가 없을 때만 생성 및 초기 텍스트 설정 (있으면 덮어쓰지 않음)
+      if (!_controllers.containsKey('weight_${set.id}')) {
+        _controllers['weight_${set.id}'] =
+            TextEditingController(text: set.weight.toString());
+        _controllers['reps_${set.id}'] =
+            TextEditingController(text: set.reps.toString());
         _weightFocusNodes[set.id] = FocusNode();
         _repsFocusNodes[set.id] = FocusNode();
-        _weightFocusNodes[set.id]!.addListener(() => _onWeightFocusChange(set.id));
-        _repsFocusNodes[set.id]!.addListener(() => _onRepsFocusChange(set.id));
+        _weightFocusNodes[set.id]!
+            .addListener(() => _onWeightFocusChange(set.id));
+        _repsFocusNodes[set.id]!
+            .addListener(() => _onRepsFocusChange(set.id));
       }
     }
     
@@ -190,16 +243,19 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
     super.dispose();
   }
 
-  // [추가] 포커스가 빠질 때만 ViewModel 업데이트 (깜빡임 방지 핵심)
+  // 포커스가 빠질 때 ViewModel 업데이트 + 빈 입력 시 '0' 복구 (Handle Empty Input on Blur)
   void _onWeightFocusChange(String setId) {
     final focusNode = _weightFocusNodes[setId];
     if (focusNode != null && !focusNode.hasFocus) {
       final controller = _controllers['weight_$setId'];
       if (controller != null) {
+        final trimmed = controller.text.trim();
+        if (trimmed.isEmpty) {
+          controller.text = '0';
+        }
         final val = double.tryParse(controller.text);
         final currentSet = _sets[setId];
         if (currentSet != null && val != null && val != currentSet.weight) {
-          // ViewModel 메모리 업데이트 (DB 호출 X)
           ref.read(homeViewModelProvider.notifier)
               .updateSetInMemory(setId, weight: val);
         }
@@ -212,10 +268,13 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
     if (focusNode != null && !focusNode.hasFocus) {
       final controller = _controllers['reps_$setId'];
       if (controller != null) {
+        final trimmed = controller.text.trim();
+        if (trimmed.isEmpty) {
+          controller.text = '0';
+        }
         final val = int.tryParse(controller.text);
         final currentSet = _sets[setId];
         if (currentSet != null && val != null && val != currentSet.reps) {
-          // ViewModel 메모리 업데이트 (DB 호출 X)
           ref.read(homeViewModelProvider.notifier)
               .updateSetInMemory(setId, reps: val);
         }
@@ -263,7 +322,7 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
 
     // [추가] 다이얼로그 표시 전 총 볼륨 계산 (현재 카드의 세트들만)
     final totalVolume = _calculateCardTotalVolume();
-    
+
     // [추가] 다이얼로그 표시
     final difficulty = await showDialog<String>(
       context: context,
@@ -277,9 +336,18 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
     try {
       final repository = ref.read(workoutRepositoryProvider);
 
-      // [추가] 세션 정보 저장 (baseline_id 포함)
+      // [메모리→DB 동기화] 베이스라인이 DB에 없을 수 있으므로 먼저 확보
+      // ensureExerciseVisible은 기존 레코드가 있으면 활성화, 없으면 생성
+      final persistedBaseline = await repository.ensureExerciseVisible(
+        widget.baseline.exerciseName,
+        widget.baseline.bodyPart?.code ?? 'full',
+        widget.baseline.targetMuscles ?? const [],
+      );
+      final baselineId = persistedBaseline.id;
+
+      // [추가] 세션 정보 저장 (DB에 확보된 baseline_id 사용)
       await repository.saveWorkoutSession(
-        baselineId: widget.baseline.id,
+        baselineId: baselineId,
         date: DateTime.now(),
         difficulty: difficulty,
         totalVolume: totalVolume,
@@ -296,14 +364,16 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
                 0.0;
         final reps =
             int.tryParse(_controllers['reps_${set.id}']?.text ?? '0') ?? 0;
-        
+
         // [핵심 수정] sets 필드를 인덱스 기반으로 명시적으로 할당 (1, 2, 3...)
         // 컨트롤러에서 파싱하지 않고 순서대로 할당하여 정확성 보장
         final setsCount = setIndex;
 
         // [핵심] isCompleted를 무조건 true로 설정하여 보관함 필터 통과
         // [중요] 저장 버튼을 눌렀을 때만 완료 처리 (불러온 직후에는 false 상태 유지)
+        // [메모리→DB 동기화] baselineId를 DB에 확보된 ID로 덮어씀
         final completedSet = set.copyWith(
+          baselineId: baselineId, // DB에 확보된 baseline_id 사용
           weight: weight,
           reps: reps,
           sets: setsCount, // 인덱스 기반 세트 번호 (1부터 시작)
@@ -311,7 +381,7 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
         );
 
         setsToSave.add(completedSet);
-        
+
         // 로컬 상태도 업데이트하여 UI 일관성 유지
         setState(() {
           _sets[set.id] = completedSet;
@@ -337,8 +407,13 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
         const SnackBar(content: Text('기록이 저장되었습니다.')),
       );
 
-      // 콜백 호출 (홈 화면에서 카드 제거)
-      widget.onUpdated();
+      // 부분 업데이트: 저장 반영된 baseline으로 해당 카드만 교체 (전체 새로고침 없음)
+      final fullBaseline =
+          await repository.getBaselineById(persistedBaseline.id);
+      widget.onUpdated(
+        fullBaseline ?? persistedBaseline,
+        widget.baseline.id,
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -505,7 +580,13 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
                           isDense: true,
                         ),
                         keyboardType: TextInputType.number,
-                        onEditingComplete: () => FocusScope.of(context).unfocus(),
+                        onTap: () {
+                          final c = _controllers['weight_$setId'];
+                          // '0' 또는 '0.0' 모두 처리 (double.toString() 결과 대응)
+                          if (c != null && (c.text == '0' || c.text == '0.0')) c.clear();
+                        },
+                        onEditingComplete: () =>
+                            FocusScope.of(context).unfocus(),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -519,7 +600,12 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
                           isDense: true,
                         ),
                         keyboardType: TextInputType.number,
-                        onEditingComplete: () => FocusScope.of(context).unfocus(),
+                        onTap: () {
+                          final c = _controllers['reps_$setId'];
+                          if (c != null && c.text == '0') c.clear();
+                        },
+                        onEditingComplete: () =>
+                            FocusScope.of(context).unfocus(),
                       ),
                     ),
                     IconButton(

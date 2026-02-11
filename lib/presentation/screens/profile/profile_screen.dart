@@ -283,6 +283,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             plan.exerciseName ?? fetchedNameMap[plan.baselineId] ?? _exerciseNameMap[plan.baselineId] ?? 'Unknown';
       }
 
+      if (!mounted) return;
       final inputs = await showDialog<List<WorkoutCompletionInput>>(
         context: context,
         builder: (context) => WorkoutExecutionDialog(
@@ -354,6 +355,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     ref.listen<int>(profileSearchTriggerProvider, (prev, next) {
       if (prev == next) return;
       _openExerciseSearchSheet(); // 내부에서 _isSearchSheetOpen으로 중복 오픈 방지
+    });
+
+    // Provider 감지하여 캘린더 갱신 (AI 계획 수립 후 즉시 동기화)
+    ref.listen(plannedWorkoutsRefreshProvider, (previous, next) {
+      if (previous != next && mounted) {
+        _loadPlannedWorkoutsForMonth(_focusedDay);
+      }
     });
 
     final profileAsync = ref.watch(currentProfileProvider);

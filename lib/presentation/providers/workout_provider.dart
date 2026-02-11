@@ -78,25 +78,21 @@ final homeViewModelProvider =
   return HomeViewModel(repository);
 });
 
-/// 오늘 날짜의 운동 기준 정보 프로바이더
-final todayBaselinesProvider =
-    FutureProvider<List<ExerciseBaseline>>((ref) async {
+/// 운동 분석 대시보드 통계 (주간 볼륨 + 부위 밸런스)
+/// - [weekStart] 주의 시작일(월요일). UI에서 주차가 변경될 때마다 새로운 데이터를 가져옴
+final dashboardStatsProvider = FutureProvider.family.autoDispose<
+    ({Map<DateTime, double> weeklyVolume, Map<String, double> bodyBalance}),
+    DateTime>((ref, weekStart) async {
   final repository = ref.watch(workoutRepositoryProvider);
-  return await repository.getTodayBaselines();
+
+  final weeklyFuture = repository.getWeeklyVolume(weekStart: weekStart);
+  final balanceFuture = repository.getBodyBalance(weekStart: weekStart);
+
+  final weekly = await weeklyFuture;
+  final balance = await balanceFuture;
+
+  return (weeklyVolume: weekly, bodyBalance: balance);
 });
 
-/// 운동 분석 대시보드 통계 (주간 볼륨 + 부위 밸런스)
-final dashboardStatsProvider = FutureProvider.autoDispose<
-    ({Map<DateTime, double> weeklyVolume, Map<String, double> bodyBalance})>(
-  (ref) async {
-    final repository = ref.watch(workoutRepositoryProvider);
-
-    final weeklyFuture = repository.getWeeklyVolume();
-    final balanceFuture = repository.getBodyBalance();
-
-    final weekly = await weeklyFuture;
-    final balance = await balanceFuture;
-
-    return (weeklyVolume: weekly, bodyBalance: balance);
-  },
-);
+/// 계획된 운동 데이터 갱신 트리거 (ProfileScreen 캘린더 동기화용)
+final plannedWorkoutsRefreshProvider = StateProvider<int>((ref) => 0);

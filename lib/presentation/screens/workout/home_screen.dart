@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:math' as math;
 import '../../providers/workout_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/subscription_provider.dart';
 import '../../viewmodels/home_state.dart';
 import '../../../data/models/exercise_baseline.dart';
 import '../../widgets/workout/workout_card.dart';
 import '../../widgets/workout/exercise_add_panel.dart';
+import '../subscription/subscription_screen.dart';
 
 /// 홈 화면 (Single Page UX - 당일 운동 기록)
 class HomeScreen extends ConsumerStatefulWidget {
@@ -23,9 +25,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // ViewModel 초기화 또는 데이터 로드
+    // ViewModel 초기화 또는 데이터 로드 (Draft 보존을 위해 forceRefresh=false)
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(homeViewModelProvider.notifier).loadBaselines();
+      ref.read(homeViewModelProvider.notifier).loadBaselines(forceRefresh: false);
     });
   }
 
@@ -53,6 +55,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       );
       return;
     }
+
+    // Check routine limit: 3 free, then premium required
+    final routines = await ref.read(routinesProvider.future);
+    final isPremium = ref.read(subscriptionProvider).isPremium;
+
+    if (!isPremium && routines.length >= 3) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('무료로 3개 루틴을 생성하셨습니다. 더 많은 루틴을 생성하려면 프리미엄이 필요합니다.'),
+          action: SnackBarAction(
+            label: '멤버십 보기',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const SubscriptionScreen(),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (!mounted) return;
 
     final nameController = TextEditingController();
     final result = await showDialog<String>(
@@ -117,7 +146,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
           // 1. 창 열기 (우측 슬라이드 패널)
-          final bool? result = await showGeneralDialog<bool>(
+          await showGeneralDialog<bool>(
             context: context,
             barrierDismissible: true,
             barrierLabel: "Dismiss",
@@ -166,10 +195,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             },
           );
 
-          // 2. 창이 닫힌 후 결과가 true면 갱신 (여기서 갱신해야 안전함)
-          if (result == true && context.mounted) {
-            ref.read(homeViewModelProvider.notifier).loadBaselines();
-          }
+          // 2. 창이 닫힌 후: addNewExercise는 메모리 전용이므로 loadBaselines() 호출 불필요
+          // Draft는 이미 state에 추가되었으므로 새로고침하지 않음
         },
         icon: const Icon(Icons.add),
         label: const Text('신규 운동 추가'),
@@ -326,10 +353,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                               return WorkoutCard(
                                 key: ValueKey(baseline.id),
                                 baseline: baseline,
-                                onUpdated: () {
-                                  ref
-                                      .read(homeViewModelProvider.notifier)
-                                      .loadBaselines();
+                                onUpdated: (savedItem, oldId) {
+                                  if (savedItem != null && oldId != null) {
+                                    ref
+                                        .read(homeViewModelProvider.notifier)
+                                        .replaceBaselineAfterSave(
+                                            oldId, savedItem);
+                                  } else {
+                                    ref
+                                        .read(homeViewModelProvider.notifier)
+                                        .loadBaselines(forceRefresh: true);
+                                  }
                                 },
                               );
                             }),
@@ -368,10 +402,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                   return WorkoutCard(
                                     key: ValueKey(baseline.id),
                                     baseline: baseline,
-                                    onUpdated: () {
-                                      ref
-                                          .read(homeViewModelProvider.notifier)
-                                          .loadBaselines();
+                                    onUpdated: (savedItem, oldId) {
+                                      if (savedItem != null && oldId != null) {
+                                        ref
+                                            .read(homeViewModelProvider
+                                                .notifier)
+                                            .replaceBaselineAfterSave(
+                                                oldId, savedItem);
+                                      } else {
+                                        ref
+                                            .read(homeViewModelProvider
+                                                .notifier)
+                                            .loadBaselines(forceRefresh: true);
+                                      }
                                     },
                                   );
                                 }).toList(),

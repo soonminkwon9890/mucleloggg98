@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
+import '../../providers/subscription_provider.dart';
 import '../../providers/workout_provider.dart';
+import '../subscription/subscription_screen.dart';
 import '../../../data/models/exercise_baseline.dart';
 import '../../../data/models/workout_set.dart';
 import '../../../data/models/routine.dart';
 import '../../../data/models/routine_item.dart';
 import '../../../data/services/supabase_service.dart';
 import '../../../core/enums/exercise_enums.dart';
-import '../../../core/utils/date_formatter.dart';
 
 /// 관리 페이지 (운동 보관함 및 루틴 관리)
 class ManagementScreen extends ConsumerStatefulWidget {
@@ -168,8 +169,9 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
     ref.invalidate(baselinesProvider);
     ref.invalidate(workoutDatesProvider);
 
-    // [추가] HomeViewModel 상태 갱신
-    ref.read(homeViewModelProvider.notifier).refresh();
+    // [Fix] HomeViewModel 갱신 - invalidate 대신 forceRefresh 사용 (Draft 보존)
+    // invalidate는 Provider를 파괴하여 Draft가 손실되므로 사용하지 않음
+    await ref.read(homeViewModelProvider.notifier).loadBaselines(forceRefresh: true);
 
     if (!mounted) return;
     messenger.showSnackBar(
@@ -189,119 +191,45 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
     }
   }
 
-  Future<void> _addToToday() async {
+  /// 보관함에서 오늘 운동에 추가 (메모리 전용 - DB 저장 X)
+  /// addFromArchiveOrRoutine을 사용하여 데이터 리셋 후 홈 화면에 표시합니다.
+  /// 실제 DB 저장은 사용자가 세트를 완료할 때 수행됩니다.
+  void _addToToday() {
     if (_selectedBaselineIds.isEmpty) return;
 
-    // [안전핀] 로딩 인디케이터 표시 (여러 개 선택 시 작업 중임을 알림)
-    bool isLoading = true;
-    if (mounted) {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const Center(
-          child: Card(
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('운동을 추가하는 중...'),
-                ],
-              ),
-            ),
-          ),
-        ),
+    final messenger = ScaffoldMessenger.of(context);
+
+    final baselines = ref.read(archivedBaselinesProvider).value ?? [];
+
+    final selectedBaselines =
+        baselines.where((b) => _selectedBaselineIds.contains(b.id)).toList();
+
+    if (selectedBaselines.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('선택된 운동을 찾을 수 없습니다.')),
       );
+      return;
     }
 
-    try {
-      final repository = ref.read(workoutRepositoryProvider);
-      final baselines = ref.read(archivedBaselinesProvider).value ?? [];
+    // 메모리 전용 추가: 새 UUID 생성 + 데이터 리셋
+    ref.read(homeViewModelProvider.notifier).addFromArchiveOrRoutine(
+      selectedBaselines,
+      routineId: null, // 보관함에서 추가 시 routineId 없음
+    );
 
-      // Fallback: 혹시라도 없으면 리포지토리에서 조회
-      if (baselines.isEmpty) {
-        final repoBaselines = await repository.getBaselines();
-        baselines.addAll(repoBaselines);
-      }
+    final addedCount = selectedBaselines.length;
 
-      var selectedBaselines =
-          baselines.where((b) => _selectedBaselineIds.contains(b.id)).toList();
+    // 선택 모드 해제
+    setState(() {
+      _selectedBaselineIds.clear();
+      _isSelectionMode = false;
+    });
 
-      if (selectedBaselines.isEmpty) {
-        if (mounted && isLoading) {
-          Navigator.pop(context); // 로딩 다이얼로그 닫기
-          isLoading = false;
-        }
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('선택된 운동을 찾을 수 없습니다.')),
-          );
-        }
-        return;
-      }
-
-      final now = DateTime.now();
-      int successCount = 0;
-
-      for (final baseline in selectedBaselines) {
-        try {
-          // 날짜 비교
-          final isSameDay = DateFormatter.isSameDate(baseline.createdAt, now);
-
-          if (isSameDay) {
-            // 이미 오늘 날짜면 건너뛰기
-            continue;
-          }
-
-          // [핵심] Repository의 addTodayWorkout 사용 (0세트로 초기화)
-          await repository.addTodayWorkout(baseline);
-
-          successCount++;
-        } catch (e) {
-          // 개별 운동 실패는 로그만 남기고 계속 진행
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('"${baseline.exerciseName}" 추가 실패: $e')),
-            );
-          }
-        }
-      }
-
-      // Provider 갱신
-      ref.invalidate(baselinesProvider);
-      ref.invalidate(workoutDatesProvider);
-
-      // [추가] HomeViewModel 상태 갱신
-      ref.read(homeViewModelProvider.notifier).refresh();
-
-      // 로딩 다이얼로그 닫기
-      if (mounted && isLoading) {
-        Navigator.pop(context);
-        isLoading = false;
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('$successCount개 운동을 오늘 목록에 추가했습니다.'),
-          ),
-        );
-      }
-    } catch (e) {
-      // 로딩 다이얼로그 닫기
-      if (mounted && isLoading) {
-        Navigator.pop(context);
-        isLoading = false;
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('오류: $e')),
-        );
-      }
-    }
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('$addedCount개 운동을 오늘 목록에 추가했습니다.'),
+      ),
+    );
   }
 
   Future<void> _confirmAndDeleteBaseline(ExerciseBaseline baseline) async {
@@ -392,6 +320,31 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
 
   Future<void> _saveAsRoutine() async {
     if (_selectedBaselineIds.isEmpty) return;
+
+    // Check routine limit: 3 free, then premium required
+    final routines = ref.read(routinesProvider).valueOrNull ?? [];
+    final isPremium = ref.read(subscriptionProvider).isPremium;
+
+    if (!isPremium && routines.length >= 3) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('무료로 3개 루틴을 생성하셨습니다. 더 많은 루틴을 생성하려면 프리미엄이 필요합니다.'),
+          action: SnackBarAction(
+            label: '멤버십 보기',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const SubscriptionScreen(),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+      return;
+    }
 
     final nameController = TextEditingController();
     final result = await showDialog<String>(
@@ -1032,6 +985,7 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab> {
   @override
   Widget build(BuildContext context) {
     final routinesAsync = ref.watch(routinesProvider);
+    final isPremium = ref.watch(subscriptionProvider).isPremium;
 
     return routinesAsync.when(
       data: (routines) {
@@ -1042,7 +996,28 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab> {
               child: SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: () => _showCreateRoutineModal(context),
+                  // 3 Free Routines, then Premium required
+                  onPressed: (isPremium || routines.length < 3)
+                      ? () => _showCreateRoutineModal(context)
+                      : () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: const Text('무료로 3개 루틴을 생성하셨습니다. 더 많은 루틴을 생성하려면 프리미엄이 필요합니다.'),
+                              action: SnackBarAction(
+                                label: '멤버십 보기',
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          const SubscriptionScreen(),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          );
+                        },
                   icon: const Icon(Icons.add),
                   label: const Text('루틴 생성하기'),
                 ),
@@ -1278,42 +1253,57 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab> {
     }
   }
 
-  /// 루틴 시작하기 (기존 _loadRoutine에서 이름 변경)
-  Future<void> _startRoutine(Routine routine) async {
+  /// 루틴 시작하기 - 메모리 전용 (DB 저장 X)
+  /// addFromArchiveOrRoutine을 사용하여 데이터 리셋 후 홈 화면에 표시합니다.
+  /// 실제 DB 저장은 사용자가 세트를 완료할 때 수행됩니다.
+  void _startRoutine(Routine routine) {
     if (routine.routineItems == null || routine.routineItems!.isEmpty) {
-      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('루틴에 운동이 없습니다.')),
       );
       return;
     }
 
-    if (!mounted) return;
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
 
-    try {
-      // 루틴 시작 로직은 HomeViewModel로 캡슐화 (ensureExerciseVisible → addTodayWorkout)
-      await ref.read(homeViewModelProvider.notifier).startRoutine(routine);
-
-      // Provider 갱신: invalidate 후 refresh로 즉시 갱신 보장
-      ref.invalidate(baselinesProvider);
-      ref.invalidate(workoutDatesProvider);
-      final _ = await ref.refresh(baselinesProvider.future);
-
-      if (!mounted) return;
-      navigator.popUntil((route) => route.isFirst);
+    // RoutineItem을 ExerciseBaseline으로 변환 (데이터 리셋 상태)
+    final userId = SupabaseService.currentUserId;
+    if (userId == null) {
       messenger.showSnackBar(
-        SnackBar(
-            content:
-                Text('${routine.routineItems!.length}개 운동이 홈 화면에 추가되었습니다.')),
+        const SnackBar(content: Text('로그인이 필요합니다.')),
       );
-    } catch (e) {
-      if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(content: Text('루틴 시작 오류: $e')),
-      );
+      return;
     }
+
+    final now = DateTime.now();
+    final baselines = routine.routineItems!.map((item) {
+      return ExerciseBaseline(
+        id: const Uuid().v4(), // 임시 ID (addFromArchiveOrRoutine에서 다시 생성됨)
+        userId: userId,
+        exerciseName: item.exerciseName,
+        bodyPart: item.bodyPart,
+        targetMuscles: const [], // RoutineItem에는 targetMuscles 없음
+        workoutSets: const [], // 리셋: 빈 리스트
+        routineId: null, // addFromArchiveOrRoutine에서 설정됨
+        isHiddenFromHome: false,
+        createdAt: now,
+        updatedAt: now,
+      );
+    }).toList();
+
+    // 메모리 전용 추가: 새 UUID 생성 + 데이터 리셋 + 루틴 ID 연결
+    ref.read(homeViewModelProvider.notifier).addFromArchiveOrRoutine(
+      baselines,
+      routineId: routine.id, // 루틴 ID 전달
+    );
+
+    navigator.popUntil((route) => route.isFirst);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('${routine.routineItems!.length}개 운동이 홈 화면에 추가되었습니다.'),
+      ),
+    );
   }
 
   /// 루틴 삭제 (확인 다이얼로그 포함)

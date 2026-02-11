@@ -36,8 +36,8 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
   List<FlSpot>? _chartSpots;
   Map<int, String>? _xAxisLabels; // 인덱스 -> 날짜 문자열
 
-  // 루틴 생성 관련 상태
-  bool _isGeneratingRoutine = false;
+  // 루틴 생성 관련 상태 (현재 미사용 - AppBar 버튼 제거로 인해)
+  // bool _isGeneratingRoutine = false;
 
   @override
   void initState() {
@@ -522,9 +522,11 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
     }
   }
 
-  /// 다음 주 루틴 생성
+  /// 다음 주 루틴 생성 (현재 미사용 - AppBar 버튼 제거로 인해)
+  /// AI 루틴 생성 기능은 워크아웃 로그 탭의 "AI 강도 측정 / 계획 수립" 기능으로 통합됨
+  // ignore: unused_element
   Future<void> _generateNextWeekRoutine() async {
-    setState(() => _isGeneratingRoutine = true);
+    // setState(() => _isGeneratingRoutine = true);
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -552,7 +554,7 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
       if (sessions.isEmpty) {
         if (mounted) {
           Navigator.pop(context); // 로딩 다이얼로그 닫기
-          setState(() => _isGeneratingRoutine = false);
+          // setState(() => _isGeneratingRoutine = false);
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('지난주 운동 기록이 없습니다. 운동을 시작해보세요!'),
@@ -590,7 +592,7 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
       // 5. 로딩 다이얼로그 닫고 결과 표시
       if (mounted) {
         Navigator.pop(context); // 로딩 다이얼로그 닫기
-        setState(() => _isGeneratingRoutine = false);
+        // setState(() => _isGeneratingRoutine = false);
         if (plans.isNotEmpty) {
           await _showRoutineGenerationDialog(plans);
         } else {
@@ -605,7 +607,7 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
     } catch (e) {
       if (mounted) {
         Navigator.pop(context); // 로딩 다이얼로그 닫기
-        setState(() => _isGeneratingRoutine = false);
+        // setState(() => _isGeneratingRoutine = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('루틴 생성 실패: $e'),
@@ -678,24 +680,8 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.exerciseName),
-        actions: [
-          // 로딩 중일 때는 CircularProgressIndicator 표시
-          if (_isGeneratingRoutine)
-            const Padding(
-              padding: EdgeInsets.all(16.0),
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            )
-          else
-            IconButton(
-              icon: const Icon(Icons.auto_awesome),
-              tooltip: 'AI 루틴 생성',
-              onPressed: _generateNextWeekRoutine,
-            ),
-        ],
+        // AI 분석 버튼 제거됨 (AI 강도 분석 및 계획 수립 기능으로 통합)
+        // 기존: IconButton (Icons.auto_awesome, 'AI 루틴 생성')
       ),
       body: SafeArea(
         child: _isLoadingHistory

@@ -91,6 +91,12 @@ class _MainScreenState extends ConsumerState<MainScreen> {
           setState(() {
             _currentIndex = index;
           });
+
+          // 홈 탭(인덱스 0) 클릭 시: Draft 보존을 위해 invalidate 제거
+          // 날짜 변경 체크만 수행하여 필요시에만 새로고침 (Draft 유지)
+          if (index == 0) {
+            ref.read(homeViewModelProvider.notifier).checkDateAndRefresh();
+          }
         },
         items: const [
           BottomNavigationBarItem(

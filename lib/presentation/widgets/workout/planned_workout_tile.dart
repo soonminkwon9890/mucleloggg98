@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/utils/adaptive_widgets.dart';
 import '../../../data/models/planned_workout.dart';
 import '../../providers/workout_provider.dart';
 import 'edit_planned_workout_dialog.dart';
@@ -89,7 +90,7 @@ class PlannedWorkoutTile extends ConsumerWidget {
     );
     final initialDate = current.isBefore(today) ? today : current;
 
-    final picked = await showDatePicker(
+    final picked = await AdaptiveWidgets.showAdaptiveDatePicker(
       context: context,
       initialDate: initialDate,
       firstDate: today,

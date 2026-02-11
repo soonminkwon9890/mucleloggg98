@@ -30,6 +30,14 @@ mixin _$UserProfile {
   @JsonKey(name: 'gender')
   String? get gender =>
       throw _privateConstructorUsedError; // 성별 ('MALE', 'FEMALE')
+  @JsonKey(name: 'is_premium')
+  bool? get isPremium => throw _privateConstructorUsedError;
+  @JsonKey(name: 'premium_until')
+  DateTime? get premiumUntil => throw _privateConstructorUsedError;
+  @JsonKey(name: 'is_admin')
+  bool? get isAdmin => throw _privateConstructorUsedError;
+  @JsonKey(name: 'is_coupon_available')
+  bool? get isCouponAvailable => throw _privateConstructorUsedError;
   @JsonKey(name: 'height', fromJson: JsonConverters.toDoubleNullable)
   double? get height => throw _privateConstructorUsedError; // 키 (cm 단위)
   @JsonKey(name: 'weight', fromJson: JsonConverters.toDoubleNullable)
@@ -58,6 +66,10 @@ abstract class $UserProfileCopyWith<$Res> {
       @JsonKey(name: 'experience_level') String? experienceLevel,
       @JsonKey(name: 'birth_date') DateTime? birthDate,
       @JsonKey(name: 'gender') String? gender,
+      @JsonKey(name: 'is_premium') bool? isPremium,
+      @JsonKey(name: 'premium_until') DateTime? premiumUntil,
+      @JsonKey(name: 'is_admin') bool? isAdmin,
+      @JsonKey(name: 'is_coupon_available') bool? isCouponAvailable,
       @JsonKey(name: 'height', fromJson: JsonConverters.toDoubleNullable)
       double? height,
       @JsonKey(name: 'weight', fromJson: JsonConverters.toDoubleNullable)
@@ -84,6 +96,10 @@ class _$UserProfileCopyWithImpl<$Res, $Val extends UserProfile>
     Object? experienceLevel = freezed,
     Object? birthDate = freezed,
     Object? gender = freezed,
+    Object? isPremium = freezed,
+    Object? premiumUntil = freezed,
+    Object? isAdmin = freezed,
+    Object? isCouponAvailable = freezed,
     Object? height = freezed,
     Object? weight = freezed,
     Object? createdAt = freezed,
@@ -105,6 +121,22 @@ class _$UserProfileCopyWithImpl<$Res, $Val extends UserProfile>
           ? _value.gender
           : gender // ignore: cast_nullable_to_non_nullable
               as String?,
+      isPremium: freezed == isPremium
+          ? _value.isPremium
+          : isPremium // ignore: cast_nullable_to_non_nullable
+              as bool?,
+      premiumUntil: freezed == premiumUntil
+          ? _value.premiumUntil
+          : premiumUntil // ignore: cast_nullable_to_non_nullable
+              as DateTime?,
+      isAdmin: freezed == isAdmin
+          ? _value.isAdmin
+          : isAdmin // ignore: cast_nullable_to_non_nullable
+              as bool?,
+      isCouponAvailable: freezed == isCouponAvailable
+          ? _value.isCouponAvailable
+          : isCouponAvailable // ignore: cast_nullable_to_non_nullable
+              as bool?,
       height: freezed == height
           ? _value.height
           : height // ignore: cast_nullable_to_non_nullable
@@ -134,6 +166,10 @@ abstract class _$$UserProfileImplCopyWith<$Res>
       @JsonKey(name: 'experience_level') String? experienceLevel,
       @JsonKey(name: 'birth_date') DateTime? birthDate,
       @JsonKey(name: 'gender') String? gender,
+      @JsonKey(name: 'is_premium') bool? isPremium,
+      @JsonKey(name: 'premium_until') DateTime? premiumUntil,
+      @JsonKey(name: 'is_admin') bool? isAdmin,
+      @JsonKey(name: 'is_coupon_available') bool? isCouponAvailable,
       @JsonKey(name: 'height', fromJson: JsonConverters.toDoubleNullable)
       double? height,
       @JsonKey(name: 'weight', fromJson: JsonConverters.toDoubleNullable)
@@ -158,6 +194,10 @@ class __$$UserProfileImplCopyWithImpl<$Res>
     Object? experienceLevel = freezed,
     Object? birthDate = freezed,
     Object? gender = freezed,
+    Object? isPremium = freezed,
+    Object? premiumUntil = freezed,
+    Object? isAdmin = freezed,
+    Object? isCouponAvailable = freezed,
     Object? height = freezed,
     Object? weight = freezed,
     Object? createdAt = freezed,
@@ -179,6 +219,22 @@ class __$$UserProfileImplCopyWithImpl<$Res>
           ? _value.gender
           : gender // ignore: cast_nullable_to_non_nullable
               as String?,
+      isPremium: freezed == isPremium
+          ? _value.isPremium
+          : isPremium // ignore: cast_nullable_to_non_nullable
+              as bool?,
+      premiumUntil: freezed == premiumUntil
+          ? _value.premiumUntil
+          : premiumUntil // ignore: cast_nullable_to_non_nullable
+              as DateTime?,
+      isAdmin: freezed == isAdmin
+          ? _value.isAdmin
+          : isAdmin // ignore: cast_nullable_to_non_nullable
+              as bool?,
+      isCouponAvailable: freezed == isCouponAvailable
+          ? _value.isCouponAvailable
+          : isCouponAvailable // ignore: cast_nullable_to_non_nullable
+              as bool?,
       height: freezed == height
           ? _value.height
           : height // ignore: cast_nullable_to_non_nullable
@@ -203,6 +259,10 @@ class _$UserProfileImpl implements _UserProfile {
       @JsonKey(name: 'experience_level') this.experienceLevel,
       @JsonKey(name: 'birth_date') this.birthDate,
       @JsonKey(name: 'gender') this.gender,
+      @JsonKey(name: 'is_premium') this.isPremium,
+      @JsonKey(name: 'premium_until') this.premiumUntil,
+      @JsonKey(name: 'is_admin') this.isAdmin,
+      @JsonKey(name: 'is_coupon_available') this.isCouponAvailable,
       @JsonKey(name: 'height', fromJson: JsonConverters.toDoubleNullable)
       this.height,
       @JsonKey(name: 'weight', fromJson: JsonConverters.toDoubleNullable)
@@ -228,6 +288,18 @@ class _$UserProfileImpl implements _UserProfile {
   final String? gender;
 // 성별 ('MALE', 'FEMALE')
   @override
+  @JsonKey(name: 'is_premium')
+  final bool? isPremium;
+  @override
+  @JsonKey(name: 'premium_until')
+  final DateTime? premiumUntil;
+  @override
+  @JsonKey(name: 'is_admin')
+  final bool? isAdmin;
+  @override
+  @JsonKey(name: 'is_coupon_available')
+  final bool? isCouponAvailable;
+  @override
   @JsonKey(name: 'height', fromJson: JsonConverters.toDoubleNullable)
   final double? height;
 // 키 (cm 단위)
@@ -241,7 +313,7 @@ class _$UserProfileImpl implements _UserProfile {
 
   @override
   String toString() {
-    return 'UserProfile(id: $id, experienceLevel: $experienceLevel, birthDate: $birthDate, gender: $gender, height: $height, weight: $weight, createdAt: $createdAt)';
+    return 'UserProfile(id: $id, experienceLevel: $experienceLevel, birthDate: $birthDate, gender: $gender, isPremium: $isPremium, premiumUntil: $premiumUntil, isAdmin: $isAdmin, isCouponAvailable: $isCouponAvailable, height: $height, weight: $weight, createdAt: $createdAt)';
   }
 
   @override
@@ -255,6 +327,13 @@ class _$UserProfileImpl implements _UserProfile {
             (identical(other.birthDate, birthDate) ||
                 other.birthDate == birthDate) &&
             (identical(other.gender, gender) || other.gender == gender) &&
+            (identical(other.isPremium, isPremium) ||
+                other.isPremium == isPremium) &&
+            (identical(other.premiumUntil, premiumUntil) ||
+                other.premiumUntil == premiumUntil) &&
+            (identical(other.isAdmin, isAdmin) || other.isAdmin == isAdmin) &&
+            (identical(other.isCouponAvailable, isCouponAvailable) ||
+                other.isCouponAvailable == isCouponAvailable) &&
             (identical(other.height, height) || other.height == height) &&
             (identical(other.weight, weight) || other.weight == weight) &&
             (identical(other.createdAt, createdAt) ||
@@ -263,8 +342,19 @@ class _$UserProfileImpl implements _UserProfile {
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode => Object.hash(runtimeType, id, experienceLevel, birthDate,
-      gender, height, weight, createdAt);
+  int get hashCode => Object.hash(
+      runtimeType,
+      id,
+      experienceLevel,
+      birthDate,
+      gender,
+      isPremium,
+      premiumUntil,
+      isAdmin,
+      isCouponAvailable,
+      height,
+      weight,
+      createdAt);
 
   /// Create a copy of UserProfile
   /// with the given fields replaced by the non-null parameter values.
@@ -288,6 +378,10 @@ abstract class _UserProfile implements UserProfile {
           @JsonKey(name: 'experience_level') final String? experienceLevel,
           @JsonKey(name: 'birth_date') final DateTime? birthDate,
           @JsonKey(name: 'gender') final String? gender,
+          @JsonKey(name: 'is_premium') final bool? isPremium,
+          @JsonKey(name: 'premium_until') final DateTime? premiumUntil,
+          @JsonKey(name: 'is_admin') final bool? isAdmin,
+          @JsonKey(name: 'is_coupon_available') final bool? isCouponAvailable,
           @JsonKey(name: 'height', fromJson: JsonConverters.toDoubleNullable)
           final double? height,
           @JsonKey(name: 'weight', fromJson: JsonConverters.toDoubleNullable)
@@ -310,6 +404,18 @@ abstract class _UserProfile implements UserProfile {
   @override
   @JsonKey(name: 'gender')
   String? get gender; // 성별 ('MALE', 'FEMALE')
+  @override
+  @JsonKey(name: 'is_premium')
+  bool? get isPremium;
+  @override
+  @JsonKey(name: 'premium_until')
+  DateTime? get premiumUntil;
+  @override
+  @JsonKey(name: 'is_admin')
+  bool? get isAdmin;
+  @override
+  @JsonKey(name: 'is_coupon_available')
+  bool? get isCouponAvailable;
   @override
   @JsonKey(name: 'height', fromJson: JsonConverters.toDoubleNullable)
   double? get height; // 키 (cm 단위)

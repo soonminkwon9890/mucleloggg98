@@ -39,6 +39,12 @@ dependencies:
   # image: ^4.1.3 # 이미지 처리 (ML Kit용) - [AI Pivot] 잠정 중단
   table_calendar: ^3.0.9 # 달력 위젯
   fl_chart: ^0.66.0 # 차트 라이브러리
+  package_info_plus: any # 앱 버전 조회 (force update)
+  pub_semver: any # 버전 비교
+  url_launcher: any # 스토어/외부 링크 열기
+
+  # 7. 인앱 결제 (RevenueCat)
+  purchases_flutter: ^9.11.0 # iOS 구독 시스템
 
 dev_dependencies:
   flutter_test:
@@ -55,9 +61,10 @@ dev_dependencies:
 
 # 앱 아이콘 설정 (iOS/Android)
 flutter_launcher_icons:
-  android: true
+  android: "launcher_icon"
   ios: true
   image_path: "assets/icon/app_icon.png"
+  min_sdk_android: 21
   remove_alpha_ios: true  # iOS는 투명 배경 불허
   adaptive_icon_background: "#FFFFFF"
   adaptive_icon_foreground: "assets/icon/app_icon.png"

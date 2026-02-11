@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../../core/utils/adaptive_widgets.dart';
 import '../../../data/models/planned_workout_dto.dart';
 
 /// 강도 모드: High(+2.5kg), Normal(원본), Condition(85%), Rest(휴식)
@@ -93,7 +94,7 @@ class _RoutineGenerationDialogState extends State<RoutineGenerationDialog> {
   Future<void> _pickDate() async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final picked = await showDatePicker(
+    final picked = await AdaptiveWidgets.showAdaptiveDatePicker(
       context: context,
       initialDate: _selectedDate,
       firstDate: today,

@@ -1,4 +1,5 @@
 import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -223,7 +224,7 @@ class _ExerciseInputScreenState extends ConsumerState<ExerciseInputScreen> {
   Widget build(BuildContext context) {
     return PopScope(
       // iOS에서는 Swipe Back 허용, Android에서만 뒤로 가기 제어
-      canPop: Platform.isIOS ? true : !_hasUnsavedChanges,
+      canPop: (!kIsWeb && Platform.isIOS) ? true : !_hasUnsavedChanges,
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
         // 데이터 저장이 필수인 경우에만 커스텀 다이얼로그 표시

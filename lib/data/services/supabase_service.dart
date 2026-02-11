@@ -35,6 +35,9 @@ class SupabaseService {
   /// 현재 사용자 가져오기
   static User? get currentUser => client.auth.currentUser;
 
+  /// 현재 사용자 ID 가져오기
+  static String? get currentUserId => currentUser?.id;
+
   /// 인증 상태 확인
   static bool get isAuthenticated => currentUser != null;
 

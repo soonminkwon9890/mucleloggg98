@@ -1,11 +1,15 @@
 import 'dart:io' show Platform;
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 /// iOS/Android 플랫폼별 적응형 위젯 유틸리티
 /// 
 /// iOS에서는 Cupertino 스타일, Android에서는 Material 스타일을 사용합니다.
 class AdaptiveWidgets {
+  /// 현재 플랫폼이 iOS인지 확인 (Web 환경 제외)
+  static bool get _isIOS => !kIsWeb && Platform.isIOS;
+
   /// 플랫폼별 적응형 다이얼로그 표시
   /// 
   /// iOS에서는 CupertinoAlertDialog, Android에서는 AlertDialog를 사용합니다.
@@ -22,7 +26,7 @@ class AdaptiveWidgets {
     confirmText ??= '확인';
     cancelText ??= '취소';
 
-    if (Platform.isIOS) {
+    if (_isIOS) {
       return showCupertinoDialog<T>(
         context: context,
         builder: (context) => CupertinoAlertDialog(
@@ -85,7 +89,7 @@ class AdaptiveWidgets {
     double? strokeWidth,
     Color? color,
   }) {
-    if (Platform.isIOS) {
+    if (_isIOS) {
       return CupertinoActivityIndicator(
         radius: radius ?? 10.0,
         color: color,
@@ -100,7 +104,7 @@ class AdaptiveWidgets {
 
   /// 플랫폼별 적응형 작은 로딩 인디케이터 (버튼 내부용)
   static Widget buildSmallLoadingIndicator({Color? color}) {
-    if (Platform.isIOS) {
+    if (_isIOS) {
       return CupertinoActivityIndicator(
         radius: 10,
         color: color,
@@ -129,7 +133,7 @@ class AdaptiveWidgets {
   }) {
     cancelText ??= '취소';
 
-    if (Platform.isIOS) {
+    if (_isIOS) {
       return showCupertinoModalPopup<T>(
         context: context,
         builder: (context) => CupertinoActionSheet(
@@ -192,6 +196,166 @@ class AdaptiveWidgets {
             ],
           ),
         ),
+      );
+    }
+  }
+
+  /// 플랫폼별 적응형 날짜 선택기
+  /// 
+  /// iOS에서는 CupertinoDatePicker, Android에서는 Material showDatePicker를 사용합니다.
+  static Future<DateTime?> showAdaptiveDatePicker({
+    required BuildContext context,
+    required DateTime initialDate,
+    required DateTime firstDate,
+    required DateTime lastDate,
+    String? confirmText,
+    String? cancelText,
+  }) async {
+    confirmText ??= '확인';
+    cancelText ??= '취소';
+
+    if (_isIOS) {
+      DateTime? selectedDate = initialDate;
+      
+      final result = await showCupertinoModalPopup<DateTime?>(
+        context: context,
+        builder: (context) => Container(
+          height: 300,
+          color: CupertinoColors.systemBackground.resolveFrom(context),
+          child: Column(
+            children: [
+              // 상단 버튼 영역
+              Container(
+                height: 50,
+                decoration: BoxDecoration(
+                  color: CupertinoColors.systemBackground.resolveFrom(context),
+                  border: Border(
+                    bottom: BorderSide(
+                      color: CupertinoColors.separator.resolveFrom(context),
+                      width: 0.5,
+                    ),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    CupertinoButton(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(cancelText!),
+                      onPressed: () => Navigator.pop(context, null),
+                    ),
+                    CupertinoButton(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(confirmText!),
+                      onPressed: () => Navigator.pop(context, selectedDate),
+                    ),
+                  ],
+                ),
+              ),
+              // 날짜 선택기
+              Expanded(
+                child: CupertinoDatePicker(
+                  mode: CupertinoDatePickerMode.date,
+                  initialDateTime: initialDate,
+                  minimumDate: firstDate,
+                  maximumDate: lastDate,
+                  onDateTimeChanged: (date) => selectedDate = date,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      
+      return result;
+    } else {
+      return showDatePicker(
+        context: context,
+        initialDate: initialDate,
+        firstDate: firstDate,
+        lastDate: lastDate,
+        confirmText: confirmText,
+        cancelText: cancelText,
+      );
+    }
+  }
+
+  /// 플랫폼별 적응형 시간 선택기
+  /// 
+  /// iOS에서는 CupertinoDatePicker, Android에서는 Material showTimePicker를 사용합니다.
+  static Future<TimeOfDay?> showAdaptiveTimePicker({
+    required BuildContext context,
+    required TimeOfDay initialTime,
+    String? confirmText,
+    String? cancelText,
+  }) async {
+    confirmText ??= '확인';
+    cancelText ??= '취소';
+
+    if (_isIOS) {
+      DateTime selectedDateTime = DateTime(
+        2000, 1, 1, initialTime.hour, initialTime.minute,
+      );
+      
+      final result = await showCupertinoModalPopup<TimeOfDay?>(
+        context: context,
+        builder: (context) => Container(
+          height: 300,
+          color: CupertinoColors.systemBackground.resolveFrom(context),
+          child: Column(
+            children: [
+              // 상단 버튼 영역
+              Container(
+                height: 50,
+                decoration: BoxDecoration(
+                  color: CupertinoColors.systemBackground.resolveFrom(context),
+                  border: Border(
+                    bottom: BorderSide(
+                      color: CupertinoColors.separator.resolveFrom(context),
+                      width: 0.5,
+                    ),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    CupertinoButton(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(cancelText!),
+                      onPressed: () => Navigator.pop(context, null),
+                    ),
+                    CupertinoButton(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(confirmText!),
+                      onPressed: () => Navigator.pop(
+                        context,
+                        TimeOfDay.fromDateTime(selectedDateTime),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // 시간 선택기
+              Expanded(
+                child: CupertinoDatePicker(
+                  mode: CupertinoDatePickerMode.time,
+                  initialDateTime: selectedDateTime,
+                  use24hFormat: true,
+                  onDateTimeChanged: (date) => selectedDateTime = date,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      
+      return result;
+    } else {
+      return showTimePicker(
+        context: context,
+        initialTime: initialTime,
+        confirmText: confirmText,
+        cancelText: cancelText,
       );
     }
   }

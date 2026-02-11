@@ -12,6 +12,10 @@ class UserProfile with _$UserProfile {
     @JsonKey(name: 'experience_level') String? experienceLevel, // 'BEGINNER', 'INTERMEDIATE', 'ADVANCED'
     @JsonKey(name: 'birth_date') DateTime? birthDate, // 생년월일
     @JsonKey(name: 'gender') String? gender, // 성별 ('MALE', 'FEMALE')
+    @JsonKey(name: 'is_premium') bool? isPremium,
+    @JsonKey(name: 'premium_until') DateTime? premiumUntil,
+    @JsonKey(name: 'is_admin') bool? isAdmin,
+    @JsonKey(name: 'is_coupon_available') bool? isCouponAvailable,
     @JsonKey(
       name: 'height',
       fromJson: JsonConverters.toDoubleNullable,

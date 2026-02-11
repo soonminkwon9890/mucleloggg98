@@ -121,49 +121,17 @@ class WorkoutRepository {
   }
 
   /// 오늘 날짜의 운동 기준 정보 가져오기
-  /// [성능 최적화] DB에서 후보군만 조회 후 Dart에서 필터링
+  /// [리팩토링] getWorkoutsByDate를 재사용하여 날짜 처리 통일
   Future<List<ExerciseBaseline>> getTodayBaselines() async {
     final userId = SupabaseService.currentUser?.id;
     if (userId == null) throw Exception('로그인 필요');
 
-    final now = DateTime.now();
+    final today = DateTime.now();
+    // 로컬 기준 자정으로 정규화
+    final normalizedToday = DateTime(today.year, today.month, today.day);
     
-    // 1. "홈에 표시될 후보군" 조회 (세트 정보 포함, 업데이트 순 정렬)
-    final response = await _client
-        .from('exercise_baselines')
-        .select('*, workout_sets(*)') 
-        .eq('user_id', userId)
-        .eq('is_hidden_from_home', false) 
-        .order('updated_at', ascending: false);
-
-    // 2. 메모리 필터링 (오늘 날짜 데이터만 남기기)
-    final baselines = (response as List).map((json) {
-      var baseline = ExerciseBaseline.fromJson(json);
-      
-      if (baseline.workoutSets != null) {
-        final todaySets = baseline.workoutSets!.where((set) {
-          if (set.createdAt == null) return false;
-          // [중요] 타임존 변환 없이 그대로 비교 (기존 방식 유지)
-          final d = set.createdAt!; 
-          return d.year == now.year && d.month == now.month && d.day == now.day && !set.isHidden;
-        }).toList();
-        
-        // 세트 시간순 정렬
-        todaySets.sort((a, b) => (a.createdAt ?? DateTime(0)).compareTo(b.createdAt ?? DateTime(0)));
-        baseline = baseline.copyWith(workoutSets: todaySets);
-      }
-      return baseline;
-    }).where((b) {
-      // "오늘 생성됨" OR "오늘 세트 있음"
-      final createdAt = b.createdAt;
-      final isCreatedToday = createdAt != null && 
-          createdAt.year == now.year && createdAt.month == now.month && createdAt.day == now.day;
-      final hasTodaySets = b.workoutSets != null && b.workoutSets!.isNotEmpty;
-      
-      return isCreatedToday || hasTodaySets;
-    }).toList();
-
-    return baselines;
+    // getWorkoutsByDate를 재사용하여 날짜 처리 통일
+    return await getWorkoutsByDate(normalizedToday);
   }
 
   /// 날짜 변경 시 홈 화면 초기화 (선택 사항)
@@ -282,7 +250,7 @@ class WorkoutRepository {
   /// [기능]
   /// - 이름으로만 검색 (대소문자 구분 없음)
   /// - 신규 운동: 생성 및 INSERT
-  /// - 기존 운동: Unhide + Metadata Update + Recover Sets
+  /// - 기존 운동: Unhide + (필요 시) Metadata 보강 + Recover Sets
   Future<ExerciseBaseline> ensureExerciseVisible(
     String name,
     String bodyPartCode,
@@ -328,14 +296,24 @@ class WorkoutRepository {
     final existing = ExerciseBaseline.fromJson(existingBaseline);
 
     // Unhide: is_hidden_from_home을 false로 UPDATE
-    // Update Metadata: bodyPartCode와 targetMuscles로 무조건 덮어쓰기
+    // Update Metadata: 절대 기존 metadata를 지우지 않음
+    // - body_part / target_muscles 는 persistent 데이터이므로, 값이 비어있을 때만 '보강'한다.
     // Refresh Timestamp: updated_at 갱신
     final updateData = <String, dynamic>{
       'is_hidden_from_home': false,
       'updated_at': DateTime.now().toIso8601String(),
-      'body_part': bodyPartCode,
-      'target_muscles': targetMuscles.isEmpty ? [] : targetMuscles,
     };
+
+    // body_part 보강: 기존 값이 없고 입력이 유효할 때만 채움 (덮어쓰기 금지)
+    if (existing.bodyPart == null && bodyPartCode.trim().isNotEmpty) {
+      updateData['body_part'] = bodyPartCode.trim();
+    }
+
+    // target_muscles 보강: 기존 값이 비어있고 입력이 있을 때만 채움 (빈 리스트로 덮어쓰기 금지)
+    final existingMuscles = existing.targetMuscles ?? const <String>[];
+    if (existingMuscles.isEmpty && targetMuscles.isNotEmpty) {
+      updateData['target_muscles'] = targetMuscles;
+    }
 
     await _client
         .from('exercise_baselines')
@@ -519,10 +497,10 @@ class WorkoutRepository {
           final createdAt = item['created_at'] as String?;
           if (createdAt != null) {
             try {
-              final dateTime = DateTime.parse(createdAt);
-              // 날짜만 추출 (시간 제거)
+              // UTC → Local 변환 후 날짜 추출 (타임존 이슈 방지)
+              final localDateTime = DateTime.parse(createdAt).toLocal();
               final dateOnly =
-                  DateTime(dateTime.year, dateTime.month, dateTime.day);
+                  DateTime(localDateTime.year, localDateTime.month, localDateTime.day);
               dates.add(dateOnly);
             } catch (e) {
               // 파싱 실패 시 무시
@@ -540,7 +518,7 @@ class WorkoutRepository {
   }
 
   /// 특정 날짜의 운동 기록 가져오기
-  /// date의 00:00:00 이상 ~ date+1일의 00:00:00 미만인 데이터 조회
+  /// 넓은 범위 조회 + 로컬 단순 비교 전략 (타임존 계산 제거)
   Future<List<ExerciseBaseline>> getWorkoutsByDate(DateTime date) async {
     // Note: workoutSets contains only the sets for the queried date
     final userId = SupabaseService.currentUser?.id;
@@ -548,14 +526,14 @@ class WorkoutRepository {
       throw Exception('로그인이 필요합니다.');
     }
 
-    // 날짜 범위 계산 (Safe Range): [start, end)
-    final start = DateTime(date.year, date.month, date.day);
-    final end = start.add(const Duration(days: 1));
+    // 타겟 날짜 (년/월/일만 사용)
+    final targetYear = date.year;
+    final targetMonth = date.month;
+    final targetDay = date.day;
 
-    // 타임존 유의:
-    // Supabase(Postgres)의 created_at이 UTC 기준이라면, 로컬 start/end를 UTC로 변환해 비교하는 것이 안전합니다.
-    final startIso = start.toUtc().toIso8601String();
-    final endIso = end.toUtc().toIso8601String();
+    // 무조건 넉넉하게 가져옴 (전전날부터 모레까지: ±2일)
+    final bufferStart = date.subtract(const Duration(days: 2)).toUtc().toIso8601String();
+    final bufferEnd = date.add(const Duration(days: 2)).toUtc().toIso8601String();
 
     // Step 1) Fetch Sets (Daily & Completed Only)
     // workout_sets에는 user_id가 없으므로 exercise_baselines로 inner join 하여 user 범위를 제한합니다.
@@ -564,8 +542,8 @@ class WorkoutRepository {
         .select(
           'id, baseline_id, weight, reps, sets, rpe, rpe_level, estimated_1rm, is_ai_suggested, performance_score, is_completed, is_hidden, created_at, exercise_baselines!inner(user_id)',
         )
-        .gte('created_at', startIso)
-        .lt('created_at', endIso)
+        .gte('created_at', bufferStart)
+        .lte('created_at', bufferEnd)
         .eq('is_completed', true)
         .eq('is_hidden', false)
         .eq('exercise_baselines.user_id', userId)
@@ -576,11 +554,26 @@ class WorkoutRepository {
     }
 
     // baseline_id -> 해당 날짜의 세트들
+    // Dart 메모리 필터링: toLocal()로 변환 후 '년/월/일'만 비교
     final Map<String, List<WorkoutSet>> dailySetsByBaselineId = {};
     for (final row in (setsResponse as List)) {
       if (row is! Map<String, dynamic>) continue;
+      
+      // 날짜 필터링: DB 시간을 로컬로 변환 후 '년/월/일'만 비교
+      final createdAtStr = row['created_at'] as String?;
+      if (createdAtStr == null) continue;
+      
+      // DB 시간이 무엇이든 내 폰 시간(Local)으로 바꿈
+      final itemTime = DateTime.parse(createdAtStr).toLocal();
+      
+      // 시간/분/초 무시하고 날짜만 같으면 OK
+      if (itemTime.year != targetYear ||
+          itemTime.month != targetMonth ||
+          itemTime.day != targetDay) {
+        continue; // 타겟 날짜가 아니면 스킵
+      }
+      
       final rowMap = Map<String, dynamic>.from(row);
-
       // inner join 결과는 WorkoutSet 모델에 없으므로 제거(파싱 에러 방지)
       rowMap.remove('exercise_baselines');
 
@@ -668,11 +661,13 @@ class WorkoutRepository {
     }
 
     // 날짜별로 그룹화 (yyyy-MM-dd 형식)
+    // UTC → Local 변환 후 날짜 추출 (타임존 이슈 방지)
     final Map<String, List<WorkoutSet>> groupedByDate = {};
     for (final set in allSets) {
       if (set.createdAt == null) continue;
 
-      final dateKey = DateFormat('yyyy-MM-dd').format(set.createdAt!);
+      final localCreatedAt = set.createdAt!.toLocal();
+      final dateKey = DateFormat('yyyy-MM-dd').format(localCreatedAt);
       groupedByDate.putIfAbsent(dateKey, () => []).add(set);
     }
 
@@ -687,23 +682,36 @@ class WorkoutRepository {
     return groupedByDate;
   }
 
-  /// 최근 7일 주간 볼륨(kg) 조회 (대시보드용)
-  /// - 대상: workout_sets, is_completed=true, is_hidden=false
-  /// - 볼륨: weight * reps (WorkoutSet 1레코드 = 1세트)
-  /// - 반환: 날짜(로컬 00:00:00) -> 총 볼륨
-  Future<Map<DateTime, double>> getWeeklyVolume() async {
+  /// 특정 주(월~일) 주간 볼륨(kg) 조회 (대시보드용)
+  /// - [weekStart] 주의 시작일(월요일). null이면 이번 주 월요일을 기본값으로 사용
+  /// - 쿼리 로직: weekStart 기준 월요일 00:00 ~ 일요일 23:59 범위를 계산하여 DB를 조회 (UTC 변환 필수)
+  /// - 버퍼 전략: 쿼리 시 월요일-1일 ~ 일요일+1일 범위로 조회 후, toLocal()로 요일 필터링
+  /// - 반환: 날짜(로컬 00:00:00) -> 총 볼륨 (7키: 월~일)
+  Future<Map<DateTime, double>> getWeeklyVolume({DateTime? weekStart}) async {
     final userId = SupabaseService.currentUser?.id;
     if (userId == null) {
       throw Exception('로그인이 필요합니다.');
     }
 
+    // weekStart가 null이면 이번 주 월요일 계산. 시간 성분 제거해 캐시 일관성 유지
     final now = DateTime.now();
     final todayLocal = DateTime(now.year, now.month, now.day);
-    final startLocal = todayLocal.subtract(const Duration(days: 6));
-    final endLocal = todayLocal.add(const Duration(days: 1));
+    final rawStart = weekStart ??
+        todayLocal.subtract(Duration(days: now.weekday - 1));
+    final effectiveWeekStart = DateTime(
+        rawStart.year, rawStart.month, rawStart.day);
 
-    final startUtc = startLocal.toUtc().toIso8601String();
-    final endUtc = endLocal.toUtc().toIso8601String();
+    // weekEnd 계산: weekStart + 6일 (일요일 23:59:59까지)
+    final endOfWeek = effectiveWeekStart.add(const Duration(days: 6));
+
+    // 쿼리 범위: 버퍼로 월요일-1일 00:00 ~ 일요일+1일 00:00 (UTC 변환)
+    // 버퍼 전략: 타임존 경계 이슈 방지를 위해 여유 범위 설정
+    final queryStart = effectiveWeekStart.subtract(const Duration(days: 1));
+    final queryEnd = endOfWeek.add(const Duration(days: 1)); // 일요일+1 = 다음 월 00:00
+    
+    // UTC 변환은 쿼리 실행 직전에 수행 (필수)
+    final startUtc = queryStart.toUtc().toIso8601String();
+    final endUtc = queryEnd.toUtc().toIso8601String();
 
     final response = await _client
         .from('workout_sets')
@@ -715,20 +723,25 @@ class WorkoutRepository {
         .gte('created_at', startUtc)
         .lt('created_at', endUtc);
 
-    // 7일치 기본값(0) 채우기
+    // 이번 주 월~일 7일 키로 초기화
     final result = <DateTime, double>{};
     for (int i = 0; i < 7; i++) {
-      final d = startLocal.add(Duration(days: i));
+      final d = effectiveWeekStart.add(Duration(days: i));
       result[DateTime(d.year, d.month, d.day)] = 0.0;
     }
 
+    // 쿼리 결과를 로컬 시간으로 변환하여 해당 주차에 포함되는지 확인
     for (final row in (response as List)) {
       if (row is! Map) continue;
       final createdAtRaw = row['created_at'];
       if (createdAtRaw == null) continue;
 
-      final createdAt = DateTime.parse(createdAtRaw.toString()).toLocal();
-      final dayKey = DateTime(createdAt.year, createdAt.month, createdAt.day);
+      final createdAtLocal = DateTime.parse(createdAtRaw.toString()).toLocal();
+      final dayKey = DateTime(
+          createdAtLocal.year, createdAtLocal.month, createdAtLocal.day);
+
+      // 이번 주(월~일)에 해당하는 날만 집계
+      if (!result.containsKey(dayKey)) continue;
 
       final weight = (row['weight'] as num?)?.toDouble() ?? 0.0;
       final reps = (row['reps'] as num?)?.toInt() ?? 0;
@@ -740,25 +753,37 @@ class WorkoutRepository {
     return result;
   }
 
-  /// 최근 7일 부위 밸런스(8축) 집계 (대시보드용)
-  /// - 대상: 최근 7일, is_completed=true, is_hidden=false
+  /// 특정 주(월~일) 부위 밸런스(8축) 집계 (대시보드용)
+  /// - [weekStart] 주의 시작일(월요일). null이면 이번 주 월요일을 기본값으로 사용
+  /// - 쿼리 로직: weekStart 기준 월요일 00:00 ~ 일요일 23:59 범위를 계산하여 DB를 조회 (UTC 변환 필수)
   /// - 중복 제거: 같은 날짜(date) + 같은 baseline_id는 1회로 카운트
   /// - 전신(BodyPart.full): 8개 축 모두 +0.2
   /// - 단일/다중 타겟: 축 매핑 후 1을 타겟 수로 분산(+1/N)
   /// - 매칭 불가: '기타'로 분류하되 차트엔 미표시(집계 제외)
-  Future<Map<String, double>> getBodyBalance() async {
+  Future<Map<String, double>> getBodyBalance({DateTime? weekStart}) async {
     final userId = SupabaseService.currentUser?.id;
     if (userId == null) {
       throw Exception('로그인이 필요합니다.');
     }
 
+    // weekStart가 null이면 이번 주 월요일 계산. 시간 성분 제거해 캐시 일관성 유지
     final now = DateTime.now();
     final todayLocal = DateTime(now.year, now.month, now.day);
-    final startLocal = todayLocal.subtract(const Duration(days: 6));
-    final endLocal = todayLocal.add(const Duration(days: 1));
+    final rawStart = weekStart ??
+        todayLocal.subtract(Duration(days: now.weekday - 1));
+    final effectiveWeekStart = DateTime(
+        rawStart.year, rawStart.month, rawStart.day);
 
-    final startUtc = startLocal.toUtc().toIso8601String();
-    final endUtc = endLocal.toUtc().toIso8601String();
+    // weekEnd 계산: weekStart + 6일 (일요일 23:59:59까지)
+    final weekEnd = effectiveWeekStart.add(const Duration(days: 6));
+    
+    // 쿼리 범위: getWeeklyVolume과 동일한 로직 사용
+    final queryStart = effectiveWeekStart.subtract(const Duration(days: 1));
+    final queryEnd = weekEnd.add(const Duration(days: 1)); // 일요일+1 = 다음 월 00:00
+    
+    // UTC 변환은 쿼리 실행 직전에 수행 (필수)
+    final startUtc = queryStart.toUtc().toIso8601String();
+    final endUtc = queryEnd.toUtc().toIso8601String();
 
     final response = await _client
         .from('workout_sets')
@@ -784,6 +809,7 @@ class WorkoutRepository {
 
     final seen = <String>{}; // yyyy-MM-dd|baselineId
 
+    // 쿼리 결과를 로컬 시간으로 변환하여 해당 주차에 포함되는지 확인
     for (final row in (response as List)) {
       if (row is! Map) continue;
       final baselineId = row['baseline_id']?.toString();
@@ -792,6 +818,26 @@ class WorkoutRepository {
 
       final createdAt = DateTime.parse(createdAtRaw).toLocal();
       final dateKey = DateFormat('yyyy-MM-dd').format(createdAt);
+      
+      // 해당 주차(월~일)에 포함되는지 확인
+      final dayKey = DateTime(createdAt.year, createdAt.month, createdAt.day);
+      final weekStartNormalized = DateTime(
+        effectiveWeekStart.year,
+        effectiveWeekStart.month,
+        effectiveWeekStart.day,
+      );
+      final weekEndNormalized = DateTime(
+        weekEnd.year,
+        weekEnd.month,
+        weekEnd.day,
+      );
+      
+      // 주차 범위를 벗어나면 제외
+      if (dayKey.isBefore(weekStartNormalized) ||
+          dayKey.isAfter(weekEndNormalized)) {
+        continue;
+      }
+      
       final dedupeKey = '$dateKey|$baselineId';
       if (!seen.add(dedupeKey)) continue;
 
@@ -1252,7 +1298,7 @@ class WorkoutRepository {
         reps: initialReps ?? 0,
         sets: 1,
         isCompleted: false,
-        createdAt: DateTime.now(),
+        createdAt: DateTime.now(), // 단순하게 현재 시간 사용 (upsertWorkoutSet에서 UTC 변환)
       );
 
       await upsertWorkoutSet(initialSet);
@@ -1283,11 +1329,12 @@ class WorkoutRepository {
     // [Fix] DB 컬럼명 강제 매핑
     data['is_completed'] = set.isCompleted;
 
-    // [중요] created_at 처리: null이면 현재 시간, 있으면 기존 시간 유지
+    // created_at 처리: 단순하게 현재 시간을 UTC로 변환하여 저장
+    // (조회 로직이 날짜만 보므로 정규화 불필요)
     if (data['created_at'] == null) {
-      data['created_at'] = DateTime.now().toIso8601String();
+      data['created_at'] = DateTime.now().toUtc().toIso8601String();
     } else if (data['created_at'] is DateTime) {
-      data['created_at'] = (data['created_at'] as DateTime).toIso8601String();
+      data['created_at'] = (data['created_at'] as DateTime).toUtc().toIso8601String();
     }
 
     // Supabase upsert 사용 (ID 기반으로 자동 Insert/Update)
@@ -1305,12 +1352,12 @@ class WorkoutRepository {
 
     final dataList = sets.map((s) {
       final json = s.toJson();
-      // [보완] 필수: 각 세트별로 날짜 확인
-      // 신규 세트(ID 없음)는 현재 시간, 기존 세트(ID 있음)는 기존 시간 유지
+      // 각 세트별로 날짜 확인: 단순하게 UTC로 변환하여 저장
+      // (조회 로직이 날짜만 보므로 정규화 불필요)
       if (json['created_at'] == null) {
-        json['created_at'] = DateTime.now().toIso8601String();
+        json['created_at'] = DateTime.now().toUtc().toIso8601String();
       } else if (json['created_at'] is DateTime) {
-        json['created_at'] = (json['created_at'] as DateTime).toIso8601String();
+        json['created_at'] = (json['created_at'] as DateTime).toUtc().toIso8601String();
       }
       // baseline_id 필수 필드 확인
       json['baseline_id'] = s.baselineId;
@@ -1423,19 +1470,32 @@ class WorkoutRepository {
     await _client.from('workout_sets').delete().eq('id', setId);
   }
 
-  /// Smart Delete: 저장된 기록이 있으면 숨김, 없으면 삭제
-  /// [수정] 물리적 삭제와 논리적 삭제를 구분하여 데이터 무결성 보장
-  /// [Soft Delete] 데이터를 삭제하지 않고, 홈 화면에서만 숨김 처리합니다.
+  /// 오늘의 운동 세션 삭제: 오늘 세트 물리 삭제 후 베이스라인 홈 숨김
+  /// [Step 1] 날짜 범위 → [Step 2] workout_sets DELETE → [Step 3] exercise_baselines 숨김
   Future<void> deleteTodayWorkoutsByBaseline(String baselineId) async {
     final userId = SupabaseService.currentUser?.id;
     if (userId == null) throw Exception('로그인 필요');
 
-    // is_hidden_from_home = true 로 업데이트
+    // 1. 날짜 범위 (getTodayWorkoutSets와 동일)
+    final now = DateTime.now();
+    final todayStart = DateTime(now.year, now.month, now.day);
+    final todayEnd = todayStart.add(const Duration(days: 1));
+
+    // 2. [Step 2] 연관 세트 선삭제 (Physical Delete)
+    // 참고: workout_sets 테이블에는 user_id 컬럼이 없으므로 baseline_id와 created_at만 사용
+    await _client
+        .from('workout_sets')
+        .delete()
+        .eq('baseline_id', baselineId)
+        .gte('created_at', todayStart.toIso8601String())
+        .lt('created_at', todayEnd.toIso8601String());
+
+    // 3. [Step 3] 본체 숨김 처리 (Soft Delete)
     await _client
         .from('exercise_baselines')
         .update({
-          'is_hidden_from_home': true, 
-          'updated_at': DateTime.now().toIso8601String()
+          'is_hidden_from_home': true,
+          'updated_at': DateTime.now().toIso8601String(),
         })
         .eq('id', baselineId)
         .eq('user_id', userId);

@@ -204,14 +204,15 @@ class _ExerciseAddPanelState extends ConsumerState<ExerciseAddPanel> {
       final viewModel = ref.read(homeViewModelProvider.notifier);
       final bodyPartCode = _selectedBodyPart!.code;
 
-      // 3. DB 저장
-      await viewModel.addNewExercise(
+      // 3. 메모리 전용 추가 (DB 저장 X, Draft로 추가)
+      viewModel.addNewExercise(
           exerciseName, bodyPartCode, _selectedTargetMuscles);
 
       // 4. mounted 체크
       if (!mounted || !context.mounted) return;
 
       // 5. 성공 신호(true)를 전달하며 패널 닫기
+      // loadBaselines()는 호출하지 않음 (Draft 보존)
       Navigator.of(context).pop(true);
     } catch (e) {
       // 실패 시: 스낵바 표시 (패널은 닫지 않음)
