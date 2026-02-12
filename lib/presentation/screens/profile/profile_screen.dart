@@ -331,7 +331,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
     try {
       final repository = ref.read(workoutRepositoryProvider);
-      final workouts = await repository.getWorkoutsByDate(date);
+      // [Fix] 캘린더는 완료된 운동만 표시 (홈 화면과 구분)
+      final workouts = await repository.getWorkoutsByDate(date, completedOnly: true);
       if (mounted) {
         setState(() {
           _selectedDayWorkouts = workouts;
@@ -637,8 +638,93 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                         )
                                       : null,
                                   trailing: const Icon(Icons.chevron_right),
-                                  onTap: () {
-                                    // TODO: 운동 분석 화면으로 이동 (필요 시 구현)
+                                  onTap: () async {
+                                    // 기록 복사 기능: 선택한 날짜의 운동 기록을 오늘로 복사
+                                    // [Lint Fix] async gap 전에 ScaffoldMessenger 캡처
+                                    final messenger = ScaffoldMessenger.of(context);
+
+                                    final confirmed = await showDialog<bool>(
+                                      context: context,
+                                      builder: (dialogContext) => AlertDialog(
+                                        title: const Text('기록 가져오기'),
+                                        content: const Text(
+                                          '선택한 날짜의 운동 기록(무게/횟수)을 오늘의 루틴에 그대로 복사하시겠습니까?',
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () =>
+                                                Navigator.pop(dialogContext, false),
+                                            child: const Text('취소'),
+                                          ),
+                                          ElevatedButton(
+                                            onPressed: () =>
+                                                Navigator.pop(dialogContext, true),
+                                            child: const Text('확인'),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+
+                                    if (confirmed != true || !mounted) return;
+
+                                    try {
+                                      final repository =
+                                          ref.read(workoutRepositoryProvider);
+
+                                      // [Fix] DB에서 선택 날짜의 완료 세트 재조회
+                                      final fetchedSets = await repository
+                                          .getCompletedWorkoutSetsByBaselineIdForDate(
+                                        baseline.id,
+                                        _selectedDay!,
+                                      );
+
+                                      // 복사할 세트가 없으면 안내 후 종료
+                                      if (fetchedSets.isEmpty) {
+                                        if (!mounted) return;
+                                        messenger.showSnackBar(
+                                          const SnackBar(
+                                            content: Text('복사할 세트가 없습니다.'),
+                                            backgroundColor: Colors.orange,
+                                          ),
+                                        );
+                                        return;
+                                      }
+
+                                      // 선택한 날짜의 세트를 오늘로 복사
+                                      await repository.copySetsToToday(
+                                        baseline.id,
+                                        fetchedSets,
+                                      );
+
+                                      // Provider 갱신
+                                      ref.invalidate(baselinesProvider);
+                                      ref.invalidate(workoutDatesProvider);
+
+                                      // 홈 화면 데이터 강제 새로고침
+                                      await ref
+                                          .read(homeViewModelProvider.notifier)
+                                          .loadBaselines(forceRefresh: true);
+
+                                      if (!mounted) return;
+
+                                      // 성공 메시지 표시
+                                      messenger.showSnackBar(
+                                        const SnackBar(
+                                          content: Text('홈 화면의 오늘 운동에 추가되었습니다.'),
+                                          backgroundColor: Colors.green,
+                                        ),
+                                      );
+                                    } catch (e) {
+                                      if (!mounted) return;
+
+                                      // 에러 메시지 표시
+                                      messenger.showSnackBar(
+                                        SnackBar(
+                                          content: Text('복사 중 오류 발생: $e'),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                    }
                                   },
                                 );
                               }),

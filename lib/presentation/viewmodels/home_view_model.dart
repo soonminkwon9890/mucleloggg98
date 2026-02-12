@@ -19,18 +19,17 @@ class HomeViewModel extends StateNotifier<HomeState> {
   }
 
   /// 데이터 로드
-  /// 
+  ///
   /// [forceRefresh]: true일 때만 DB에서 강제로 가져옵니다.
   /// false일 때는 같은 날짜이고 state에 데이터가 있으면 Draft를 보존하기 위해 DB 조회를 스킵합니다.
   Future<void> loadBaselines({bool forceRefresh = false}) async {
     final today = DateTime.now();
-    
+
     // Draft 보존 로직: 같은 날짜이고 state에 데이터가 있고 강제 새로고침이 아니면 스킵
-    if (!forceRefresh && 
-        state.baselines.isNotEmpty && 
+    if (!forceRefresh &&
+        state.baselines.isNotEmpty &&
         _lastLoadedDate != null &&
         DateFormatter.isSameDate(_lastLoadedDate!, today)) {
-      // 같은 날짜이고 Draft가 있으면 DB 조회를 스킵하여 Draft 보존
       return;
     }
 

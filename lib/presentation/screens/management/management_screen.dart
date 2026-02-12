@@ -128,68 +128,6 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
   }
 
   /// 특정 날짜의 세트 기록을 오늘 날짜로 복사
-  Future<void> _copyDateToToday(
-    BuildContext context,
-    ExerciseBaseline baseline,
-    List<WorkoutSet> dateSets,
-  ) async {
-    if (!mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
-
-    // 확인 다이얼로그
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('기록 복사'),
-        content: Text(
-          '이 날짜의 기록(${dateSets.length}세트)을 오늘 운동으로 복사하시겠습니까?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('취소'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('복사'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true || !mounted) return;
-
-    try {
-      final repository = ref.read(workoutRepositoryProvider);
-
-      // copySetsToToday 실행 (세트 복사 + Baseline 상태 업데이트)
-      await repository.copySetsToToday(baseline.id, dateSets);
-
-    // Provider 갱신
-    ref.invalidate(baselinesProvider);
-    ref.invalidate(workoutDatesProvider);
-
-    // [Fix] HomeViewModel 갱신 - invalidate 대신 forceRefresh 사용 (Draft 보존)
-    // invalidate는 Provider를 파괴하여 Draft가 손실되므로 사용하지 않음
-    await ref.read(homeViewModelProvider.notifier).loadBaselines(forceRefresh: true);
-
-    if (!mounted) return;
-    messenger.showSnackBar(
-      const SnackBar(
-        content: Text('기록이 복사되었습니다. 홈 화면에서 확인하세요.'),
-        backgroundColor: Colors.green,
-      ),
-    );
-    } catch (e) {
-      if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('복사 오류: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
 
   /// 보관함에서 오늘 운동에 추가 (메모리 전용 - DB 저장 X)
   /// addFromArchiveOrRoutine을 사용하여 데이터 리셋 후 홈 화면에 표시합니다.
@@ -602,17 +540,6 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
                                                               '${set.weight}kg × ${set.reps}회'),
                                                           subtitle: Text(
                                                               '${set.sets}세트'),
-                                                          // [Step 3] 날짜 선택 기능: 클릭 시 해당 날짜의 세트를 홈 화면으로 복사
-                                                          onTap: () =>
-                                                              _copyDateToToday(
-                                                            context,
-                                                            baseline,
-                                                            dateSets,
-                                                          ),
-                                                          trailing: const Icon(
-                                                              Icons
-                                                                  .arrow_forward_ios,
-                                                              size: 16),
                                                         );
                                                       }),
                                                     ],

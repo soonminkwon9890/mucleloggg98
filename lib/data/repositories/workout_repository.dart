@@ -519,7 +519,14 @@ class WorkoutRepository {
 
   /// 특정 날짜의 운동 기록 가져오기
   /// 넓은 범위 조회 + 로컬 단순 비교 전략 (타임존 계산 제거)
-  Future<List<ExerciseBaseline>> getWorkoutsByDate(DateTime date) async {
+  ///
+  /// [completedOnly]: true면 완료된 세트만, false면 모든 세트 (기본값: false)
+  /// - 홈 화면: false (완료/미완료 모두 표시)
+  /// - 프로필/보관함: true (완료된 기록만 표시)
+  Future<List<ExerciseBaseline>> getWorkoutsByDate(
+    DateTime date, {
+    bool completedOnly = false,
+  }) async {
     // Note: workoutSets contains only the sets for the queried date
     final userId = SupabaseService.currentUser?.id;
     if (userId == null) {
@@ -535,19 +542,24 @@ class WorkoutRepository {
     final bufferStart = date.subtract(const Duration(days: 2)).toUtc().toIso8601String();
     final bufferEnd = date.add(const Duration(days: 2)).toUtc().toIso8601String();
 
-    // Step 1) Fetch Sets (Daily & Completed Only)
+    // Step 1) Fetch Sets
     // workout_sets에는 user_id가 없으므로 exercise_baselines로 inner join 하여 user 범위를 제한합니다.
-    final setsResponse = await _client
+    var query = _client
         .from('workout_sets')
         .select(
           'id, baseline_id, weight, reps, sets, rpe, rpe_level, estimated_1rm, is_ai_suggested, performance_score, is_completed, is_hidden, created_at, exercise_baselines!inner(user_id)',
         )
         .gte('created_at', bufferStart)
         .lte('created_at', bufferEnd)
-        .eq('is_completed', true)
         .eq('is_hidden', false)
-        .eq('exercise_baselines.user_id', userId)
-        .order('created_at', ascending: true);
+        .eq('exercise_baselines.user_id', userId);
+
+    // [Fix] completedOnly가 true일 때만 is_completed 필터 적용
+    if (completedOnly) {
+      query = query.eq('is_completed', true);
+    }
+
+    final setsResponse = await query.order('created_at', ascending: true);
 
     if (setsResponse.isEmpty) {
       return [];
@@ -610,6 +622,74 @@ class WorkoutRepository {
     }).toList();
 
     return merged;
+  }
+
+  /// 특정 baseline의 특정 날짜 완료 세트 조회 (기록 복사용)
+  /// 선택한 날짜의 완료된 세트만 반환하여 copySetsToToday에 전달
+  Future<List<WorkoutSet>> getCompletedWorkoutSetsByBaselineIdForDate(
+    String baselineId,
+    DateTime date,
+  ) async {
+    final userId = SupabaseService.currentUser?.id;
+    if (userId == null) {
+      throw Exception('로그인이 필요합니다.');
+    }
+
+    // 타겟 날짜 (년/월/일만 사용)
+    final targetYear = date.year;
+    final targetMonth = date.month;
+    final targetDay = date.day;
+
+    // 무조건 넉넉하게 가져옴 (전전날부터 모레까지: ±2일)
+    final bufferStart = date.subtract(const Duration(days: 2)).toUtc().toIso8601String();
+    final bufferEnd = date.add(const Duration(days: 2)).toUtc().toIso8601String();
+
+    // workout_sets에는 user_id가 없으므로 exercise_baselines로 inner join 하여 user 범위를 제한
+    final setsResponse = await _client
+        .from('workout_sets')
+        .select(
+          'id, baseline_id, weight, reps, sets, rpe, rpe_level, estimated_1rm, is_ai_suggested, performance_score, is_completed, is_hidden, created_at, exercise_baselines!inner(user_id)',
+        )
+        .eq('baseline_id', baselineId)
+        .gte('created_at', bufferStart)
+        .lte('created_at', bufferEnd)
+        .eq('is_completed', true)
+        .eq('is_hidden', false)
+        .eq('exercise_baselines.user_id', userId)
+        .order('created_at', ascending: true);
+
+    if (setsResponse.isEmpty) {
+      return [];
+    }
+
+    // Dart 메모리 필터링: toLocal()로 변환 후 '년/월/일'만 비교
+    final filteredSets = <WorkoutSet>[];
+    for (final row in (setsResponse as List)) {
+      if (row is! Map<String, dynamic>) continue;
+
+      // 날짜 필터링: DB 시간을 로컬로 변환 후 '년/월/일'만 비교
+      final createdAtStr = row['created_at'] as String?;
+      if (createdAtStr == null) continue;
+
+      // DB 시간이 무엇이든 내 폰 시간(Local)으로 바꿈
+      final itemTime = DateTime.parse(createdAtStr).toLocal();
+
+      // 시간/분/초 무시하고 날짜만 같으면 OK
+      if (itemTime.year != targetYear ||
+          itemTime.month != targetMonth ||
+          itemTime.day != targetDay) {
+        continue; // 타겟 날짜가 아니면 스킵
+      }
+
+      final rowMap = Map<String, dynamic>.from(row);
+      // inner join 결과는 WorkoutSet 모델에 없으므로 제거(파싱 에러 방지)
+      rowMap.remove('exercise_baselines');
+
+      final set = WorkoutSet.fromJson(rowMap);
+      filteredSets.add(set);
+    }
+
+    return filteredSets;
   }
 
   /// 특정 운동의 날짜별 기록 조회 (운동 보관함 UI용)
@@ -1602,7 +1682,11 @@ class WorkoutRepository {
     return dates.length;
   }
 
-  /// 과거 날짜의 세트 데이터를 오늘 날짜로 복사
+  /// 과거 날짜의 세트 데이터를 오늘 날짜로 복사 (Replace Plan 전략)
+  ///
+  /// [중요] 중복 방지: 복사 전에 오늘 날짜의 미완료 세트를 삭제합니다.
+  /// - 이미 완료한 세트(is_completed=true)는 보존됩니다.
+  /// - 미완료 세트(is_completed=false)만 교체됩니다.
   Future<void> copySetsToToday(
       String baselineId, List<WorkoutSet> pastSets) async {
     final userId = SupabaseService.currentUser?.id;
@@ -1613,39 +1697,56 @@ class WorkoutRepository {
     // [Safety Net] 프로필 존재 확인
     await _ensureProfileExists();
 
-    // [중요] 세트 순서 보장: sets 필드 또는 created_at 기준으로 정렬
+    // ============================================================
+    // [Step 0] Replace Plan: 오늘의 미완료 세트 삭제 (중복 방지)
+    // ============================================================
+    final now = DateTime.now();
+    final todayStart = DateTime(now.year, now.month, now.day).toUtc();
+    final todayEnd = todayStart.add(const Duration(days: 1));
+
+    // 오늘 날짜 + 해당 baseline + 미완료(is_completed=false) 세트만 삭제
+    // → 이미 완료한 세트는 보존됨
+    await _client
+        .from('workout_sets')
+        .delete()
+        .eq('baseline_id', baselineId)
+        .eq('is_completed', false)
+        .gte('created_at', todayStart.toIso8601String())
+        .lt('created_at', todayEnd.toIso8601String());
+
+    // ============================================================
+    // [Step 1] 새로운 세트 생성
+    // ============================================================
     final sortedSets = List<WorkoutSet>.from(pastSets);
     sortedSets.sort((a, b) {
-      // sets 필드를 기준으로 정렬
       final setsComparison = a.sets.compareTo(b.sets);
       if (setsComparison != 0) {
         return setsComparison;
       }
-      // sets가 같으면 created_at 기준으로 정렬
       if (a.createdAt != null && b.createdAt != null) {
         return a.createdAt!.compareTo(b.createdAt!);
       }
       return 0;
     });
 
-    // pastSets를 반복문으로 돌면서 새로운 세트 생성 (일괄 저장을 위해 리스트에 수집)
+    final todayUtc = DateTime.now().toUtc();
+
     final newSets = <WorkoutSet>[];
     for (int i = 0; i < sortedSets.length; i++) {
       final pastSet = sortedSets[i];
       final newSet = pastSet.copyWith(
-        id: const Uuid().v4(), // 새로운 ID
+        id: const Uuid().v4(),
         baselineId: baselineId,
-        sets: i + 1, // 순차적으로 재할당
-        isCompleted: false, // [강제] 반드시 false로 설정 (저장 전까지 미완료 상태)
-        createdAt: DateTime.now(), // 오늘 날짜
+        sets: i + 1,
+        isCompleted: false,
+        createdAt: todayUtc,
       );
       newSets.add(newSet);
-
-      // [검증] isCompleted가 false인지 확인 (디버그용)
-      assert(newSet.isCompleted == false, '새로 생성된 세트는 반드시 미완료 상태여야 합니다.');
     }
 
-    // 일괄 저장
+    // ============================================================
+    // [Step 2] 일괄 저장
+    // ============================================================
     if (newSets.isNotEmpty) {
       await batchSaveWorkoutSets(newSets);
     }
@@ -1655,7 +1756,7 @@ class WorkoutRepository {
         .from('exercise_baselines')
         .update({
           'is_hidden_from_home': false,
-          'updated_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
         })
         .eq('id', baselineId)
         .eq('user_id', userId);
