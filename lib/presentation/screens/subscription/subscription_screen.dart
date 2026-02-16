@@ -74,11 +74,18 @@ class SubscriptionScreen extends ConsumerWidget {
         const SizedBox(height: 24),
         OutlinedButton(
           onPressed: () {
+            // TODO: 실제 결제 구현 시
+            // RevenueCat 결제 완료 콜백에서 Navigator.pop(context, true) 호출하여
+            // 호출부(showPremiumGuidanceDialog)에 결제 성공 여부 전달
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('베타 기간에는 무료 쿠폰을 이용해주세요!'),
               ),
             );
+            // 결제 성공 예시:
+            // if (paymentSuccess) {
+            //   Navigator.pop(context, true);
+            // }
           },
           child: const Text('월간 구독 (Coming Soon)'),
         ),
@@ -159,6 +166,8 @@ class SubscriptionScreen extends ConsumerWidget {
             const SizedBox(height: 12),
             TextButton(
               onPressed: () {
+                // 쿠폰 적용 화면(마이페이지)으로 이동하므로 단순 pop
+                // 쿠폰 적용 성공 시 프로필 갱신되면 다음 진입 시 isPremium=true 표시
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(

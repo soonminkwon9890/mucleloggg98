@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:uuid/uuid.dart';
 import '../../providers/auth_provider.dart';
-import '../../providers/subscription_provider.dart';
 import '../../providers/workout_provider.dart';
 import '../../../data/models/exercise_baseline.dart';
 import '../../../data/models/planned_workout.dart';
@@ -15,7 +14,6 @@ import '../../widgets/profile/exercise_search_sheet.dart';
 import '../../widgets/workout/planned_workout_tile.dart';
 import '../../widgets/workout/routine_generation_dialog.dart';
 import '../../widgets/workout/workout_execution_dialog.dart';
-import '../subscription/subscription_screen.dart';
 import '../workout/workout_analysis_screen.dart';
 
 /// 프로필 화면
@@ -590,31 +588,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           child: ElevatedButton.icon(
                             onPressed: _isGeneratingRoutine
                                 ? null
-                                : () {
-                                    // 프리미엄 체크 (Riverpod)
-                                    final isPremium = ref.read(subscriptionProvider).isPremium;
-                                    if (isPremium) {
-                                      _generateWeeklyRoutine();
-                                    } else {
-                                      // 비프리미엄 안내
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: const Text('프리미엄이 필요합니다'),
-                                          action: SnackBarAction(
-                                            label: '멤버십 보기',
-                                            onPressed: () {
-                                              Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (_) => const SubscriptionScreen(),
-                                                ),
-                                              );
-                                            },
-                                          ),
-                                        ),
-                                      );
-                                    }
-                                  },
+                                : _generateWeeklyRoutine,
                             icon: _isGeneratingRoutine
                                 ? const SizedBox(
                                     width: 20,

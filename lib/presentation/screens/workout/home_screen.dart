@@ -8,9 +8,9 @@ import '../../viewmodels/home_state.dart';
 import '../../../data/models/exercise_baseline.dart';
 import '../../widgets/workout/workout_card.dart';
 import '../../widgets/workout/exercise_add_panel.dart';
-import '../subscription/subscription_screen.dart';
 import '../management/management_screen.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../utils/premium_guidance_dialog.dart';
 
 /// 홈 화면 (Single Page UX - 당일 운동 기록)
 class HomeScreen extends ConsumerStatefulWidget {
@@ -64,22 +64,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     if (!isPremium && routines.length >= 3) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('무료로 3개 루틴을 생성하셨습니다. 더 많은 루틴을 생성하려면 프리미엄이 필요합니다.'),
-          action: SnackBarAction(
-            label: '멤버십 보기',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const SubscriptionScreen(),
-                ),
-              );
-            },
-          ),
-        ),
-      );
+      final isPurchased = await showPremiumGuidanceDialog(context);
+      if (isPurchased == true && context.mounted) {
+        ref.invalidate(subscriptionProvider);
+        // 결제 성공 후 루틴 저장 재시도
+        ref.invalidate(routinesProvider);
+      }
       return;
     }
 

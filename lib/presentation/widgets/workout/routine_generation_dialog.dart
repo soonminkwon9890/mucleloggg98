@@ -1,9 +1,12 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../core/utils/adaptive_widgets.dart';
 import '../../../data/models/planned_workout_dto.dart';
+import '../../providers/subscription_provider.dart';
+import '../../../utils/premium_guidance_dialog.dart';
 
 /// 강도 모드: High(+2.5kg), Normal(원본), Condition(85%), Rest(휴식)
 enum RoutineIntensity { high, normal, condition, rest }
@@ -23,7 +26,7 @@ class RoutineApplyResult {
   RoutineApplyResult(this.routines, this.colorHex);
 }
 
-class RoutineGenerationDialog extends StatefulWidget {
+class RoutineGenerationDialog extends ConsumerStatefulWidget {
   final List<PlannedWorkoutDto> routines;
 
   const RoutineGenerationDialog({
@@ -32,10 +35,10 @@ class RoutineGenerationDialog extends StatefulWidget {
   });
 
   @override
-  State<RoutineGenerationDialog> createState() => _RoutineGenerationDialogState();
+  ConsumerState<RoutineGenerationDialog> createState() => _RoutineGenerationDialogState();
 }
 
-class _RoutineGenerationDialogState extends State<RoutineGenerationDialog> {
+class _RoutineGenerationDialogState extends ConsumerState<RoutineGenerationDialog> {
   /// AI 원본 (불변)
   late List<PlannedWorkoutDto> baseRoutines;
   /// 화면 표시용 (모드별 계산된 targetWeight 반영)
@@ -107,7 +110,21 @@ class _RoutineGenerationDialogState extends State<RoutineGenerationDialog> {
     }
   }
 
-  void _apply() {
+  Future<void> _apply() async {
+    // 프리미엄 체크 (Try-then-Buy 모델: 저장 시점에 체크)
+    final isPremium = ref.read(subscriptionProvider).isPremium;
+
+    if (!isPremium) {
+      // 비프리미엄 사용자: 저장 불가, 구독 유도
+      final isPurchased = await showPremiumGuidanceDialog(context);
+      if (isPurchased == true && context.mounted) {
+        ref.invalidate(subscriptionProvider);
+        // 결제 성공 후 사용자가 저장을 다시 시도할 수 있도록 다이얼로그 유지
+      }
+      return;
+    }
+
+    // 프리미엄 사용자: 기존 저장 로직 실행
     final colorHex = _intensityColorHex[_selectedMode]!;
     if (_selectedMode == RoutineIntensity.rest) {
       Navigator.pop(context, RoutineApplyResult([], colorHex));

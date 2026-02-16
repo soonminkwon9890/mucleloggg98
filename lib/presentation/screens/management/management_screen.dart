@@ -4,9 +4,9 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:uuid/uuid.dart';
 import '../../providers/subscription_provider.dart';
 import '../../providers/workout_provider.dart';
-import '../subscription/subscription_screen.dart';
 import '../workout/workout_analysis_screen.dart';
 import '../../../data/models/exercise_baseline.dart';
+import '../../../utils/premium_guidance_dialog.dart';
 import '../../../data/models/workout_set.dart';
 import '../../../data/models/routine.dart';
 import '../../../data/models/routine_item.dart';
@@ -268,22 +268,11 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
 
     if (!isPremium && routines.length >= 3) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('무료로 3개 루틴을 생성하셨습니다. 더 많은 루틴을 생성하려면 프리미엄이 필요합니다.'),
-          action: SnackBarAction(
-            label: '멤버십 보기',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const SubscriptionScreen(),
-                ),
-              );
-            },
-          ),
-        ),
-      );
+      final isPurchased = await showPremiumGuidanceDialog(context);
+      if (isPurchased == true && context.mounted) {
+        ref.invalidate(subscriptionProvider);
+        ref.invalidate(routinesProvider);
+      }
       return;
     }
 
@@ -969,24 +958,12 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab> {
                   // 3 Free Routines, then Premium required
                   onPressed: (isPremium || routines.length < 3)
                       ? () => _showCreateRoutineModal(context)
-                      : () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: const Text('무료로 3개 루틴을 생성하셨습니다. 더 많은 루틴을 생성하려면 프리미엄이 필요합니다.'),
-                              action: SnackBarAction(
-                                label: '멤버십 보기',
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          const SubscriptionScreen(),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          );
+                      : () async {
+                          final isPurchased = await showPremiumGuidanceDialog(context);
+                          if (isPurchased == true && context.mounted) {
+                            ref.invalidate(subscriptionProvider);
+                            ref.invalidate(routinesProvider);
+                          }
                         },
                   icon: const Icon(Icons.add),
                   label: const Text('루틴 생성하기'),

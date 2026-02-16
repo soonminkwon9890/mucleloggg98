@@ -8,7 +8,7 @@ import 'package:intl/intl.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/subscription_provider.dart';
 import '../../providers/workout_provider.dart';
-import '../subscription/subscription_screen.dart';
+import '../../../utils/premium_guidance_dialog.dart';
 
 /// 운동 분석 탭 메인 화면 (대시보드)
 class WorkoutLogScreen extends ConsumerStatefulWidget {
@@ -162,6 +162,9 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
                           isCurrentWeek: isCurrentWeek,
                           icon: Icons.show_chart, // 추가
                           message: '지난 성장 그래프를 확인하고 정체기를 돌파하세요!', // 추가
+                          onPremiumPurchased: () {
+                            ref.invalidate(subscriptionProvider);
+                          },
                           child:
                               WeeklyVolumeChartCard(weeklyVolume: weeklyVolume),
                         ),
@@ -171,6 +174,9 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
                           isCurrentWeek: isCurrentWeek,
                           icon: Icons.pie_chart, // 추가
                           message: '신체 불균형을 분석하여 완벽한 밸런스를 찾으세요.', // 추가
+                          onPremiumPurchased: () {
+                            ref.invalidate(subscriptionProvider);
+                          },
                           child: BodyBalanceChartCard(
                             key: ValueKey(
                                 'balance_${normalizedWeekStart.toIso8601String()}'),
@@ -309,13 +315,11 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
                     ),
                     const SizedBox(height: 16),
                     FilledButton.icon(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const SubscriptionScreen(),
-                          ),
-                        );
+                      onPressed: () async {
+                        final isPurchased = await showPremiumGuidanceDialog(context);
+                        if (isPurchased == true && context.mounted) {
+                          ref.invalidate(subscriptionProvider);
+                        }
                       },
                       icon: const Icon(Icons.star, size: 18),
                       label: const Text('구독하기'),
@@ -623,6 +627,7 @@ class _PremiumGate extends StatelessWidget {
   final Widget child;
   final IconData icon; // 추가
   final String message; // 추가
+  final VoidCallback? onPremiumPurchased; // 결제 성공 시 호출될 콜백
 
   const _PremiumGate({
     required this.isPremium,
@@ -630,6 +635,7 @@ class _PremiumGate extends StatelessWidget {
     required this.child,
     this.icon = Icons.lock, // 기본값
     this.message = '과거 기록 분석은 프리미엄 기능입니다.', // 기본값
+    this.onPremiumPurchased,
   });
 
   @override
@@ -674,13 +680,11 @@ class _PremiumGate extends StatelessWidget {
                   const SizedBox(height: 16),
                   // CTA 버튼: "프리미엄 구독하고 전체 기록 보기"
                   FilledButton.icon(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const SubscriptionScreen(),
-                        ),
-                      );
+                    onPressed: () async {
+                      final isPurchased = await showPremiumGuidanceDialog(context);
+                      if (isPurchased == true && context.mounted) {
+                        onPremiumPurchased?.call();
+                      }
                     },
                     icon: const Icon(Icons.star, size: 18),
                     label: const Text('프리미엄 구독하고 전체 기록 보기'),
