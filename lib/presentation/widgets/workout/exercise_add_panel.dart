@@ -182,8 +182,9 @@ class _ExerciseAddPanelState extends ConsumerState<ExerciseAddPanel> {
       return;
     }
 
-    // 타겟 근육 체크 (필수!)
-    if (_selectedTargetMuscles.isEmpty) {
+    // 타겟 근육 체크 (상체/하체만 필수, 전신은 예외)
+    // [Fix] BodyPart.full(전신)은 타겟 근육이 없으므로 검증 스킵
+    if (_selectedBodyPart != BodyPart.full && _selectedTargetMuscles.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('타겟 근육을 최소 1개 이상 선택해주세요.')),
       );

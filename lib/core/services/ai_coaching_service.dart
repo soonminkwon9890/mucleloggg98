@@ -100,6 +100,8 @@ class AiCoachingService {
       entry.value.sort((a, b) => b.workoutDate.compareTo(a.workoutDate));
       final latest = entry.value.first;
       final (w, r) = bestSet;
+      // [수정] 0kg/0회 운동은 AI 프롬프트에서 제외 (기록 없는 운동 추천 방지)
+      if (w <= 0 && r <= 0) continue;
       lines.add(
         '${baseline.exerciseName}: $w kg, $r 회, 3세트, 강도=${latest.difficulty}',
       );
@@ -181,6 +183,8 @@ ${lines.join('\n')}
       if (sessions == null || sessions.isEmpty) continue;
       final nextWeekDate = calculateNextSessionDate(sessions.first.workoutDate);
       final (currentWeight, currentReps) = bestSet;
+      // [수정] 0kg/0회 운동은 최종 계획에서 제외 (기록 없는 운동 추천 방지)
+      if (currentWeight <= 0 || currentReps <= 0) continue;
       plans.add(PlannedWorkoutDto(
         baselineId: baseline.id,
         exerciseName: baseline.exerciseName,

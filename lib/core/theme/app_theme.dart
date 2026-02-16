@@ -1,82 +1,90 @@
 import 'package:flutter/material.dart';
 
-/// 앱 테마 설정
 class AppTheme {
-  // 색상 정의
-  static const Color primaryColor = Color(0xFF6366F1); // Indigo
-  static const Color secondaryColor = Color(0xFF8B5CF6); // Purple
-  static const Color accentColor = Color(0xFF10B981); // Green
-  static const Color errorColor = Color(0xFFEF4444); // Red
-  static const Color warningColor = Color(0xFFF59E0B); // Amber
+  // 1. Light Theme
+  static final ThemeData lightTheme = ThemeData(
+    useMaterial3: true,
+    scaffoldBackgroundColor: Colors.white, // 밝은 배경
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: Colors.blue,
+      brightness: Brightness.light,
+    ),
+    cardTheme: CardThemeData(
+      color: Colors.white, // [표준] 밝은 카드
+      elevation: 1, // [유지] 은은한 그림자
+      shadowColor: Colors.black.withValues(alpha: 0.05), // [유지]
+      surfaceTintColor: Colors.transparent, // [유지] 틴트 제거
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    ),
+    bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+      type: BottomNavigationBarType.fixed,
+      backgroundColor: Colors.white,
+      selectedItemColor: Colors.blue,
+      unselectedItemColor: Colors.grey,
+    ),
+    extensions: const <ThemeExtension<dynamic>>[
+      AppCardTheme(
+        onCardColor: Colors.black, // [표준] 밝은 카드 위 검은 글씨
+        subTextColor: Colors.grey,
+      ),
+    ],
+  );
 
-  // 라이트 테마
-  static ThemeData get lightTheme {
-    return ThemeData(
-      useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: primaryColor,
-        brightness: Brightness.light,
+  // 2. Dark Theme
+  static final ThemeData darkTheme = ThemeData(
+    useMaterial3: true,
+    scaffoldBackgroundColor: Colors.black, // 어두운 배경
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: Colors.blue,
+      brightness: Brightness.dark,
+    ),
+    cardTheme: CardThemeData(
+      color: const Color(0xFF1C1C1E), // [표준] 어두운 카드
+      elevation: 1, // [유지]
+      shadowColor: Colors.black.withValues(alpha: 0.05), // [유지]
+      surfaceTintColor: Colors.transparent, // [유지]
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    ),
+    bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+      type: BottomNavigationBarType.fixed,
+      backgroundColor: Color(0xFF1C1C1E),
+      selectedItemColor: Colors.blue,
+      unselectedItemColor: Colors.grey,
+    ),
+    extensions: const <ThemeExtension<dynamic>>[
+      AppCardTheme(
+        onCardColor: Colors.white, // [표준] 어두운 카드 위 흰 글씨
+        subTextColor: Colors.grey,
       ),
-      appBarTheme: const AppBarTheme(
-        centerTitle: true,
-        elevation: 0,
-      ),
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      ),
-      inputDecorationTheme: InputDecorationTheme(
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      ),
-      cardTheme: CardThemeData(
-        elevation: 2,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-      ),
+    ],
+  );
+}
+
+// 3. Theme Extension Definition
+@immutable
+class AppCardTheme extends ThemeExtension<AppCardTheme> {
+  final Color onCardColor;
+  final Color subTextColor;
+
+  const AppCardTheme({
+    required this.onCardColor,
+    required this.subTextColor,
+  });
+
+  @override
+  AppCardTheme copyWith({Color? onCardColor, Color? subTextColor}) {
+    return AppCardTheme(
+      onCardColor: onCardColor ?? this.onCardColor,
+      subTextColor: subTextColor ?? this.subTextColor,
     );
   }
 
-  // 다크 테마
-  static ThemeData get darkTheme {
-    return ThemeData(
-      useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: primaryColor,
-        brightness: Brightness.dark,
-      ),
-      appBarTheme: const AppBarTheme(
-        centerTitle: true,
-        elevation: 0,
-      ),
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      ),
-      inputDecorationTheme: InputDecorationTheme(
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      ),
-      cardTheme: CardThemeData(
-        elevation: 2,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-      ),
+  @override
+  AppCardTheme lerp(ThemeExtension<AppCardTheme>? other, double t) {
+    if (other is! AppCardTheme) return this;
+    return AppCardTheme(
+      onCardColor: Color.lerp(onCardColor, other.onCardColor, t)!,
+      subTextColor: Color.lerp(subTextColor, other.subTextColor, t)!,
     );
   }
 }
-

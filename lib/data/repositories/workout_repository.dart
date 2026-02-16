@@ -2149,13 +2149,17 @@ class WorkoutRepository {
 
   /// ID 목록으로 운동 정보 일괄 조회
   /// [ids] baseline_id 리스트
-  /// 반환: ExerciseBaseline 리스트
+  /// 반환: ExerciseBaseline 리스트 (현재 사용자 소유만)
   Future<List<ExerciseBaseline>> getBaselinesByIds(List<String> ids) async {
     if (ids.isEmpty) return [];
+    
+    final userId = SupabaseService.currentUser?.id;
+    if (userId == null) return []; // 로그인 필요
     
     final response = await _client
         .from('exercise_baselines')
         .select()
+        .eq('user_id', userId) // 현재 사용자 소유만 조회
         .inFilter('id', ids); // IN 쿼리 사용
         
     return (response as List).map((e) => ExerciseBaseline.fromJson(e)).toList();

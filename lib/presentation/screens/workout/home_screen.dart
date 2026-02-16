@@ -9,6 +9,8 @@ import '../../../data/models/exercise_baseline.dart';
 import '../../widgets/workout/workout_card.dart';
 import '../../widgets/workout/exercise_add_panel.dart';
 import '../subscription/subscription_screen.dart';
+import '../management/management_screen.dart';
+import '../../../core/theme/app_theme.dart';
 
 /// 홈 화면 (Single Page UX - 당일 운동 기록)
 class HomeScreen extends ConsumerStatefulWidget {
@@ -143,6 +145,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final authStateAsync = ref.watch(authStateProvider);
 
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
           // 1. 창 열기 (우측 슬라이드 패널)
@@ -234,68 +237,122 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final allTodayWorkouts =
         groupedWorkouts.values.expand((list) => list).toList();
 
-    return RefreshIndicator(
-      onRefresh: () async {
-        await ref.read(homeViewModelProvider.notifier).refresh();
-        ref.invalidate(workoutDatesProvider);
-        await ref.read(workoutDatesProvider.future);
-      },
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      behavior: HitTestBehavior.translucent,
+      child: RefreshIndicator(
+        onRefresh: () async {
+          await ref.read(homeViewModelProvider.notifier).refresh();
+          ref.invalidate(workoutDatesProvider);
+          await ref.read(workoutDatesProvider.future);
+        },
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 16,
+            bottom: 150.0,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
             // 상단 요약 카드
-            Card(
-              elevation: 4,
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      '오늘 총 볼륨',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey,
-                      ),
+            Builder(
+              builder: (context) {
+                final appCard = Theme.of(context).extension<AppCardTheme>();
+                return Card(
+                  elevation: 1,
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                '오늘 총 볼륨',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: appCard?.subTextColor ?? Colors.grey,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            TextButton.icon(
+                              onPressed: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const ManagementScreen(),
+                                ),
+                              ),
+                              icon: const Icon(Icons.inventory_2_outlined, size: 18),
+                              label: const Text('보관함'),
+                              style: TextButton.styleFrom(
+                                foregroundColor: appCard?.subTextColor ?? Colors.grey,
+                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '${state.totalVolume.toStringAsFixed(1)}kg',
+                          style: TextStyle(
+                            fontSize: 48,
+                            fontWeight: FontWeight.bold,
+                            color: appCard?.onCardColor,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        Divider(
+                          color: appCard?.subTextColor.withValues(alpha: 0.3),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          '오늘의 집중',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: appCard?.subTextColor ?? Colors.grey,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          state.mainFocusArea,
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: appCard?.onCardColor,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '${state.totalVolume.toStringAsFixed(1)}kg',
-                      style: const TextStyle(
-                        fontSize: 48,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    const Divider(),
-                    const SizedBox(height: 16),
-                    const Text(
-                      '오늘의 집중',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      state.mainFocusArea,
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 32),
 
-            // 오늘의 운동 섹션
-            const Text(
-              '오늘의 운동',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            // 오늘의 운동 섹션 헤더 (루틴 저장 버튼 포함)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  '오늘의 운동',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                if (allTodayWorkouts.isNotEmpty)
+                  TextButton.icon(
+                    onPressed: () => _showSaveRoutineDialog(allTodayWorkouts),
+                    icon: const Icon(Icons.bookmark_add, size: 18),
+                    label: const Text('루틴 저장'),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 16),
             if (groupedWorkouts.isEmpty)
@@ -378,47 +435,55 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                             final routineId = entry.key;
                             final routineName = routineNameMap[routineId]!;
 
-                            return Card(
-                              margin: const EdgeInsets.only(bottom: 16),
-                              child: ExpansionTile(
-                                key: PageStorageKey('routine_$routineId'),
-                                maintainState: true,
-                                initiallyExpanded: true,
-                                title: Row(
-                                  children: [
-                                    Icon(Icons.fitness_center,
-                                        color: Colors.green.shade700),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      routineName,
-                                      style: const TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                            return Builder(
+                              builder: (context) {
+                                final appCard = Theme.of(context).extension<AppCardTheme>();
+                                return Card(
+                                  margin: const EdgeInsets.only(bottom: 16),
+                                  child: ExpansionTile(
+                                    key: PageStorageKey('routine_$routineId'),
+                                    maintainState: true,
+                                    initiallyExpanded: true,
+                                    iconColor: appCard?.onCardColor,
+                                    collapsedIconColor: appCard?.onCardColor,
+                                    title: Row(
+                                      children: [
+                                        Icon(Icons.fitness_center,
+                                            color: appCard?.onCardColor),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          routineName,
+                                          style: TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                            color: appCard?.onCardColor,
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                  ],
-                                ),
-                                children: entry.value.map((baseline) {
-                                  return WorkoutCard(
-                                    key: ValueKey(baseline.id),
-                                    baseline: baseline,
-                                    onUpdated: (savedItem, oldId) {
-                                      if (savedItem != null && oldId != null) {
-                                        ref
-                                            .read(homeViewModelProvider
-                                                .notifier)
-                                            .replaceBaselineAfterSave(
-                                                oldId, savedItem);
-                                      } else {
-                                        ref
-                                            .read(homeViewModelProvider
-                                                .notifier)
-                                            .loadBaselines(forceRefresh: true);
-                                      }
-                                    },
-                                  );
-                                }).toList(),
-                              ),
+                                    children: entry.value.map((baseline) {
+                                      return WorkoutCard(
+                                        key: ValueKey(baseline.id),
+                                        baseline: baseline,
+                                        onUpdated: (savedItem, oldId) {
+                                          if (savedItem != null && oldId != null) {
+                                            ref
+                                                .read(homeViewModelProvider
+                                                    .notifier)
+                                                .replaceBaselineAfterSave(
+                                                    oldId, savedItem);
+                                          } else {
+                                            ref
+                                                .read(homeViewModelProvider
+                                                    .notifier)
+                                                .loadBaselines(forceRefresh: true);
+                                          }
+                                        },
+                                      );
+                                    }).toList(),
+                                  ),
+                                );
+                              },
                             );
                           }),
                         ],
@@ -431,24 +496,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   );
                 },
               ),
-            const SizedBox(height: 16),
-
-            // 루틴화 버튼
-            if (allTodayWorkouts.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () => _showSaveRoutineDialog(allTodayWorkouts),
-                    icon: const Icon(Icons.bookmark_add),
-                    label: const Text('오늘 운동을 루틴으로 저장'),
-                  ),
-                ),
-              ),
           ],
         ),
       ),
+    ),
     );
   }
 }

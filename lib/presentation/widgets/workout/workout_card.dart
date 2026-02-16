@@ -5,9 +5,7 @@ import '../../../core/enums/exercise_enums.dart';
 import '../../../data/models/exercise_baseline.dart';
 import '../../../data/models/workout_set.dart';
 import '../../../core/utils/date_formatter.dart';
-import '../../../core/utils/adaptive_widgets.dart';
 import '../../providers/workout_provider.dart';
-import '../../screens/workout/workout_analysis_screen.dart';
 import 'workout_finish_dialog.dart';
 
 /// 저장 완료 시 호출되는 콜백: (저장 반영된 baseline, 기존 draft id)
@@ -454,23 +452,41 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
     }
   }
 
-  Future<void> _deleteWorkoutCard() async {
-    // 확인 다이얼로그 표시 (플랫폼별 적응형)
-    final confirm = await AdaptiveWidgets.showAdaptiveDialog<bool>(
+  /// 삭제 확인 다이얼로그 표시 및 삭제 실행
+  Future<void> _showDeleteConfirmation() async {
+    final confirmed = await showDialog<bool>(
       context: context,
-      title: '오늘 기록 삭제',
-      content: '홈 화면 목록에서 제거하시겠습니까?\n(작성된 기록은 보관함에 안전하게 유지되며, 오늘 다시 추가하면 기록을 이어갈 수 있습니다.)',
-      confirmText: '삭제',
-      cancelText: '취소',
-      destructive: true,
+      builder: (context) => AlertDialog(
+        title: const Text('삭제하시겠습니까?'),
+        content: const Text('이 항목을 삭제하면 복구할 수 없습니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red,
+            ),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
     );
 
-    if (confirm != true || !mounted) return;
+    if (confirmed == true) {
+      await _performDeleteWorkout();
+    }
+  }
 
+  /// 삭제 실행 (다이얼로그 없이 실제 삭제만 수행)
+  Future<void> _performDeleteWorkout() async {
+    if (!mounted) return;
+    
     final messenger = ScaffoldMessenger.of(context);
 
     try {
-      // [수정] ViewModel 메서드 호출 (Repository 직접 호출 제거)
       await ref.read(homeViewModelProvider.notifier).deleteWorkout(widget.baseline.id);
 
       if (!mounted) return;
@@ -515,36 +531,9 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.delete),
-                  onPressed: _deleteWorkoutCard,
-                  tooltip: '오늘 기록 삭제',
-                ),
-                IconButton(
-                  icon: const Icon(Icons.arrow_forward_ios),
-                  onPressed: () {
-                    // 로컬 상태에서 완료된 세트가 하나라도 있는지 확인
-                    final hasCompletedSets =
-                        _sets.values.any((set) => set.isCompleted);
-
-                    if (!hasCompletedSets) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('저장된 기록이 없습니다. 운동을 수행하고 저장해 주세요.'),
-                        ),
-                      );
-                      return;
-                    }
-
-                    // 저장된 운동만 상세 페이지로 이동
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => WorkoutAnalysisScreen(
-                          exerciseName: widget.baseline.exerciseName,
-                        ),
-                      ),
-                    );
-                  },
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: _showDeleteConfirmation,
+                  tooltip: '운동 삭제',
                 ),
               ],
             ),
@@ -580,6 +569,7 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
                           isDense: true,
                         ),
                         keyboardType: TextInputType.number,
+                        scrollPadding: const EdgeInsets.only(bottom: 150.0),
                         onTap: () {
                           final c = _controllers['weight_$setId'];
                           // '0' 또는 '0.0' 모두 처리 (double.toString() 결과 대응)
@@ -600,6 +590,7 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
                           isDense: true,
                         ),
                         keyboardType: TextInputType.number,
+                        scrollPadding: const EdgeInsets.only(bottom: 150.0),
                         onTap: () {
                           final c = _controllers['reps_$setId'];
                           if (c != null && c.text == '0') c.clear();

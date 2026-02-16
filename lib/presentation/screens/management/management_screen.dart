@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:uuid/uuid.dart';
 import '../../providers/subscription_provider.dart';
 import '../../providers/workout_provider.dart';
 import '../subscription/subscription_screen.dart';
+import '../workout/workout_analysis_screen.dart';
 import '../../../data/models/exercise_baseline.dart';
 import '../../../data/models/workout_set.dart';
 import '../../../data/models/routine.dart';
@@ -50,6 +52,7 @@ class _ManagementScreenState extends ConsumerState<ManagementScreen>
       ),
       body: TabBarView(
         controller: _tabController,
+        physics: const NeverScrollableScrollPhysics(),
         children: const [
           _ExerciseLibraryTab(),
           _RoutinesTab(),
@@ -392,10 +395,11 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
 
               return Stack(
                 children: [
-                  ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: filtered.length,
-                    itemBuilder: (context, index) {
+                  SlidableAutoCloseBehavior(
+                    child: ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: filtered.length,
+                      itemBuilder: (context, index) {
                       final baseline = filtered[index];
                       final isSelected =
                           _selectedBaselineIds.contains(baseline.id);
@@ -410,64 +414,95 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
                           ? targetMusclesText
                           : '$bodyPartLabel · $targetMusclesText';
 
-                      return Card(
-                        color: isSelected
-                            ? Theme.of(context).colorScheme.primaryContainer
-                            : null,
-                        child: _isSelectionMode
-                            ? ListTile(
-                                leading: Checkbox(
-                                  value: isSelected,
-                                  onChanged: (_) =>
-                                      _toggleSelection(baseline.id),
-                                ),
-                                title: Text(baseline.exerciseName),
-                                subtitle: Text(
-                                  subtitleText,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                onTap: () => _toggleSelection(baseline.id),
-                              )
-                            : GestureDetector(
-                                onLongPress: () {
-                                  _handleLongPress(baseline.id);
-                                },
-                                child: ExpansionTile(
-                                  key: PageStorageKey(
-                                      'exercise_${baseline.exerciseName}'),
-                                  leading: baseline.thumbnailUrl != null &&
-                                          baseline.thumbnailUrl!.isNotEmpty
-                                      ? ClipRRect(
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                          child: Image.network(
-                                            baseline.thumbnailUrl!,
-                                            width: 50,
-                                            height: 50,
-                                            fit: BoxFit.cover,
-                                            errorBuilder:
-                                                (context, error, stackTrace) {
-                                              return const Icon(
-                                                  Icons.fitness_center,
-                                                  size: 50);
-                                            },
-                                          ),
-                                        )
-                                      : const Icon(Icons.fitness_center,
-                                          size: 50),
+                      return Slidable(
+                        key: ValueKey(baseline.id),
+                        endActionPane: ActionPane(
+                          motion: const ScrollMotion(),
+                          extentRatio: 0.55,
+                          children: [
+                            SlidableAction(
+                              onPressed: (context) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => WorkoutAnalysisScreen(
+                                      exerciseName: baseline.exerciseName,
+                                    ),
+                                  ),
+                                );
+                              },
+                              backgroundColor: Colors.blue,
+                              foregroundColor: Colors.white,
+                              icon: Icons.history,
+                              label: '운동 기록',
+                              flex: 2,
+                            ),
+                            SlidableAction(
+                              onPressed: (context) =>
+                                  _confirmAndDeleteBaseline(baseline),
+                              backgroundColor: Colors.red,
+                              foregroundColor: Colors.white,
+                              icon: Icons.delete,
+                              label: '삭제',
+                              flex: 1,
+                            ),
+                          ],
+                        ),
+                        child: Card(
+                          color: isSelected
+                              ? Theme.of(context).colorScheme.primaryContainer
+                              : null,
+                          child: _isSelectionMode
+                              ? ListTile(
+                                  leading: Checkbox(
+                                    value: isSelected,
+                                    onChanged: (_) =>
+                                        _toggleSelection(baseline.id),
+                                  ),
                                   title: Text(baseline.exerciseName),
                                   subtitle: Text(
                                     subtitleText,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
-                                  trailing: IconButton(
-                                    icon: const Icon(Icons.delete),
-                                    onPressed: () =>
-                                        _confirmAndDeleteBaseline(baseline),
-                                    tooltip: '운동 삭제',
-                                  ),
+                                  onTap: () => _toggleSelection(baseline.id),
+                                )
+                              : GestureDetector(
+                                  onLongPress: () {
+                                    _handleLongPress(baseline.id);
+                                  },
+                                  child: ExpansionTile(
+                                    key: PageStorageKey(
+                                        'exercise_${baseline.exerciseName}'),
+                                    leading: baseline.thumbnailUrl != null &&
+                                            baseline.thumbnailUrl!.isNotEmpty
+                                        ? ClipRRect(
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                            child: Image.network(
+                                              baseline.thumbnailUrl!,
+                                              width: 50,
+                                              height: 50,
+                                              fit: BoxFit.cover,
+                                              errorBuilder:
+                                                  (context, error, stackTrace) {
+                                                return const Icon(
+                                                    Icons.fitness_center,
+                                                    size: 50);
+                                              },
+                                            ),
+                                          )
+                                        : const Icon(Icons.fitness_center,
+                                            size: 50),
+                                    title: Text(baseline.exerciseName),
+                                    subtitle: Text(
+                                      subtitleText,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    trailing: const Icon(
+                                      Icons.keyboard_double_arrow_left,
+                                    ),
                                   initiallyExpanded: false,
                                   children: [
                                     // FutureBuilder로 날짜별 히스토리 비동기 로드
@@ -525,6 +560,16 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
                                                   final totalSets = dateSets
                                                       .length; // 실제 세트 개수
 
+                                                  // 총 볼륨과 총 횟수 계산
+                                                  final totalVolume = dateSets.fold<double>(
+                                                    0.0,
+                                                    (sum, set) => sum + (set.weight * set.reps),
+                                                  );
+                                                  final totalReps = dateSets.fold<int>(
+                                                    0,
+                                                    (sum, set) => sum + set.reps,
+                                                  );
+
                                                   return ExpansionTile(
                                                     key: PageStorageKey(
                                                         'date_${baseline.exerciseName}_${entry.key}'),
@@ -532,16 +577,12 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
                                                     title: Text(
                                                         '${entry.key} ($totalSets세트)'),
                                                     children: [
-                                                      // 날짜별 세트 리스트
-                                                      ...dateSets.map((set) {
-                                                        return ListTile(
-                                                          dense: true,
-                                                          title: Text(
-                                                              '${set.weight}kg × ${set.reps}회'),
-                                                          subtitle: Text(
-                                                              '${set.sets}세트'),
-                                                        );
-                                                      }),
+                                                      ListTile(
+                                                        dense: true,
+                                                        title: Text(
+                                                          '총 볼륨: ${totalVolume.toStringAsFixed(1)}kg / 총 횟수: $totalReps회',
+                                                        ),
+                                                      ),
                                                     ],
                                                   );
                                                 }),
@@ -574,8 +615,10 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
                                   ],
                                 ),
                               ),
+                        ),
                       );
                     },
+                  ),
                   ),
                   if (!_isSelectionMode)
                     Positioned(

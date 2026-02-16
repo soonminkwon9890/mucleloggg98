@@ -1,14 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
+import 'package:uuid/uuid.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/subscription_provider.dart';
 import '../../providers/workout_provider.dart';
 import '../../../data/models/exercise_baseline.dart';
 import '../../../data/models/planned_workout.dart';
+import '../../../data/models/planned_workout_dto.dart';
+import '../../../data/models/workout_completion_input.dart';
+import '../../../domain/algorithms/workout_recommendation_service.dart';
 import '../../widgets/profile/exercise_search_sheet.dart';
 import '../../widgets/workout/planned_workout_tile.dart';
+import '../../widgets/workout/routine_generation_dialog.dart';
 import '../../widgets/workout/workout_execution_dialog.dart';
-import '../../../data/models/workout_completion_input.dart';
+import '../subscription/subscription_screen.dart';
+import '../workout/workout_analysis_screen.dart';
 
 /// 프로필 화면
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -30,6 +38,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   List<PlannedWorkout> _selectedDayPlannedWorkouts = [];
   Map<String, String> _exerciseNameMap = {}; // baselineId -> exerciseName 매핑
   bool _isConvertingToLog = false; // 변환 중 로딩 상태
+  bool _isGeneratingRoutine = false; // AI 루틴 생성 중 로딩 상태
   
   @override
   void initState() {
@@ -349,6 +358,175 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
+  /// AI 루틴 생성 메서드
+  Future<void> _generateWeeklyRoutine() async {
+    if (_isGeneratingRoutine) return;
+    setState(() => _isGeneratingRoutine = true);
+
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        content: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: 16),
+            Expanded(child: Text('AI가 루틴을 분석 중입니다...')),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final repo = ref.read(workoutRepositoryProvider);
+      final sessions = await repo.getLastWeekSessions();
+      if (sessions.isEmpty) {
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('지난주 운동 기록이 없습니다. 운동을 시작해보세요!'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      final userGoal = await repo.getUserGoal();
+      
+      // [Step 1] 모든 세션의 bestSet 조회
+      final bestSetsFutures = sessions.map((s) async {
+        final bestSet = await repo.getLastWeekBestSet(s.baselineId, s.workoutDate);
+        return MapEntry(s.baselineId, bestSet);
+      }).toList();
+      final allBestSetsMap = Map.fromEntries(await Future.wait(bestSetsFutures));
+
+      // [Step 2] 0kg/0회 운동 제외: 실제 기록이 있는 baseline만 유지
+      final validBestSetsMap = Map<String, (double, int)>.fromEntries(
+        allBestSetsMap.entries.where((entry) {
+          final (weight, reps) = entry.value;
+          return weight > 0 || reps > 0; // 무게 또는 횟수 중 하나라도 있으면 유지
+        }),
+      );
+
+      // [Step 3] 유효한 baseline만 포함된 세션으로 필터링
+      final filteredSessions = sessions
+          .where((s) => validBestSetsMap.containsKey(s.baselineId))
+          .toList();
+
+      // 필터링 후 세션이 없으면 조기 종료
+      if (filteredSessions.isEmpty) {
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('완료된 운동 기록이 없습니다. 운동을 완료하고 저장해주세요!'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      // [Step 4] 유효한 baseline만 조회
+      final validBaselineIds = filteredSessions.map((s) => s.baselineId).toSet().toList();
+      final baselines = await repo.getBaselinesByIds(validBaselineIds);
+      final baselineMap = {for (var b in baselines) b.id: b};
+
+      // [Step 5] AI 호출 (0kg/0회 제외된 데이터만 전달)
+      final plans = await WorkoutRecommendationService.generateWeeklyPlan(
+        lastWeekSessions: filteredSessions,
+        userGoal: userGoal,
+        baselineMap: baselineMap,
+        bestSetsMap: validBestSetsMap,
+      );
+
+      if (mounted) {
+        Navigator.pop(context);
+        if (plans.isNotEmpty) {
+          await _showRoutineGenerationDialog(plans);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('생성된 루틴이 없습니다.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('루틴 생성 실패: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isGeneratingRoutine = false);
+    }
+  }
+
+  /// 루틴 생성 다이얼로그 표시 (결과: 날짜가 주입된 루틴 + 색상)
+  Future<void> _showRoutineGenerationDialog(List<PlannedWorkoutDto> plans) async {
+    final result = await showDialog<RoutineApplyResult>(
+      context: context,
+      builder: (context) => RoutineGenerationDialog(routines: plans),
+    );
+    if (result == null || !mounted) return;
+    await _savePlannedWorkouts(result.routines, result.colorHex);
+  }
+
+  Future<void> _savePlannedWorkouts(
+    List<PlannedWorkoutDto> routines,
+    String colorHex,
+  ) async {
+    if (routines.isEmpty) return;
+    try {
+      final repository = ref.read(workoutRepositoryProvider);
+      final plans = routines
+          .map(
+            (dto) => dto.toPlannedWorkout(
+              colorHex: colorHex,
+              createdAt: DateTime.now(),
+            ),
+          )
+          .toList();
+      await repository.savePlannedWorkouts(plans);
+      
+      // ProfileScreen 캘린더 즉시 갱신 (저장 성공 시)
+      ref.read(plannedWorkoutsRefreshProvider.notifier).state++;
+      
+      if (mounted) {
+        final dateLabel = DateFormat('M월 d일', 'ko_KR').format(routines.first.scheduledDate);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$dateLabel에 운동이 추가되었습니다'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('저장 실패: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // [Wiring] MainScreen(+버튼) -> ProfileScreen(바텀시트) 트리거 연결
@@ -383,11 +561,71 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          '운동 기록 달력',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              '운동 기록 달력',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            TextButton.icon(
+                              onPressed: () => _openExerciseSearchSheet(),
+                              icon: const Icon(Icons.search, size: 18),
+                              label: const Text('운동 검색'),
+                              style: TextButton.styleFrom(
+                                minimumSize: Size.zero,
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        // [AI 루틴 생성 버튼]
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: _isGeneratingRoutine
+                                ? null
+                                : () {
+                                    // 프리미엄 체크 (Riverpod)
+                                    final isPremium = ref.read(subscriptionProvider).isPremium;
+                                    if (isPremium) {
+                                      _generateWeeklyRoutine();
+                                    } else {
+                                      // 비프리미엄 안내
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: const Text('프리미엄이 필요합니다'),
+                                          action: SnackBarAction(
+                                            label: '멤버십 보기',
+                                            onPressed: () {
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (_) => const SubscriptionScreen(),
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  },
+                            icon: _isGeneratingRoutine
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.auto_awesome),
+                            label: const Text('AI 강도 측정을 통해 다음주 계획을 만들어 보세요!'),
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -637,94 +875,34 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                           '${baseline.workoutSets!.length}세트',
                                         )
                                       : null,
-                                  trailing: const Icon(Icons.chevron_right),
-                                  onTap: () async {
-                                    // 기록 복사 기능: 선택한 날짜의 운동 기록을 오늘로 복사
-                                    // [Lint Fix] async gap 전에 ScaffoldMessenger 캡처
-                                    final messenger = ScaffoldMessenger.of(context);
-
-                                    final confirmed = await showDialog<bool>(
-                                      context: context,
-                                      builder: (dialogContext) => AlertDialog(
-                                        title: const Text('기록 가져오기'),
-                                        content: const Text(
-                                          '선택한 날짜의 운동 기록(무게/횟수)을 오늘의 루틴에 그대로 복사하시겠습니까?',
+                                  trailing: TextButton(
+                                    onPressed: () {
+                                      // 선택한 날짜의 기록을 보기 위해 상세 화면으로 이동
+                                      final dateKey = DateFormat('yyyy-MM-dd').format(_selectedDay!);
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => WorkoutAnalysisScreen(
+                                            exerciseName: baseline.exerciseName,
+                                            initialDateKey: dateKey,
+                                          ),
                                         ),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () =>
-                                                Navigator.pop(dialogContext, false),
-                                            child: const Text('취소'),
-                                          ),
-                                          ElevatedButton(
-                                            onPressed: () =>
-                                                Navigator.pop(dialogContext, true),
-                                            child: const Text('확인'),
-                                          ),
-                                        ],
+                                      );
+                                    },
+                                    child: const Text('기록 보기'),
+                                  ),
+                                  onTap: () {
+                                    // 선택한 날짜의 기록을 보기 위해 상세 화면으로 이동
+                                    final dateKey = DateFormat('yyyy-MM-dd').format(_selectedDay!);
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => WorkoutAnalysisScreen(
+                                          exerciseName: baseline.exerciseName,
+                                          initialDateKey: dateKey,
+                                        ),
                                       ),
                                     );
-
-                                    if (confirmed != true || !mounted) return;
-
-                                    try {
-                                      final repository =
-                                          ref.read(workoutRepositoryProvider);
-
-                                      // [Fix] DB에서 선택 날짜의 완료 세트 재조회
-                                      final fetchedSets = await repository
-                                          .getCompletedWorkoutSetsByBaselineIdForDate(
-                                        baseline.id,
-                                        _selectedDay!,
-                                      );
-
-                                      // 복사할 세트가 없으면 안내 후 종료
-                                      if (fetchedSets.isEmpty) {
-                                        if (!mounted) return;
-                                        messenger.showSnackBar(
-                                          const SnackBar(
-                                            content: Text('복사할 세트가 없습니다.'),
-                                            backgroundColor: Colors.orange,
-                                          ),
-                                        );
-                                        return;
-                                      }
-
-                                      // 선택한 날짜의 세트를 오늘로 복사
-                                      await repository.copySetsToToday(
-                                        baseline.id,
-                                        fetchedSets,
-                                      );
-
-                                      // Provider 갱신
-                                      ref.invalidate(baselinesProvider);
-                                      ref.invalidate(workoutDatesProvider);
-
-                                      // 홈 화면 데이터 강제 새로고침
-                                      await ref
-                                          .read(homeViewModelProvider.notifier)
-                                          .loadBaselines(forceRefresh: true);
-
-                                      if (!mounted) return;
-
-                                      // 성공 메시지 표시
-                                      messenger.showSnackBar(
-                                        const SnackBar(
-                                          content: Text('홈 화면의 오늘 운동에 추가되었습니다.'),
-                                          backgroundColor: Colors.green,
-                                        ),
-                                      );
-                                    } catch (e) {
-                                      if (!mounted) return;
-
-                                      // 에러 메시지 표시
-                                      messenger.showSnackBar(
-                                        SnackBar(
-                                          content: Text('복사 중 오류 발생: $e'),
-                                          backgroundColor: Colors.red,
-                                        ),
-                                      );
-                                    }
                                   },
                                 );
                               }),
@@ -818,3 +996,25 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 }
 
+extension on PlannedWorkoutDto {
+  PlannedWorkout toPlannedWorkout({
+    required String colorHex,
+    required DateTime createdAt,
+  }) {
+    return PlannedWorkout(
+      id: const Uuid().v4(),
+      userId: '',
+      baselineId: baselineId,
+      scheduledDate: scheduledDate,
+      targetWeight: targetWeight,
+      targetReps: targetReps,
+      targetSets: targetSets,
+      aiComment: aiComment,
+      isCompleted: false,
+      exerciseName: exerciseName,
+      isConvertedToLog: false,
+      createdAt: createdAt,
+      colorHex: colorHex,
+    );
+  }
+}

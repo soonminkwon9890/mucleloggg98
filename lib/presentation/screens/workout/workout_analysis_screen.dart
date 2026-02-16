@@ -14,10 +14,12 @@ import '../../widgets/workout/routine_generation_dialog.dart';
 /// 운동 분석 화면
 class WorkoutAnalysisScreen extends ConsumerStatefulWidget {
   final String exerciseName;
+  final String? initialDateKey; // yyyy-MM-dd 형식
 
   const WorkoutAnalysisScreen({
     super.key,
     required this.exerciseName,
+    this.initialDateKey,
   });
 
   @override
@@ -39,10 +41,19 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
   // 루틴 생성 관련 상태 (현재 미사용 - AppBar 버튼 제거로 인해)
   // bool _isGeneratingRoutine = false;
 
+  // 스크롤 컨트롤러 (날짜 포커스용)
+  final ScrollController _scrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
     _loadHistory();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   /// 날짜별 세트 데이터 로딩
@@ -76,6 +87,11 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
         });
         // 차트 데이터 준비
         _prepareChartData();
+        
+        // 초기 날짜로 스크롤
+        if (widget.initialDateKey != null) {
+          _scrollToDate();
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -85,6 +101,34 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
         });
       }
     }
+  }
+
+  /// 초기 날짜로 스크롤
+  void _scrollToDate() {
+    if (_historyByDate == null || widget.initialDateKey == null) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      final sortedDates = _historyByDate!.keys.toList()
+        ..sort((a, b) => b.compareTo(a)); // 최신순
+      
+      final targetIndex = sortedDates.indexOf(widget.initialDateKey!);
+      
+      if (targetIndex >= 0 && _scrollController.hasClients) {
+        // 차트 높이 + 각 카드 높이를 고려한 대략적인 위치 계산
+        // 차트 약 300px, 각 카드 약 80px
+        const chartHeight = 300.0;
+        const cardHeight = 80.0;
+        final offset = chartHeight + (targetIndex * cardHeight);
+        
+        _scrollController.animateTo(
+          offset.clamp(0.0, _scrollController.position.maxScrollExtent),
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
   }
 
   /// 단순 Epley 공식: 1RM = 무게 * (1 + (0.0333 * 횟수))
@@ -204,7 +248,9 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
             },
             child: Card(
               margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: ListTile(
+              child: ExpansionTile(
+                key: PageStorageKey('analysis_date_$dateKey'),
+                initiallyExpanded: dateKey == widget.initialDateKey,
                 title: Row(
                   children: [
                     Text(dateKey),
@@ -212,18 +258,42 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
                     _buildDifficultyTag(_difficultyByDate?[dateKey]),
                   ],
                 ),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    const SizedBox(height: 4),
-                    Text('총 볼륨: ${totalVolume.toStringAsFixed(1)}kg'),
-                    Text('총 횟수: $totalReps회'),
+                    TextButton(
+                      onPressed: () => _copyRecordToToday(dateKey, sets),
+                      child: const Text('기록 복사'),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline),
+                      onPressed: () => _showDeleteConfirmation(dateKey),
+                    ),
                   ],
                 ),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete_outline),
-                  onPressed: () => _showDeleteConfirmation(dateKey),
-                ),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '총 볼륨: ${totalVolume.toStringAsFixed(1)}kg / 총 횟수: $totalReps회',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const Divider(),
+                        ...sets.map((set) {
+                          return ListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            title: Text('${set.weight}kg × ${set.reps}회'),
+                            subtitle: Text('${set.sets}세트'),
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
           );
@@ -522,6 +592,101 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
     }
   }
 
+  /// 선택한 날짜의 운동 기록을 오늘로 복사
+  Future<void> _copyRecordToToday(String dateKey, List<WorkoutSet> sets) async {
+    // ScaffoldMessenger 캡처
+    final messenger = ScaffoldMessenger.of(context);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('기록 가져오기'),
+        content: const Text(
+          '선택한 날짜의 운동 기록(무게/횟수)을 오늘의 루틴에 그대로 복사하시겠습니까?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('확인'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      final repository = ref.read(workoutRepositoryProvider);
+
+      // baselineId 가져오기 (첫 번째 세트에서)
+      if (sets.isEmpty) {
+        if (!mounted) return;
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('복사할 세트가 없습니다.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      final baselineId = sets.first.baselineId;
+      final date = DateTime.parse(dateKey);
+
+      // DB에서 선택 날짜의 완료 세트 재조회
+      final fetchedSets = await repository
+          .getCompletedWorkoutSetsByBaselineIdForDate(baselineId, date);
+
+      // 복사할 세트가 없으면 안내 후 종료
+      if (fetchedSets.isEmpty) {
+        if (!mounted) return;
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('복사할 세트가 없습니다.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      // 선택한 날짜의 세트를 오늘로 복사
+      await repository.copySetsToToday(baselineId, fetchedSets);
+
+      // Provider 갱신
+      ref.invalidate(baselinesProvider);
+      ref.invalidate(workoutDatesProvider);
+
+      // 홈 화면 데이터 강제 새로고침
+      await ref
+          .read(homeViewModelProvider.notifier)
+          .loadBaselines(forceRefresh: true);
+
+      if (!mounted) return;
+
+      // 성공 메시지 표시
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('홈 화면의 오늘 운동에 추가되었습니다.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      // 에러 메시지 표시
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('복사 중 오류 발생: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   /// 다음 주 루틴 생성 (현재 미사용 - AppBar 버튼 제거로 인해)
   /// AI 루틴 생성 기능은 워크아웃 로그 탭의 "AI 강도 측정 / 계획 수립" 기능으로 통합됨
   // ignore: unused_element
@@ -691,6 +856,7 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
                 : RefreshIndicator(
                     onRefresh: _loadHistory,
                     child: CustomScrollView(
+                      controller: _scrollController,
                       slivers: [
                         SliverToBoxAdapter(
                           child: Padding(

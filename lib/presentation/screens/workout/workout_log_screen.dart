@@ -4,17 +4,11 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:uuid/uuid.dart';
 
 import '../../providers/auth_provider.dart';
 import '../../providers/subscription_provider.dart';
 import '../../providers/workout_provider.dart';
-import '../../../data/models/planned_workout.dart';
-import '../../../data/models/planned_workout_dto.dart';
-import '../../../domain/algorithms/workout_recommendation_service.dart';
-import '../../widgets/workout/routine_generation_dialog.dart';
 import '../subscription/subscription_screen.dart';
-import 'workout_history_screen.dart';
 
 /// 운동 분석 탭 메인 화면 (대시보드)
 class WorkoutLogScreen extends ConsumerStatefulWidget {
@@ -25,7 +19,6 @@ class WorkoutLogScreen extends ConsumerStatefulWidget {
 }
 
 class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
-  bool _isGeneratingRoutine = false;
   late DateTime _selectedWeekStart;
 
   /// Provider 캐시 일관성을 위해 주 시작일을 날짜(00:00:00)만 남겨 반환
@@ -126,7 +119,7 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 8.0),
                           child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               IconButton(
                                 icon: const Icon(Icons.chevron_left),
@@ -189,56 +182,6 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
                           context,
                           aiComment: aiComment,
                           isPremium: isPremium,
-                        ),
-                        const SizedBox(height: 16),
-                        ElevatedButton.icon(
-                          onPressed: _isGeneratingRoutine
-                              ? null
-                              : (isPremium
-                                  ? _generateWeeklyRoutine
-                                  : () {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        SnackBar(
-                                          content: const Text('프리미엄이 필요합니다'),
-                                          action: SnackBarAction(
-                                            label: '멤버십 보기',
-                                            onPressed: () {
-                                              Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (_) =>
-                                                      const SubscriptionScreen(),
-                                                ),
-                                              );
-                                            },
-                                          ),
-                                        ),
-                                      );
-                                    }),
-                          icon: _isGeneratingRoutine
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child:
-                                      CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : const Icon(Icons.auto_awesome),
-                          label: const Text('AI 강도 측정 / 계획 수립'),
-                        ),
-                        const SizedBox(height: 8),
-                        OutlinedButton.icon(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    const WorkoutHistoryScreen(),
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.history),
-                          label: const Text('지난 운동 기록 보러가기'),
                         ),
                       ],
                     ),
@@ -434,166 +377,6 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
     final minIdx = values.indexOf(minVal);
     final minAxis = axes[minIdx];
     return '$minAxis 운동이 가장 부족해요.';
-  }
-
-  Future<void> _generateWeeklyRoutine() async {
-    if (_isGeneratingRoutine) return;
-    setState(() => _isGeneratingRoutine = true);
-
-    if (!mounted) return;
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const AlertDialog(
-        content: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-            SizedBox(width: 16),
-            Expanded(child: Text('AI가 루틴을 분석 중입니다...')),
-          ],
-        ),
-      ),
-    );
-
-    try {
-      final repo = ref.read(workoutRepositoryProvider);
-      final sessions = await repo.getLastWeekSessions();
-      if (sessions.isEmpty) {
-        if (mounted) {
-          Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('지난주 운동 기록이 없습니다. 운동을 시작해보세요!'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-        return;
-      }
-
-      final userGoal = await repo.getUserGoal();
-      final baselineIds = sessions.map((s) => s.baselineId).toSet().toList();
-      final baselines = await repo.getBaselinesByIds(baselineIds);
-      final baselineMap = {for (var b in baselines) b.id: b};
-
-      final bestSetsFutures = sessions.map((s) async {
-        final bestSet = await repo.getLastWeekBestSet(s.baselineId, s.workoutDate);
-        return MapEntry(s.baselineId, bestSet);
-      }).toList();
-      final bestSetsMap = Map.fromEntries(await Future.wait(bestSetsFutures));
-
-      final plans = await WorkoutRecommendationService.generateWeeklyPlan(
-        lastWeekSessions: sessions,
-        userGoal: userGoal,
-        baselineMap: baselineMap,
-        bestSetsMap: bestSetsMap,
-      );
-
-      if (mounted) {
-        Navigator.pop(context);
-        if (plans.isNotEmpty) {
-          await _showRoutineGenerationDialog(plans);
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('생성된 루틴이 없습니다.'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('루틴 생성 실패: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isGeneratingRoutine = false);
-    }
-  }
-
-  /// 루틴 생성 다이얼로그 표시 (결과: 날짜가 주입된 루틴 + 색상)
-  Future<void> _showRoutineGenerationDialog(List<PlannedWorkoutDto> plans) async {
-    final result = await showDialog<RoutineApplyResult>(
-      context: context,
-      builder: (context) => RoutineGenerationDialog(routines: plans),
-    );
-    if (result == null || !mounted) return;
-    await _savePlannedWorkouts(result.routines, result.colorHex);
-  }
-
-  Future<void> _savePlannedWorkouts(
-    List<PlannedWorkoutDto> routines,
-    String colorHex,
-  ) async {
-    if (routines.isEmpty) return;
-    try {
-      final repository = ref.read(workoutRepositoryProvider);
-      final plans = routines
-          .map(
-            (dto) => dto.toPlannedWorkout(
-              colorHex: colorHex,
-              createdAt: DateTime.now(),
-            ),
-          )
-          .toList();
-      await repository.savePlannedWorkouts(plans);
-      
-      // ProfileScreen 캘린더 즉시 갱신 (저장 성공 시)
-      ref.read(plannedWorkoutsRefreshProvider.notifier).state++;
-      
-      if (mounted) {
-        final dateLabel = DateFormat('M월 d일', 'ko_KR').format(routines.first.scheduledDate);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('$dateLabel에 운동이 추가되었습니다'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('저장 실패: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-}
-
-extension on PlannedWorkoutDto {
-  PlannedWorkout toPlannedWorkout({
-    required String colorHex,
-    required DateTime createdAt,
-  }) {
-    return PlannedWorkout(
-      id: const Uuid().v4(),
-      userId: '',
-      baselineId: baselineId,
-      scheduledDate: scheduledDate,
-      targetWeight: targetWeight,
-      targetReps: targetReps,
-      targetSets: targetSets,
-      aiComment: aiComment,
-      isCompleted: false,
-      exerciseName: exerciseName,
-      isConvertedToLog: false,
-      createdAt: createdAt,
-      colorHex: colorHex,
-    );
   }
 }
 

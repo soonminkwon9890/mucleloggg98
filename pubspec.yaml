@@ -1,7 +1,7 @@
 name: musclelog
 description: AI Progressive Overload Coaching App
 publish_to: "none"
-version: 1.0.0+2
+version: 1.0.0+3
 
 environment:
   sdk: ">=3.2.0 <4.0.0"
@@ -42,6 +42,7 @@ dependencies:
   package_info_plus: any # 앱 버전 조회 (force update)
   pub_semver: any # 버전 비교
   url_launcher: any # 스토어/외부 링크 열기
+  flutter_slidable: ^3.0.0 # 리스트 스와이프 액션
 
   # 7. 인앱 결제 (RevenueCat)
   purchases_flutter: ^9.11.0 # iOS 구독 시스템
