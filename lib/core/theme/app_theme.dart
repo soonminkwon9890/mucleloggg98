@@ -12,7 +12,7 @@ class AppTheme {
     cardTheme: CardThemeData(
       color: Colors.white, // [표준] 밝은 카드
       elevation: 1, // [유지] 은은한 그림자
-      shadowColor: Colors.black.withValues(alpha: 0.05), // [유지]
+      shadowColor: Colors.black.withValues(alpha: 0.85), // [유지]
       surfaceTintColor: Colors.transparent, // [유지] 틴트 제거
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     ),
@@ -41,7 +41,7 @@ class AppTheme {
     cardTheme: CardThemeData(
       color: const Color(0xFF1C1C1E), // [표준] 어두운 카드
       elevation: 1, // [유지]
-      shadowColor: Colors.black.withValues(alpha: 0.05), // [유지]
+      shadowColor: Colors.black.withValues(alpha: 0.85), // [유지]
       surfaceTintColor: Colors.transparent, // [유지]
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     ),
