@@ -500,19 +500,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           )
           .toList();
       await repository.savePlannedWorkouts(plans);
-      
+
+      // [Fix] async gap 후 mounted 체크 필수
+      if (!mounted) return;
+
       // ProfileScreen 캘린더 즉시 갱신 (저장 성공 시)
       ref.read(plannedWorkoutsRefreshProvider.notifier).state++;
-      
-      if (mounted) {
-        final dateLabel = DateFormat('M월 d일', 'ko_KR').format(routines.first.scheduledDate);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('$dateLabel에 운동이 추가되었습니다'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
+
+      final dateLabel = DateFormat('M월 d일', 'ko_KR').format(routines.first.scheduledDate);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$dateLabel에 운동이 추가되었습니다'),
+          backgroundColor: Colors.green,
+        ),
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

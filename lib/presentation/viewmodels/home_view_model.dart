@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../../../data/repositories/workout_repository.dart';
 import '../../../data/models/exercise_baseline.dart';
+import '../../../data/models/workout_set.dart';
 import '../../../data/services/supabase_service.dart';
 import '../../../core/utils/date_formatter.dart';
 import '../../../core/enums/exercise_enums.dart';
@@ -401,25 +402,74 @@ class HomeViewModel extends StateNotifier<HomeState> {
 
   /// 입력값 메모리 업데이트 (DB 호출 X, 화면 갱신만 수행)
   /// 포커스가 해제될 때 호출되어 사용자 입력을 메모리에 반영합니다.
+  /// [Fix] Upsert 로직으로 변경 - 세트가 없으면 추가, 있으면 업데이트
   void updateSetInMemory(String setId, {double? weight, int? reps}) {
     final updatedBaselines = state.baselines.map((baseline) {
-      if (baseline.workoutSets == null) return baseline;
+      final currentSets = baseline.workoutSets ?? [];
 
-      final updatedSets = baseline.workoutSets!.map((set) {
-        if (set.id == setId) {
-          // 값이 변경된 경우에만 객체 복사
-          return set.copyWith(
-            weight: weight ?? set.weight,
-            reps: reps ?? set.reps,
-          );
-        }
-        return set;
-      }).toList();
+      // 해당 세트가 이 baseline에 존재하는지 확인
+      final existingSetIndex = currentSets.indexWhere((s) => s.id == setId);
 
-      return baseline.copyWith(workoutSets: updatedSets);
+      if (existingSetIndex != -1) {
+        // Case A: 기존 세트 업데이트
+        final updatedSets = currentSets.map((set) {
+          if (set.id == setId) {
+            return set.copyWith(
+              weight: weight ?? set.weight,
+              reps: reps ?? set.reps,
+            );
+          }
+          return set;
+        }).toList();
+
+        return baseline.copyWith(workoutSets: updatedSets);
+      }
+
+      // Case B: 세트가 존재하지 않으면 이 baseline은 건드리지 않음
+      return baseline;
     }).toList();
 
-    // 상태 업데이트 (화면에는 반영되지만 DB는 안 감)
+    state = state.copyWith(baselines: updatedBaselines);
+  }
+
+  /// 새로운 세트를 baseline에 추가 (Upsert)
+  /// WorkoutCard에서 로컬로 생성한 세트를 ViewModel에 동기화할 때 사용
+  void upsertSetInMemory(
+    String baselineId,
+    String setId, {
+    required double weight,
+    required int reps,
+    required int sets,
+    required DateTime createdAt,
+  }) {
+    final updatedBaselines = state.baselines.map((baseline) {
+      if (baseline.id != baselineId) return baseline;
+
+      final currentSets = List<WorkoutSet>.from(baseline.workoutSets ?? []);
+      final existingSetIndex = currentSets.indexWhere((s) => s.id == setId);
+
+      if (existingSetIndex != -1) {
+        // Update existing set
+        currentSets[existingSetIndex] = currentSets[existingSetIndex].copyWith(
+          weight: weight,
+          reps: reps,
+        );
+      } else {
+        // Add new set
+        currentSets.add(WorkoutSet(
+          id: setId,
+          baselineId: baselineId,
+          weight: weight,
+          reps: reps,
+          sets: sets,
+          isCompleted: false,
+          createdAt: createdAt,
+        ));
+      }
+
+      return baseline.copyWith(workoutSets: currentSets);
+    }).toList();
+
     state = state.copyWith(baselines: updatedBaselines);
   }
 

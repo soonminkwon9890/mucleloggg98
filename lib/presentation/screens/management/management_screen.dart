@@ -243,6 +243,9 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
     try {
       await repository.deleteBaseline(baseline.id, baseline.exerciseName);
 
+      // [Fix] async gap 후 mounted 체크 필수
+      if (!mounted) return;
+
       // Provider 갱신 (화면 즉시 업데이트)
       ref.invalidate(baselinesProvider);
       ref.invalidate(archivedBaselinesProvider); // 보관함 화면 갱신 (중요!)
@@ -926,10 +929,12 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab> {
 
       await repository.saveRoutine(routine, items);
 
+      // [Fix] async gap 후 mounted 체크 필수
+      if (!mounted) return;
+
       // Provider 갱신
       ref.invalidate(routinesProvider);
 
-      if (!mounted) return;
       messenger.showSnackBar(
         const SnackBar(content: Text('루틴이 저장되었습니다.')),
       );
@@ -1184,10 +1189,12 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab> {
         selectedBaselineIds.toList(),
       );
 
+      // [Fix] async gap 후 mounted 체크 필수
+      if (!mounted) return;
+
       // Provider 갱신
       ref.invalidate(routinesProvider);
 
-      if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(
             content: Text('${selectedBaselineIds.length}개 운동이 루틴에 추가되었습니다.')),
@@ -1320,13 +1327,15 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab> {
       final repository = ref.read(workoutRepositoryProvider);
       await repository.deleteRoutine(routine.id);
 
+      // [Fix] async gap 후 mounted 체크 필수
+      if (!mounted) return;
+
       // Provider 갱신 (UI 즉시 업데이트)
       ref.invalidate(routinesProvider);
       // [추가] 홈 화면도 갱신 (루틴 그룹 변경 반영)
       ref.invalidate(baselinesProvider);
 
       // 성공 메시지 표시
-      if (!mounted) return;
       messenger.showSnackBar(
         const SnackBar(
           content: Text('루틴이 삭제되었습니다. 과거 운동 기록은 보존되었습니다.'),

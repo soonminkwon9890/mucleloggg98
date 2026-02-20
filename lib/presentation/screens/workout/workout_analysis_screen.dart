@@ -531,6 +531,9 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
       // Repository 메서드 호출
       await repository.deleteWorkoutSetsByDate(baselineId, date);
 
+      // [Fix] async gap 후 mounted 체크 필수
+      if (!mounted) return;
+
       // 로컬 상태 업데이트
       setState(() {
         _historyByDate!.remove(dateKey);
@@ -544,14 +547,12 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
       ref.invalidate(archivedBaselinesProvider);
       ref.invalidate(workoutDatesProvider);
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('기록이 삭제되었습니다.'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('기록이 삭제되었습니다.'),
+          backgroundColor: Colors.green,
+        ),
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -655,6 +656,9 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
 
       // 선택한 날짜의 세트를 오늘로 복사
       await repository.copySetsToToday(baselineId, fetchedSets);
+
+      // [Fix] async gap 후 mounted 체크 필수
+      if (!mounted) return;
 
       // Provider 갱신
       ref.invalidate(baselinesProvider);

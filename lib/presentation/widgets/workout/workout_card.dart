@@ -42,12 +42,25 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
   bool get wantKeepAlive => true;
 
   /// 로컬 데이터가 Dirty 상태인지 판단 (세트 추가 또는 입력값 존재)
+  /// [Fix] TextEditingController의 실제 값을 확인 (_sets는 포커스 해제 전까지 업데이트 안 됨)
   bool get _isLocalDirty {
     // 조건 1: 세트가 2개 이상 (세트 추가됨)
     if (_sets.length > 1) return true;
 
-    // 조건 2: 세트 중 하나라도 입력값이 있음 (weight > 0 또는 reps > 0)
-    return _sets.values.any((set) => set.weight > 0 || set.reps > 0);
+    // 조건 2: Controller에 0이 아닌 입력값이 있는지 확인
+    for (final setId in _sets.keys) {
+      final weightText = _controllers['weight_$setId']?.text.trim() ?? '0';
+      final repsText = _controllers['reps_$setId']?.text.trim() ?? '0';
+
+      final weight = double.tryParse(weightText) ?? 0.0;
+      final reps = int.tryParse(repsText) ?? 0;
+
+      if (weight > 0 || reps > 0) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   @override
@@ -221,6 +234,10 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
 
   @override
   void dispose() {
+    // [Critical Fix] 상태 파괴 전 모든 pending 입력값을 HomeViewModel에 동기화
+    // 다른 카드 저장으로 인한 rebuild 시 이 카드의 Draft 입력값을 보존
+    _syncPendingInputsToViewModel();
+
     // FocusNode 정리
     for (final node in _weightFocusNodes.values) {
       node.removeListener(() {});
@@ -232,13 +249,41 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
     }
     _weightFocusNodes.clear();
     _repsFocusNodes.clear();
-    
+
     // Controller 정리
     for (final controller in _controllers.values) {
       controller.dispose();
     }
     _controllers.clear();
     super.dispose();
+  }
+
+  /// [Critical] 모든 pending 입력값을 HomeViewModel에 동기화
+  /// dispose() 호출 전에 실행하여 다른 카드 저장 시 이 카드의 Draft가 유실되지 않도록 함
+  void _syncPendingInputsToViewModel() {
+    for (final entry in _sets.entries) {
+      final setId = entry.key;
+      final currentSet = entry.value;
+
+      final weightController = _controllers['weight_$setId'];
+      final repsController = _controllers['reps_$setId'];
+
+      // Controller에서 현재 값 추출
+      final weightText = weightController?.text.trim() ?? '0';
+      final repsText = repsController?.text.trim() ?? '0';
+      final parsedWeight = double.tryParse(weightText) ?? 0.0;
+      final parsedReps = int.tryParse(repsText) ?? 0;
+
+      // Upsert: 세트가 ViewModel에 없으면 추가, 있으면 업데이트
+      ref.read(homeViewModelProvider.notifier).upsertSetInMemory(
+        widget.baseline.id,
+        setId,
+        weight: parsedWeight,
+        reps: parsedReps,
+        sets: currentSet.sets,
+        createdAt: currentSet.createdAt ?? DateTime.now(),
+      );
+    }
   }
 
   // 포커스가 빠질 때 ViewModel 업데이트 + 빈 입력 시 '0' 복구 (Handle Empty Input on Blur)
@@ -391,6 +436,9 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
         await repository.batchSaveWorkoutSets(setsToSave);
       }
 
+      // [Fix] async gap 후 mounted 체크 필수 (ConsumerStatefulElement._assertNotDisposed 방지)
+      if (!mounted) return;
+
       // 2. 상태 갱신 (순서 중요)
       ref.invalidate(baselinesProvider); // 홈 화면 갱신
       ref.invalidate(workoutDatesProvider); // 캘린더 갱신
@@ -427,12 +475,15 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
     try {
       await ref.read(workoutRepositoryProvider).deleteWorkoutSet(setId);
 
+      // [Fix] async gap 후 mounted 체크 필수 (setState 및 ref 사용 전)
+      if (!mounted) return;
+
       setState(() {
         _controllers.remove('weight_$setId')?.dispose();
         _controllers.remove('reps_$setId')?.dispose();
         _controllers.remove('sets_$setId')?.dispose();
         _sets.remove(setId);
-        
+
         // [추가] FocusNode 정리
         _weightFocusNodes[setId]?.removeListener(() {});
         _weightFocusNodes[setId]?.dispose();

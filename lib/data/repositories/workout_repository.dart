@@ -1409,10 +1409,16 @@ class WorkoutRepository {
     // [Fix] DB 컬럼명 강제 매핑
     data['is_completed'] = set.isCompleted;
 
-    // created_at 처리: 단순하게 현재 시간을 UTC로 변환하여 저장
-    // (조회 로직이 날짜만 보므로 정규화 불필요)
+    // [Critical Fix] created_at 타임존 처리
+    // Freezed toJson()이 DateTime을 String으로 변환하므로 String 케이스 처리 필수
     if (data['created_at'] == null) {
       data['created_at'] = DateTime.now().toUtc().toIso8601String();
+    } else if (data['created_at'] is String) {
+      // toJson()이 생성한 로컬 시간 문자열을 UTC로 변환
+      final parsed = DateTime.tryParse(data['created_at'] as String);
+      if (parsed != null && !parsed.isUtc) {
+        data['created_at'] = parsed.toUtc().toIso8601String();
+      }
     } else if (data['created_at'] is DateTime) {
       data['created_at'] = (data['created_at'] as DateTime).toUtc().toIso8601String();
     }
@@ -1432,10 +1438,16 @@ class WorkoutRepository {
 
     final dataList = sets.map((s) {
       final json = s.toJson();
-      // 각 세트별로 날짜 확인: 단순하게 UTC로 변환하여 저장
-      // (조회 로직이 날짜만 보므로 정규화 불필요)
+      // [Critical Fix] created_at 타임존 처리
+      // Freezed toJson()이 DateTime을 String으로 변환하므로 String 케이스 처리 필수
       if (json['created_at'] == null) {
         json['created_at'] = DateTime.now().toUtc().toIso8601String();
+      } else if (json['created_at'] is String) {
+        // toJson()이 생성한 로컬 시간 문자열을 UTC로 변환
+        final parsed = DateTime.tryParse(json['created_at'] as String);
+        if (parsed != null && !parsed.isUtc) {
+          json['created_at'] = parsed.toUtc().toIso8601String();
+        }
       } else if (json['created_at'] is DateTime) {
         json['created_at'] = (json['created_at'] as DateTime).toUtc().toIso8601String();
       }
