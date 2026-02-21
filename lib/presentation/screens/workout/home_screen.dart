@@ -227,16 +227,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final allTodayWorkouts =
         groupedWorkouts.values.expand((list) => list).toList();
 
+    // [수정됨] RefreshIndicator 제거 - 미저장 데이터 손실 방지
+    // Pull-to-refresh 기능을 완전히 비활성화하여 사용자의 입력값이 초기화되는 문제 해결
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       behavior: HitTestBehavior.translucent,
-      child: RefreshIndicator(
-        onRefresh: () async {
-          await ref.read(homeViewModelProvider.notifier).refresh();
-          ref.invalidate(workoutDatesProvider);
-          await ref.read(workoutDatesProvider.future);
-        },
-        child: SingleChildScrollView(
+      // RefreshIndicator 래퍼 제거됨 - SingleChildScrollView가 직접 child로 승격
+      child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.only(
             left: 16,
@@ -488,8 +485,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               ),
           ],
         ),
-      ),
-    ),
-    );
+      ),  // SingleChildScrollView 닫힘
+    );  // GestureDetector 닫힘
   }
 }
