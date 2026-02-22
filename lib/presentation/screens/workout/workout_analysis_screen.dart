@@ -44,16 +44,150 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
   // 스크롤 컨트롤러 (날짜 포커스용)
   final ScrollController _scrollController = ScrollController();
 
+  // [Task 2] 이름 수정 관련 상태
+  bool _isEditingName = false;
+  late String _currentExerciseName; // 현재 표시되는 운동 이름 (변경 가능)
+  late TextEditingController _nameController;
+  late FocusNode _nameFocusNode;
+  bool _isUpdatingName = false; // DB 업데이트 중 상태
+  bool _hasShownDialog = false; // 다이얼로그 중복 방지
+
   @override
   void initState() {
     super.initState();
+    _currentExerciseName = widget.exerciseName;
+    _nameController = TextEditingController(text: widget.exerciseName);
+    _nameFocusNode = FocusNode();
+
+    // [Task 2] FocusNode 리스너 등록 (포커스 해제 시 다이얼로그 표시)
+    _nameFocusNode.addListener(_onFocusChange);
+
     _loadHistory();
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
+    _nameController.dispose();
+    _nameFocusNode.removeListener(_onFocusChange);
+    _nameFocusNode.dispose();
     super.dispose();
+  }
+
+  /// [Task 2] 포커스 변경 감지 - 포커스 해제 시 확인 다이얼로그 표시
+  void _onFocusChange() {
+    if (!_nameFocusNode.hasFocus && _isEditingName && !_hasShownDialog) {
+      _showNameChangeConfirmation();
+    }
+  }
+
+  /// [Task 2] 이름 수정 모드 토글
+  void _toggleEditMode() {
+    setState(() {
+      _isEditingName = !_isEditingName;
+      _hasShownDialog = false; // 플래그 리셋
+      if (_isEditingName) {
+        _nameController.text = _currentExerciseName;
+        // 다음 프레임에서 포커스 요청
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _nameFocusNode.requestFocus();
+          }
+        });
+      }
+    });
+  }
+
+  /// [Task 2] 이름 변경 확인 다이얼로그 표시
+  Future<void> _showNameChangeConfirmation() async {
+    if (_hasShownDialog) return; // 중복 방지
+    _hasShownDialog = true;
+
+    final newName = _nameController.text.trim();
+
+    // 이름이 비어있거나 변경이 없으면 취소
+    if (newName.isEmpty || newName == _currentExerciseName) {
+      setState(() {
+        _isEditingName = false;
+        _nameController.text = _currentExerciseName;
+      });
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false, // 외부 탭으로 닫기 방지
+      builder: (context) => AlertDialog(
+        title: const Text('이름 변경'),
+        content: Text('"$newName"(으)로 변경하시겠습니까?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('아니오'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('예'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _updateExerciseName(newName);
+    } else {
+      // 취소: 원래 이름으로 복원
+      setState(() {
+        _isEditingName = false;
+        _nameController.text = _currentExerciseName;
+      });
+    }
+  }
+
+  /// [Task 2] 운동 이름 DB 업데이트
+  Future<void> _updateExerciseName(String newName) async {
+    setState(() => _isUpdatingName = true);
+
+    try {
+      final repository = ref.read(workoutRepositoryProvider);
+      await repository.updateExerciseName(_currentExerciseName, newName);
+
+      if (!mounted) return;
+
+      // Provider 갱신 (다른 화면 동기화)
+      ref.invalidate(baselinesProvider);
+      ref.invalidate(archivedBaselinesProvider);
+      ref.invalidate(routinesProvider);
+      ref.invalidate(exercisesWithHistoryProvider);
+
+      // 상태 업데이트
+      setState(() {
+        _currentExerciseName = newName;
+        _isEditingName = false;
+        _isUpdatingName = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('운동 이름이 변경되었습니다.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isUpdatingName = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('이름 변경 실패: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      // 실패 시 원래 이름으로 복원
+      setState(() {
+        _isEditingName = false;
+        _nameController.text = _currentExerciseName;
+      });
+    }
   }
 
   /// 날짜별 세트 데이터 로딩
@@ -65,10 +199,11 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
 
     try {
       final repository = ref.read(workoutRepositoryProvider);
+      // [Task 2] _currentExerciseName 사용 (이름 변경 후에도 올바르게 로드)
       final history =
-          await repository.getHistoryByExerciseName(widget.exerciseName);
+          await repository.getHistoryByExerciseName(_currentExerciseName);
       final difficultyMap =
-          await repository.getDifficultyByExerciseName(widget.exerciseName); // [추가]
+          await repository.getDifficultyByExerciseName(_currentExerciseName); // [추가]
 
       // [안전핀] UI 레벨에서 정렬 보장 (오래된 순 -> 최신 순)
       // Repository에서 정렬되어 있어도 UI 레벨에서 한 번 더 확인하여 안전성 확보
@@ -506,8 +641,9 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
     final repository = ref.read(workoutRepositoryProvider);
     final baselines = await repository.getBaselines();
     try {
+      // [Task 2] _currentExerciseName 사용 (이름 변경 후에도 올바르게 조회)
       return baselines.firstWhere(
-        (b) => b.exerciseName == widget.exerciseName,
+        (b) => b.exerciseName == _currentExerciseName,
       );
     } catch (e) {
       return null;
@@ -848,9 +984,55 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.exerciseName),
-        // AI 분석 버튼 제거됨 (AI 강도 분석 및 계획 수립 기능으로 통합)
-        // 기존: IconButton (Icons.auto_awesome, 'AI 루틴 생성')
+        // [Task 2] 편집 모드에 따라 Title 또는 TextField 표시
+        title: _isEditingName
+            ? TextField(
+                controller: _nameController,
+                focusNode: _nameFocusNode,
+                autofocus: true,
+                style: const TextStyle(fontSize: 20),
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  hintText: '운동 이름 입력',
+                ),
+                onSubmitted: (_) {
+                  // Enter 키 입력 시 확인 다이얼로그 표시
+                  if (!_hasShownDialog) {
+                    _showNameChangeConfirmation();
+                  }
+                },
+              )
+            : Text(_currentExerciseName),
+        // [Task 2] 이름 수정 버튼 추가
+        actions: [
+          if (_isUpdatingName)
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else if (_isEditingName)
+            IconButton(
+              icon: const Icon(Icons.close),
+              tooltip: '취소',
+              onPressed: () {
+                setState(() {
+                  _isEditingName = false;
+                  _nameController.text = _currentExerciseName;
+                  _hasShownDialog = false;
+                });
+              },
+            )
+          else
+            TextButton.icon(
+              onPressed: _toggleEditMode,
+              icon: const Icon(Icons.edit, size: 18),
+              label: const Text('이름 수정'),
+            ),
+        ],
       ),
       body: SafeArea(
         child: _isLoadingHistory

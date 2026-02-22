@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import '../../../core/utils/adaptive_widgets.dart';
 import '../../../data/models/planned_workout.dart';
 import '../../providers/workout_provider.dart';
-import 'edit_planned_workout_dialog.dart';
 
+/// [MODIFIED - Task 1] 캘린더 화면의 계획된 운동 타일
+/// Slidable로 변경: 왼쪽 스와이프 시 "날짜 수정", "삭제" 버튼 표시
 class PlannedWorkoutTile extends ConsumerWidget {
   final PlannedWorkout plannedWorkout;
   final String exerciseName;
-  final VoidCallback onUpdated; // 갱신 콜백
+  final VoidCallback onUpdated;
 
   const PlannedWorkoutTile({
     super.key,
@@ -19,65 +21,77 @@ class PlannedWorkoutTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return ListTile(
-      leading: Checkbox(
-        value: plannedWorkout.isCompleted,
-        onChanged: (checked) => _toggleCompletion(context, ref, checked ?? false),
-      ),
-      title: Text(
-        exerciseName,
-        style: plannedWorkout.isCompleted
-            ? const TextStyle(
-                decoration: TextDecoration.lineThrough,
-                color: Colors.grey,
-              )
-            : null,
-      ),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    // [Task 1] Slidable로 감싸서 스와이프 액션 제공
+    return Slidable(
+      key: ValueKey('planned_${plannedWorkout.id}'),
+      // [Task 1] 왼쪽으로 스와이프 시 "날짜 수정", "삭제" 버튼 2개 표시
+      endActionPane: ActionPane(
+        motion: const ScrollMotion(),
+        extentRatio: 0.5, // 화면의 50%만큼 열림
         children: [
-          const SizedBox(height: 4),
-          Text('${plannedWorkout.targetWeight}kg × ${plannedWorkout.targetReps}회'),
-          if (plannedWorkout.aiComment != null && plannedWorkout.aiComment!.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            _buildCommentBadge(plannedWorkout.aiComment!),
-          ],
+          // [Task 1] 날짜 수정 버튼
+          SlidableAction(
+            onPressed: (ctx) => _changeDate(context, ref),
+            backgroundColor: Colors.blue,
+            foregroundColor: Colors.white,
+            icon: Icons.calendar_today,
+            label: '날짜 수정',
+          ),
+          // [Task 1] 삭제 버튼
+          SlidableAction(
+            onPressed: (ctx) => _showDeleteDialog(context, ref),
+            backgroundColor: Colors.red,
+            foregroundColor: Colors.white,
+            icon: Icons.delete,
+            label: '삭제',
+          ),
         ],
       ),
-      trailing: PopupMenuButton<String>(
-        itemBuilder: (context) => [
-          const PopupMenuItem(
-            value: 'date',
-            child: Row(
-              children: [
-                Icon(Icons.calendar_today, size: 18),
-                SizedBox(width: 8),
-                Text('날짜 변경'),
-              ],
+      child: ListTile(
+        leading: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: Color(int.parse(plannedWorkout.colorHex)).withValues(alpha: 0.2),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(
+            Icons.fitness_center,
+            color: Color(int.parse(plannedWorkout.colorHex)),
+            size: 20,
+          ),
+        ),
+        title: Text(
+          exerciseName,
+          style: const TextStyle(fontWeight: FontWeight.w500),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 4),
+            // Manual(0kg x 0회) vs AI Plan(값 있음) 구분 표시
+            Text(
+              plannedWorkout.targetWeight == 0 && plannedWorkout.targetReps == 0
+                  ? '${plannedWorkout.targetSets}세트 예정'
+                  : '${plannedWorkout.targetWeight}kg × ${plannedWorkout.targetReps}회 (${plannedWorkout.targetSets}세트)',
             ),
-          ),
-          const PopupMenuItem(
-            value: 'edit',
-            child: Text('수정'),
-          ),
-          const PopupMenuItem(
-            value: 'delete',
-            child: Text('삭제'),
-          ),
-        ],
-        onSelected: (value) {
-          if (value == 'date') {
-            _changeDate(context, ref);
-          } else if (value == 'edit') {
-            _showEditDialog(context, ref);
-          } else if (value == 'delete') {
-            _showDeleteDialog(context, ref);
-          }
-        },
+            if (plannedWorkout.aiComment != null && plannedWorkout.aiComment!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              _buildCommentBadge(plannedWorkout.aiComment!),
+            ],
+          ],
+        ),
+        // [Task 1] 스와이프 힌트 아이콘으로 변경
+        trailing: const Icon(
+          Icons.chevron_left,
+          color: Colors.grey,
+          size: 20,
+        ),
       ),
     );
   }
 
+  /// [Task 1] 날짜 수정 - DatePicker 표시 후 DB 업데이트
   Future<void> _changeDate(BuildContext context, WidgetRef ref) async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -124,80 +138,42 @@ class PlannedWorkoutTile extends ConsumerWidget {
     }
   }
 
-  Future<void> _toggleCompletion(BuildContext context, WidgetRef ref, bool isCompleted) async {
-    try {
-      final repository = ref.read(workoutRepositoryProvider);
-      await repository.togglePlannedWorkoutCompletion(plannedWorkout.id, isCompleted);
-      
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(isCompleted ? '완료 처리되었습니다.' : '완료 취소되었습니다.'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 1),
-          ),
-        );
-        onUpdated(); // 갱신 콜백 호출
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('오류: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  void _showEditDialog(BuildContext context, WidgetRef ref) {
-    showDialog(
-      context: context,
-      builder: (context) => EditPlannedWorkoutDialog(
-        plannedWorkout: plannedWorkout,
-        exerciseName: exerciseName,
-        onUpdated: onUpdated,
-      ),
-    );
-  }
-
+  /// [Task 1] 삭제 확인 다이얼로그 표시 후 DB 삭제
   Future<void> _showDeleteDialog(BuildContext context, WidgetRef ref) async {
-    final confirm = await showDialog<bool>(
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('계획 삭제'),
-        content: const Text('이 계획을 삭제하시겠습니까?'),
+        content: Text('$exerciseName 계획을 정말 삭제하시겠습니까?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('취소'),
+            child: const Text('아니오'),
           ),
-          ElevatedButton(
+          TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-            ),
-            child: const Text('삭제'),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('예'),
           ),
         ],
       ),
     );
 
-    if (confirm != true || !context.mounted) return;
+    if (confirmed != true) return;
 
     try {
       final repository = ref.read(workoutRepositoryProvider);
       await repository.deletePlannedWorkout(plannedWorkout.id);
-      
+
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('계획이 삭제되었습니다.'),
             backgroundColor: Colors.green,
+            duration: Duration(seconds: 1),
           ),
         );
-        onUpdated(); // 갱신 콜백 호출
+        onUpdated();
       }
     } catch (e) {
       if (context.mounted) {
@@ -220,7 +196,7 @@ class PlannedWorkoutTile extends ConsumerWidget {
     } else {
       color = Colors.blue;
     }
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
@@ -234,4 +210,3 @@ class PlannedWorkoutTile extends ConsumerWidget {
     );
   }
 }
-

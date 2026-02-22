@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:table_calendar/table_calendar.dart';
 import 'package:uuid/uuid.dart';
 import '../../providers/subscription_provider.dart';
 import '../../providers/workout_provider.dart';
 import '../workout/workout_analysis_screen.dart';
 import '../../../data/models/exercise_baseline.dart';
+import '../../../data/models/planned_workout.dart';
 import '../../../utils/premium_guidance_dialog.dart';
 import '../../../data/models/workout_set.dart';
 import '../../../data/models/routine.dart';
@@ -130,48 +132,8 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
     });
   }
 
-  /// 특정 날짜의 세트 기록을 오늘 날짜로 복사
-
-  /// 보관함에서 오늘 운동에 추가 (메모리 전용 - DB 저장 X)
-  /// addFromArchiveOrRoutine을 사용하여 데이터 리셋 후 홈 화면에 표시합니다.
-  /// 실제 DB 저장은 사용자가 세트를 완료할 때 수행됩니다.
-  void _addToToday() {
-    if (_selectedBaselineIds.isEmpty) return;
-
-    final messenger = ScaffoldMessenger.of(context);
-
-    final baselines = ref.read(archivedBaselinesProvider).value ?? [];
-
-    final selectedBaselines =
-        baselines.where((b) => _selectedBaselineIds.contains(b.id)).toList();
-
-    if (selectedBaselines.isEmpty) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('선택된 운동을 찾을 수 없습니다.')),
-      );
-      return;
-    }
-
-    // 메모리 전용 추가: 새 UUID 생성 + 데이터 리셋
-    ref.read(homeViewModelProvider.notifier).addFromArchiveOrRoutine(
-      selectedBaselines,
-      routineId: null, // 보관함에서 추가 시 routineId 없음
-    );
-
-    final addedCount = selectedBaselines.length;
-
-    // 선택 모드 해제
-    setState(() {
-      _selectedBaselineIds.clear();
-      _isSelectionMode = false;
-    });
-
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text('$addedCount개 운동을 오늘 목록에 추가했습니다.'),
-      ),
-    );
-  }
+  // [REMOVED - Task 1] _addToToday() 제거
+  // 로직이 _planWorkoutForDate()로 통합됨
 
   Future<void> _confirmAndDeleteBaseline(ExerciseBaseline baseline) async {
     if (!mounted) return;
@@ -262,105 +224,345 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
     }
   }
 
-  Future<void> _saveAsRoutine() async {
+  /// [NEW - Task 1] 운동 계획 시트 표시
+  /// 2/3 높이의 BottomSheet에 캘린더를 표시하고, 날짜 선택 시 "운동 계획하기" 버튼 활성화
+  Future<void> _showWorkoutPlanSheet() async {
     if (_selectedBaselineIds.isEmpty) return;
 
-    // Check routine limit: 3 free, then premium required
-    final routines = ref.read(routinesProvider).valueOrNull ?? [];
-    final isPremium = ref.read(subscriptionProvider).isPremium;
+    final messenger = ScaffoldMessenger.of(context);
+    final baselines = ref.read(archivedBaselinesProvider).value ?? [];
+    final selectedBaselines =
+        baselines.where((b) => _selectedBaselineIds.contains(b.id)).toList();
 
-    if (!isPremium && routines.length >= 3) {
-      if (!mounted) return;
-      final isPurchased = await showPremiumGuidanceDialog(context);
-      if (isPurchased == true && context.mounted) {
-        ref.invalidate(subscriptionProvider);
-        ref.invalidate(routinesProvider);
-      }
+    if (selectedBaselines.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('선택된 운동을 찾을 수 없습니다.')),
+      );
       return;
     }
 
-    final nameController = TextEditingController();
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('루틴 이름 입력'),
-        content: TextField(
-          controller: nameController,
-          decoration: const InputDecoration(
-            hintText: '예: 상체 루틴',
-          ),
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('취소'),
-          ),
-          TextButton(
-            onPressed: () {
-              if (nameController.text.trim().isNotEmpty) {
-                Navigator.pop(context, nameController.text.trim());
-              }
-            },
-            child: const Text('저장'),
-          ),
-        ],
-      ),
-    );
+    // 캘린더 상태 관리
+    DateTime focusedDay = DateTime.now();
+    DateTime? selectedDay;
+    Map<DateTime, PlannedWorkout> plannedWorkoutsByDate = {};
 
-    if (result == null || result.isEmpty) return;
+    // Planned workouts 로드 함수
+    Future<void> loadPlannedWorkouts(DateTime month) async {
+      try {
+        final repository = ref.read(workoutRepositoryProvider);
+        final startDate = DateTime(month.year, month.month, 1);
+        final endDate = DateTime(month.year, month.month + 1, 0);
+
+        final plannedWorkouts = await repository.getPlannedWorkoutsByDateRange(
+          startDate,
+          endDate,
+        );
+
+        plannedWorkoutsByDate = {};
+        for (final workout in plannedWorkouts) {
+          if (workout.isConvertedToLog) continue;
+          final dateKey = DateTime(
+            workout.scheduledDate.year,
+            workout.scheduledDate.month,
+            workout.scheduledDate.day,
+          );
+          plannedWorkoutsByDate.putIfAbsent(dateKey, () => workout);
+        }
+      } catch (e) {
+        plannedWorkoutsByDate = {};
+      }
+    }
+
+    // 초기 로드
+    await loadPlannedWorkouts(focusedDay);
+
+    if (!mounted) return;
+
+    // BottomSheet 표시
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final screenHeight = MediaQuery.of(context).size.height;
+            final sheetHeight = screenHeight * 2 / 3; // 2/3 높이
+
+            return Container(
+              height: sheetHeight,
+              decoration: BoxDecoration(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(20),
+                ),
+              ),
+              child: Column(
+                children: [
+                  // 드래그 핸들
+                  Container(
+                    margin: const EdgeInsets.only(top: 12, bottom: 8),
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[400],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  // 헤더
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '${selectedBaselines.length}개 운동 선택됨',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(),
+                  // 캘린더
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: TableCalendar(
+                        firstDay: DateTime.now(),
+                        lastDay: DateTime.now().add(const Duration(days: 365)),
+                        focusedDay: focusedDay,
+                        selectedDayPredicate: (day) =>
+                            selectedDay != null && isSameDay(selectedDay!, day),
+                        locale: 'ko_KR',
+                        calendarFormat: CalendarFormat.month,
+                        startingDayOfWeek: StartingDayOfWeek.monday,
+                        eventLoader: (day) {
+                          final dayDate = DateTime(day.year, day.month, day.day);
+                          final plannedWorkout = plannedWorkoutsByDate[dayDate];
+                          return plannedWorkout != null ? [plannedWorkout] : [];
+                        },
+                        onDaySelected: (selected, focused) {
+                          setSheetState(() {
+                            selectedDay = selected;
+                            focusedDay = focused;
+                          });
+                        },
+                        onPageChanged: (focused) async {
+                          setSheetState(() {
+                            focusedDay = focused;
+                          });
+                          await loadPlannedWorkouts(focused);
+                          setSheetState(() {});
+                        },
+                        calendarStyle: CalendarStyle(
+                          todayDecoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .primary
+                                .withValues(alpha: 0.5),
+                            shape: BoxShape.circle,
+                          ),
+                          selectedDecoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.primary,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        calendarBuilders: CalendarBuilders(
+                          markerBuilder: (context, date, events) {
+                            if (events.isEmpty) return null;
+                            final plannedWorkout =
+                                events.whereType<PlannedWorkout>().firstOrNull;
+                            if (plannedWorkout != null) {
+                              return Container(
+                                width: 6,
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  color: Color(int.parse(plannedWorkout.colorHex)),
+                                  shape: BoxShape.circle,
+                                ),
+                              );
+                            }
+                            return null;
+                          },
+                        ),
+                        headerStyle: const HeaderStyle(
+                          formatButtonVisible: false,
+                          titleCentered: true,
+                        ),
+                      ),
+                    ),
+                  ),
+                  // 하단 버튼 (날짜 선택 시에만 표시)
+                  if (selectedDay != null)
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.1),
+                            blurRadius: 4,
+                            offset: const Offset(0, -2),
+                          ),
+                        ],
+                      ),
+                      child: SafeArea(
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: () async {
+                              // [CRITICAL] 날짜 비교 및 저장 로직
+                              await _planWorkoutForDate(
+                                selectedBaselines,
+                                selectedDay!,
+                              );
+                              if (sheetContext.mounted) {
+                                Navigator.pop(sheetContext);
+                              }
+                            },
+                            icon: const Icon(Icons.calendar_today),
+                            label: Text(
+                              _formatDateLabel(selectedDay!),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              minimumSize: const Size.fromHeight(48),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// 날짜 라벨 포맷 (오늘/내일/특정 날짜)
+  String _formatDateLabel(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final selectedDate = DateTime(date.year, date.month, date.day);
+
+    if (selectedDate == today) {
+      return '오늘 운동하기';
+    } else if (selectedDate == today.add(const Duration(days: 1))) {
+      return '내일 (${date.month}/${date.day}) 운동 계획하기';
+    } else {
+      return '${date.month}/${date.day} 운동 계획하기';
+    }
+  }
+
+  /// [CRITICAL] 운동 계획 저장 로직
+  /// - 오늘: 홈 화면에 메모리 Draft로 추가 (기존 _addToToday 로직)
+  /// - 미래: planned_workouts 테이블에 저장 (addNewExercise 로직 복제)
+  Future<void> _planWorkoutForDate(
+    List<ExerciseBaseline> selectedBaselines,
+    DateTime selectedDate,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final now = DateTime.now();
+    final normalizedToday = DateTime(now.year, now.month, now.day);
+    final normalizedSelected = DateTime(
+      selectedDate.year,
+      selectedDate.month,
+      selectedDate.day,
+    );
+    final isFutureDate = normalizedSelected.isAfter(normalizedToday);
 
     try {
-      final repository = ref.read(workoutRepositoryProvider);
-      final baselines = await repository.getBaselines();
-      final selectedBaselines =
-          baselines.where((b) => _selectedBaselineIds.contains(b.id)).toList();
-
-      final userId = SupabaseService.currentUser?.id;
-      if (userId == null) {
-        throw Exception('로그인이 필요합니다.');
-      }
-
-      final routine = Routine(
-        id: const Uuid().v4(),
-        userId: userId,
-        name: result,
-        createdAt: DateTime.now(),
-      );
-
-      final items = selectedBaselines.asMap().entries.map((entry) {
-        final index = entry.key;
-        final baseline = entry.value;
-        return RoutineItem(
-          id: const Uuid().v4(),
-          routineId: routine.id,
-          exerciseName: baseline.exerciseName,
-          bodyPart: baseline.bodyPart,
-          sortOrder: index,
-          createdAt: DateTime.now(),
+      if (!isFutureDate) {
+        // [Case A: 오늘] - 기존 _addToToday 로직 사용
+        ref.read(homeViewModelProvider.notifier).addFromArchiveOrRoutine(
+          selectedBaselines,
+          routineId: null,
         );
-      }).toList();
 
-      await repository.saveRoutine(routine, items);
-
-      if (mounted) {
-        // 루틴 목록 즉시 갱신 (루틴 관리 탭)
-        ref.invalidate(routinesProvider);
-
+        // 선택 모드 해제
         setState(() {
           _selectedBaselineIds.clear();
           _isSelectionMode = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('루틴이 저장되었습니다.')),
+
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('${selectedBaselines.length}개 운동을 오늘 목록에 추가했습니다.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        // [Case B: 미래 날짜] - planned_workouts 테이블에 저장
+        final repository = ref.read(workoutRepositoryProvider);
+        final userId = SupabaseService.currentUser?.id;
+        if (userId == null) {
+          throw Exception('로그인이 필요합니다.');
+        }
+
+        // 각 선택된 운동에 대해 planned_workout 생성
+        final plannedWorkouts = <PlannedWorkout>[];
+        for (final baseline in selectedBaselines) {
+          // 1. exercise_baseline을 DB에 확보 (ensureExerciseVisible)
+          final persistedBaseline = await repository.ensureExerciseVisible(
+            baseline.exerciseName,
+            baseline.bodyPart?.code ?? 'full',
+            baseline.targetMuscles ?? [],
+          );
+
+          // 2. planned_workout 생성 (Manual Addition: 0kg, 0회, 1세트)
+          final plannedWorkout = PlannedWorkout(
+            id: const Uuid().v4(),
+            userId: userId,
+            baselineId: persistedBaseline.id,
+            scheduledDate: normalizedSelected,
+            targetWeight: 0.0, // Manual: 빈 값
+            targetReps: 0,     // Manual: 빈 값
+            targetSets: 1,     // Manual: 기본 1세트
+            exerciseName: baseline.exerciseName,
+            isCompleted: false,
+            isConvertedToLog: false,
+            colorHex: '0xFF4CAF50', // 녹색 (수동 추가 구분)
+            createdAt: DateTime.now(),
+          );
+
+          plannedWorkouts.add(plannedWorkout);
+        }
+
+        // 3. planned_workouts 테이블에 일괄 저장
+        await repository.savePlannedWorkouts(plannedWorkouts);
+
+        // 4. 캘린더 화면 갱신 트리거
+        ref.read(plannedWorkoutsRefreshProvider.notifier).state++;
+
+        // 선택 모드 해제
+        setState(() {
+          _selectedBaselineIds.clear();
+          _isSelectionMode = false;
+        });
+
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              '${selectedBaselines.length}개 운동이 ${selectedDate.month}월 ${selectedDate.day}일에 계획되었습니다.',
+            ),
+            backgroundColor: Colors.green,
+          ),
         );
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('오류: $e')),
-        );
-      }
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('운동 계획 실패: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -612,6 +814,7 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
                     },
                   ),
                   ),
+                  // [MODIFIED - Task 1] 힌트 텍스트 업데이트
                   if (!_isSelectionMode)
                     Positioned(
                       bottom: 16,
@@ -624,7 +827,7 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: const Text(
-                          '길게 눌러 루틴으로 설정하거나 오늘 운동에 추가하세요.',
+                          '길게 눌러 운동을 선택하고 날짜를 지정하세요.',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 12,
@@ -633,6 +836,8 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
                         ),
                       ),
                     ),
+                  // [MODIFIED - Task 1] 선택 모드 시 하단 버튼
+                  // "루틴으로 저장" 제거, "운동 다시하기" -> 캘린더 시트 오픈
                   if (_isSelectionMode && _selectedBaselineIds.isNotEmpty)
                     Positioned(
                       bottom: 0,
@@ -641,20 +846,20 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
                       child: Container(
                         color: Theme.of(context).colorScheme.surface,
                         padding: const EdgeInsets.all(16),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: [
-                            ElevatedButton.icon(
-                              onPressed: _addToToday,
-                              icon: const Icon(Icons.add),
-                              label: const Text('운동 다시하기'),
+                        child: SafeArea(
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: _showWorkoutPlanSheet,
+                              icon: const Icon(Icons.calendar_today),
+                              label: Text(
+                                '${_selectedBaselineIds.length}개 운동 다시하기',
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                minimumSize: const Size.fromHeight(48),
+                              ),
                             ),
-                            ElevatedButton.icon(
-                              onPressed: _saveAsRoutine,
-                              icon: const Icon(Icons.bookmark_add),
-                              label: const Text('루틴으로 저장'),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                     ),

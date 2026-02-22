@@ -20,6 +20,9 @@ class _ExerciseAddPanelState extends ConsumerState<ExerciseAddPanel> {
   BodyPart? _selectedBodyPart;
   final List<String> _selectedTargetMuscles = [];
 
+  // [NEW] 날짜 선택 상태 변수 (기본값: 오늘)
+  DateTime _selectedDate = DateTime.now();
+
   static const Map<BodyPart, List<String>> _targetMusclesByBodyPart = {
     BodyPart.upper: ['가슴', '등', '어깨', '팔', '복근'],
     BodyPart.lower: ['대퇴사두(앞)', '햄스트링(뒤)', '둔근(힙)'],
@@ -137,6 +140,45 @@ class _ExerciseAddPanelState extends ConsumerState<ExerciseAddPanel> {
                         ),
                       ],
 
+                      const SizedBox(height: 24),
+
+                      // [NEW] 날짜 선택 섹션
+                      const Text(
+                        '운동 날짜',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      InkWell(
+                        onTap: _showDatePicker,
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: Theme.of(context).dividerColor,
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                _formatDate(_selectedDate),
+                                style: const TextStyle(fontSize: 16),
+                              ),
+                              const Icon(Icons.calendar_today, size: 20),
+                            ],
+                          ),
+                        ),
+                      ),
+
                       const SizedBox(height: 32),
 
                       // 저장 버튼
@@ -159,6 +201,43 @@ class _ExerciseAddPanelState extends ConsumerState<ExerciseAddPanel> {
         ),
       ),
     );
+  }
+
+  // [NEW] 날짜 포맷 헬퍼 함수
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final selectedDay = DateTime(date.year, date.month, date.day);
+
+    if (selectedDay == today) {
+      return '오늘 (${date.month}월 ${date.day}일)';
+    } else if (selectedDay == today.add(const Duration(days: 1))) {
+      return '내일 (${date.month}월 ${date.day}일)';
+    } else {
+      return '${date.year}년 ${date.month}월 ${date.day}일';
+    }
+  }
+
+  // [NEW] 날짜 선택 다이얼로그 표시
+  Future<void> _showDatePicker() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: today, // 오늘 이전 날짜 선택 불가
+      lastDate: today.add(const Duration(days: 365)), // 1년 후까지
+      helpText: '운동 날짜 선택',
+      cancelText: '취소',
+      confirmText: '확인',
+    );
+
+    if (pickedDate != null && pickedDate != _selectedDate) {
+      setState(() {
+        _selectedDate = pickedDate;
+      });
+    }
   }
 
   Future<void> _saveNewExercise() async {
@@ -205,15 +284,35 @@ class _ExerciseAddPanelState extends ConsumerState<ExerciseAddPanel> {
       final viewModel = ref.read(homeViewModelProvider.notifier);
       final bodyPartCode = _selectedBodyPart!.code;
 
-      // 3. 메모리 전용 추가 (DB 저장 X, Draft로 추가)
-      viewModel.addNewExercise(
-          exerciseName, bodyPartCode, _selectedTargetMuscles);
+      // [MODIFIED] 비동기 메서드로 변경 - await 추가
+      // 미래 날짜: planned_workouts에 저장
+      // 오늘 날짜: 메모리 Draft로 홈 화면에 추가
+      await viewModel.addNewExercise(
+        exerciseName,
+        bodyPartCode,
+        _selectedTargetMuscles,
+        date: _selectedDate,
+      );
 
       // 4. mounted 체크
       if (!mounted || !context.mounted) return;
 
+      // [NEW] 미래 날짜인 경우 캘린더 갱신 트리거
+      final today = DateTime.now();
+      final normalizedToday = DateTime(today.year, today.month, today.day);
+      final normalizedSelected = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+      if (normalizedSelected.isAfter(normalizedToday)) {
+        // 캘린더 화면에 반영되도록 Provider 갱신
+        ref.read(plannedWorkoutsRefreshProvider.notifier).state++;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${_selectedDate.month}월 ${_selectedDate.day}일에 운동이 예약되었습니다.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+
       // 5. 성공 신호(true)를 전달하며 패널 닫기
-      // loadBaselines()는 호출하지 않음 (Draft 보존)
       Navigator.of(context).pop(true);
     } catch (e) {
       // 실패 시: 스낵바 표시 (패널은 닫지 않음)

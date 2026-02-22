@@ -2366,4 +2366,160 @@ class WorkoutRepository {
       await batchSaveWorkoutSets(workoutSets);
     }
   }
+
+  /// [NEW] 특정 날짜의 계획된 운동을 ExerciseBaseline 형태로 변환하여 반환
+  ///
+  /// [Business Logic]
+  /// - scheduled_date = date AND is_converted_to_log = false 인 항목만 조회
+  /// - Case A (Manual): target_weight == 0 && target_reps == 0 → 빈 세트 1개 생성
+  /// - Case B (AI Plan): target_weight > 0 || target_reps > 0 → target_sets 개수만큼 세트 생성 (값 미리 채움)
+  ///
+  /// 반환: (ExerciseBaseline 리스트, baseline_id -> PlannedWorkout 매핑)
+  Future<(List<ExerciseBaseline>, Map<String, PlannedWorkout>)> getPlannedWorkoutsAsBaselines(
+    DateTime date,
+  ) async {
+    final userId = SupabaseService.currentUser?.id;
+    if (userId == null) throw Exception('로그인 필요');
+
+    final dateStr = DateFormat('yyyy-MM-dd').format(date);
+
+    // 1. planned_workouts 조회 (is_converted_to_log = false)
+    final response = await _client
+        .from('planned_workouts')
+        .select('*, exercise_baselines(*)')
+        .eq('user_id', userId)
+        .eq('scheduled_date', dateStr)
+        .eq('is_converted_to_log', false);
+
+    if (response.isEmpty) {
+      return (<ExerciseBaseline>[], <String, PlannedWorkout>{});
+    }
+
+    final resultBaselines = <ExerciseBaseline>[];
+    final plannedWorkoutMap = <String, PlannedWorkout>{};
+
+    for (final row in response as List) {
+      final rowCopy = Map<String, dynamic>.from(row);
+      final baselineData = rowCopy.remove('exercise_baselines');
+
+      // PlannedWorkout 파싱
+      final plannedWorkout = PlannedWorkout.fromJson(rowCopy);
+
+      // exercise_baselines 데이터가 없으면 스킵
+      if (baselineData == null) continue;
+
+      // ExerciseBaseline 파싱
+      final baseline = ExerciseBaseline.fromJson(baselineData);
+
+      // [Critical] 세트 생성 로직
+      final List<WorkoutSet> syntheticSets = [];
+      final isManualAdd = plannedWorkout.targetWeight == 0 && plannedWorkout.targetReps == 0;
+
+      if (isManualAdd) {
+        // Case A: Manual Addition → 빈 세트 1개
+        syntheticSets.add(WorkoutSet(
+          id: const Uuid().v4(),
+          baselineId: baseline.id,
+          weight: 0.0,
+          reps: 0,
+          sets: 1,
+          isCompleted: false,
+          createdAt: date,
+        ));
+      } else {
+        // Case B: AI Plan → target_sets 개수만큼 세트 생성 (값 미리 채움)
+        final setCount = plannedWorkout.targetSets > 0 ? plannedWorkout.targetSets : 1;
+        for (int i = 0; i < setCount; i++) {
+          syntheticSets.add(WorkoutSet(
+            id: const Uuid().v4(),
+            baselineId: baseline.id,
+            weight: plannedWorkout.targetWeight,
+            reps: plannedWorkout.targetReps,
+            sets: i + 1,
+            isCompleted: false,
+            createdAt: date,
+          ));
+        }
+      }
+
+      // ExerciseBaseline에 synthetic sets 추가
+      final baselineWithSets = baseline.copyWith(
+        workoutSets: syntheticSets,
+        isHiddenFromHome: false, // 홈에 표시
+      );
+
+      resultBaselines.add(baselineWithSets);
+      plannedWorkoutMap[baseline.id] = plannedWorkout;
+    }
+
+    return (resultBaselines, plannedWorkoutMap);
+  }
+
+  /// [NEW] 계획된 운동을 로그로 변환 완료 처리
+  /// WorkoutSet 저장 성공 후 호출하여 is_converted_to_log = true 로 업데이트
+  Future<void> markPlannedWorkoutAsConverted(String plannedWorkoutId) async {
+    final userId = SupabaseService.currentUser?.id;
+    if (userId == null) throw Exception('로그인 필요');
+
+    await _client
+        .from('planned_workouts')
+        .update({'is_converted_to_log': true})
+        .eq('id', plannedWorkoutId)
+        .eq('user_id', userId);
+  }
+
+  /// [Task 2] 운동 이름 변경 (모든 관련 테이블 업데이트)
+  ///
+  /// [CRITICAL] 데이터 무결성을 위해 다음 테이블을 모두 업데이트합니다:
+  /// 1. exercise_baselines - 주 테이블
+  /// 2. planned_workouts - exercise_name 컬럼
+  /// 3. routine_items - exercise_name 컬럼
+  ///
+  /// [oldName]: 기존 운동 이름
+  /// [newName]: 새 운동 이름
+  Future<void> updateExerciseName(String oldName, String newName) async {
+    final userId = SupabaseService.currentUser?.id;
+    if (userId == null) throw Exception('로그인 필요');
+
+    final trimmedNewName = newName.trim();
+    if (trimmedNewName.isEmpty) {
+      throw Exception('운동 이름은 비어있을 수 없습니다.');
+    }
+
+    // 1. exercise_baselines 테이블 업데이트 (주 테이블)
+    await _client
+        .from('exercise_baselines')
+        .update({
+          'exercise_name': trimmedNewName,
+          'updated_at': DateTime.now().toIso8601String(),
+        })
+        .eq('user_id', userId)
+        .eq('exercise_name', oldName);
+
+    // 2. planned_workouts 테이블 업데이트 (exercise_name 컬럼)
+    await _client
+        .from('planned_workouts')
+        .update({'exercise_name': trimmedNewName})
+        .eq('user_id', userId)
+        .eq('exercise_name', oldName);
+
+    // 3. routine_items 테이블 업데이트 (exercise_name 컬럼)
+    // routine_items는 user_id가 없으므로, 해당 사용자의 routines를 먼저 조회
+    final routinesResponse = await _client
+        .from('routines')
+        .select('id')
+        .eq('user_id', userId);
+
+    final routineIds = (routinesResponse as List)
+        .map((r) => r['id'] as String)
+        .toList();
+
+    if (routineIds.isNotEmpty) {
+      await _client
+          .from('routine_items')
+          .update({'exercise_name': trimmedNewName})
+          .inFilter('routine_id', routineIds)
+          .eq('exercise_name', oldName);
+    }
+  }
 }

@@ -1,13 +1,16 @@
 name: musclelog
 description: AI Progressive Overload Coaching App
 publish_to: "none"
-version: 1.0.0+8
+version: 1.0.0+9
 
 environment:
   sdk: ">=3.2.0 <4.0.0"
 
 dependencies:
   flutter:
+    sdk: flutter
+  # [NEW] 한국어 Material UI 로컬라이제이션
+  flutter_localizations:
     sdk: flutter
 
   # 1. 상태 관리 & 아키텍처
@@ -33,7 +36,7 @@ dependencies:
   google_sign_in: ^6.2.1
 
   # 6. 유틸리티
-  intl: ^0.18.0 # 날짜 포맷
+  intl: ^0.20.2 # 날짜 포맷 (flutter_localizations 호환)
   uuid: ^4.3.3 # 고유 ID 생성
   path: ^1.9.0 # 경로 관리
   # image: ^4.1.3 # 이미지 처리 (ML Kit용) - [AI Pivot] 잠정 중단

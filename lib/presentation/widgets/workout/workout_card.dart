@@ -33,10 +33,13 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
     with AutomaticKeepAliveClientMixin {
   final Map<String, TextEditingController> _controllers = {};
   final Map<String, WorkoutSet> _sets = {};
-  
+
   // [추가] FocusNode 관리 (세트별 무게/횟수)
   final Map<String, FocusNode> _weightFocusNodes = {};
   final Map<String, FocusNode> _repsFocusNodes = {};
+
+  // [NEW - Requirement 4] 저장 완료 상태 추적
+  bool _isSavedAndCompleted = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -453,6 +456,11 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
         const SnackBar(content: Text('기록이 저장되었습니다.')),
       );
 
+      // [NEW - Requirement 4] 저장 완료 상태로 전환 (UI 변경)
+      setState(() {
+        _isSavedAndCompleted = true;
+      });
+
       // 부분 업데이트: 저장 반영된 baseline으로 해당 카드만 교체 (전체 새로고침 없음)
       final fullBaseline =
           await repository.getBaselineById(persistedBaseline.id);
@@ -563,6 +571,79 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
   Widget build(BuildContext context) {
     super.build(context); // AutomaticKeepAliveClientMixin 필수
 
+    // [NEW - Requirement 4] 저장 완료 상태인 경우 간소화된 UI 표시
+    if (_isSavedAndCompleted) {
+      return _buildCompletedCard(context);
+    }
+
+    // [기존] 입력 모드 UI
+    return _buildInputCard(context);
+  }
+
+  /// [NEW - Requirement 4] 저장 완료 후 표시되는 간소화된 카드 UI
+  Widget _buildCompletedCard(BuildContext context) {
+    // 저장된 세트 요약 계산
+    final totalSets = _sets.length;
+    double totalVolume = 0.0;
+    for (final set in _sets.values) {
+      totalVolume += set.weight * set.reps;
+    }
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.green, size: 24),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    widget.baseline.exerciseName,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // 세트 요약 정보
+            Text(
+              '$totalSets세트 완료 · 총 볼륨 ${totalVolume.toStringAsFixed(1)}kg',
+              style: TextStyle(
+                fontSize: 14,
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+              ),
+            ),
+            const SizedBox(height: 12),
+            // 기록 보기 버튼
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  // TODO: 운동 분석/기록 화면으로 이동
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('기록 보기 기능은 프로필 > 캘린더에서 확인하세요.')),
+                  );
+                },
+                icon: const Icon(Icons.history),
+                label: const Text('기록 보기'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// [기존] 입력 모드 카드 UI
+  Widget _buildInputCard(BuildContext context) {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: Padding(

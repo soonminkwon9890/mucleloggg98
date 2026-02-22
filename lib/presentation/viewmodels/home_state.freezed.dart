@@ -22,7 +22,11 @@ mixin _$HomeState {
   double get totalVolume => throw _privateConstructorUsedError;
   String get mainFocusArea => throw _privateConstructorUsedError;
   bool get isLoading => throw _privateConstructorUsedError;
-  String? get errorMessage => throw _privateConstructorUsedError;
+  String? get errorMessage =>
+      throw _privateConstructorUsedError; // [NEW] 계획된 운동 추적용 (baseline_id -> PlannedWorkout 매핑)
+// 저장 시 is_converted_to_log 업데이트에 사용
+  Map<String, PlannedWorkout> get plannedWorkoutMap =>
+      throw _privateConstructorUsedError;
 
   /// Create a copy of HomeState
   /// with the given fields replaced by the non-null parameter values.
@@ -42,7 +46,8 @@ abstract class $HomeStateCopyWith<$Res> {
       double totalVolume,
       String mainFocusArea,
       bool isLoading,
-      String? errorMessage});
+      String? errorMessage,
+      Map<String, PlannedWorkout> plannedWorkoutMap});
 }
 
 /// @nodoc
@@ -66,6 +71,7 @@ class _$HomeStateCopyWithImpl<$Res, $Val extends HomeState>
     Object? mainFocusArea = null,
     Object? isLoading = null,
     Object? errorMessage = freezed,
+    Object? plannedWorkoutMap = null,
   }) {
     return _then(_value.copyWith(
       baselines: null == baselines
@@ -92,6 +98,10 @@ class _$HomeStateCopyWithImpl<$Res, $Val extends HomeState>
           ? _value.errorMessage
           : errorMessage // ignore: cast_nullable_to_non_nullable
               as String?,
+      plannedWorkoutMap: null == plannedWorkoutMap
+          ? _value.plannedWorkoutMap
+          : plannedWorkoutMap // ignore: cast_nullable_to_non_nullable
+              as Map<String, PlannedWorkout>,
     ) as $Val);
   }
 }
@@ -110,7 +120,8 @@ abstract class _$$HomeStateImplCopyWith<$Res>
       double totalVolume,
       String mainFocusArea,
       bool isLoading,
-      String? errorMessage});
+      String? errorMessage,
+      Map<String, PlannedWorkout> plannedWorkoutMap});
 }
 
 /// @nodoc
@@ -132,6 +143,7 @@ class __$$HomeStateImplCopyWithImpl<$Res>
     Object? mainFocusArea = null,
     Object? isLoading = null,
     Object? errorMessage = freezed,
+    Object? plannedWorkoutMap = null,
   }) {
     return _then(_$HomeStateImpl(
       baselines: null == baselines
@@ -158,6 +170,10 @@ class __$$HomeStateImplCopyWithImpl<$Res>
           ? _value.errorMessage
           : errorMessage // ignore: cast_nullable_to_non_nullable
               as String?,
+      plannedWorkoutMap: null == plannedWorkoutMap
+          ? _value._plannedWorkoutMap
+          : plannedWorkoutMap // ignore: cast_nullable_to_non_nullable
+              as Map<String, PlannedWorkout>,
     ));
   }
 }
@@ -171,9 +187,11 @@ class _$HomeStateImpl implements _HomeState {
       this.totalVolume = 0.0,
       this.mainFocusArea = '기록 없음',
       this.isLoading = false,
-      this.errorMessage})
+      this.errorMessage,
+      final Map<String, PlannedWorkout> plannedWorkoutMap = const {}})
       : _baselines = baselines,
-        _groupedWorkouts = groupedWorkouts;
+        _groupedWorkouts = groupedWorkouts,
+        _plannedWorkoutMap = plannedWorkoutMap;
 
   final List<ExerciseBaseline> _baselines;
   @override
@@ -204,10 +222,23 @@ class _$HomeStateImpl implements _HomeState {
   final bool isLoading;
   @override
   final String? errorMessage;
+// [NEW] 계획된 운동 추적용 (baseline_id -> PlannedWorkout 매핑)
+// 저장 시 is_converted_to_log 업데이트에 사용
+  final Map<String, PlannedWorkout> _plannedWorkoutMap;
+// [NEW] 계획된 운동 추적용 (baseline_id -> PlannedWorkout 매핑)
+// 저장 시 is_converted_to_log 업데이트에 사용
+  @override
+  @JsonKey()
+  Map<String, PlannedWorkout> get plannedWorkoutMap {
+    if (_plannedWorkoutMap is EqualUnmodifiableMapView)
+      return _plannedWorkoutMap;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableMapView(_plannedWorkoutMap);
+  }
 
   @override
   String toString() {
-    return 'HomeState(baselines: $baselines, groupedWorkouts: $groupedWorkouts, totalVolume: $totalVolume, mainFocusArea: $mainFocusArea, isLoading: $isLoading, errorMessage: $errorMessage)';
+    return 'HomeState(baselines: $baselines, groupedWorkouts: $groupedWorkouts, totalVolume: $totalVolume, mainFocusArea: $mainFocusArea, isLoading: $isLoading, errorMessage: $errorMessage, plannedWorkoutMap: $plannedWorkoutMap)';
   }
 
   @override
@@ -226,7 +257,9 @@ class _$HomeStateImpl implements _HomeState {
             (identical(other.isLoading, isLoading) ||
                 other.isLoading == isLoading) &&
             (identical(other.errorMessage, errorMessage) ||
-                other.errorMessage == errorMessage));
+                other.errorMessage == errorMessage) &&
+            const DeepCollectionEquality()
+                .equals(other._plannedWorkoutMap, _plannedWorkoutMap));
   }
 
   @override
@@ -237,7 +270,8 @@ class _$HomeStateImpl implements _HomeState {
       totalVolume,
       mainFocusArea,
       isLoading,
-      errorMessage);
+      errorMessage,
+      const DeepCollectionEquality().hash(_plannedWorkoutMap));
 
   /// Create a copy of HomeState
   /// with the given fields replaced by the non-null parameter values.
@@ -255,7 +289,8 @@ abstract class _HomeState implements HomeState {
       final double totalVolume,
       final String mainFocusArea,
       final bool isLoading,
-      final String? errorMessage}) = _$HomeStateImpl;
+      final String? errorMessage,
+      final Map<String, PlannedWorkout> plannedWorkoutMap}) = _$HomeStateImpl;
 
   @override
   List<ExerciseBaseline> get baselines;
@@ -268,7 +303,11 @@ abstract class _HomeState implements HomeState {
   @override
   bool get isLoading;
   @override
-  String? get errorMessage;
+  String?
+      get errorMessage; // [NEW] 계획된 운동 추적용 (baseline_id -> PlannedWorkout 매핑)
+// 저장 시 is_converted_to_log 업데이트에 사용
+  @override
+  Map<String, PlannedWorkout> get plannedWorkoutMap;
 
   /// Create a copy of HomeState
   /// with the given fields replaced by the non-null parameter values.
