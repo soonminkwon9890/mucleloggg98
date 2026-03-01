@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import '../../providers/subscription_provider.dart';
 import '../../providers/workout_provider.dart';
 import '../workout/workout_analysis_screen.dart';
+import 'routine_detail_screen.dart'; // [Phase 3]
 import '../../../data/models/exercise_baseline.dart';
 import '../../../data/models/planned_workout.dart';
 import '../../../utils/premium_guidance_dialog.dart';
@@ -74,7 +75,7 @@ class _ExerciseLibraryTab extends ConsumerStatefulWidget {
 }
 
 class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   BodyPart _selectedBodyPart = BodyPart.upper;
   final Set<String> _selectedBaselineIds = {};
   final Set<String> _expandedBaselineIds = {}; // 펼쳐진 운동 종목 추적
@@ -82,6 +83,11 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
   late TabController _tabController;
   // 더보기 상태 관리 (운동별로 관리)
   final Map<String, bool> _showAllDates = {};
+
+  // [Nudge Animation] 첫 번째 아이템 더블 바운스 힌트용
+  late final AnimationController _nudgeController;
+  late final Animation<double> _nudgeAnimation;
+  bool _hasNudged = false;
 
   @override
   void initState() {
@@ -98,12 +104,61 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
         });
       }
     });
+
+    // [Nudge Animation] 500ms 동안 더블 바운스 애니메이션
+    _nudgeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
+
+    // TweenSequence: 왼쪽으로 갔다가 돌아오고, 다시 왼쪽으로 갔다가 돌아옴
+    _nudgeAnimation = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween(begin: 0.0, end: -20.0)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 25,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: -20.0, end: 0.0)
+            .chain(CurveTween(curve: Curves.easeIn)),
+        weight: 25,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 0.0, end: -20.0)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 25,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: -20.0, end: 0.0)
+            .chain(CurveTween(curve: Curves.easeIn)),
+        weight: 25,
+      ),
+    ]).animate(_nudgeController);
+
+    // 화면 렌더링 후 애니메이션 트리거
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _triggerNudgeAnimation();
+    });
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _nudgeController.dispose();
     super.dispose();
+  }
+
+  /// [Nudge Animation] 첫 번째 운동 아이템 더블 바운스 애니메이션
+  Future<void> _triggerNudgeAnimation() async {
+    if (_hasNudged) return;
+
+    // 데이터 로딩 및 렌더링 완료 대기
+    await Future.delayed(const Duration(milliseconds: 300));
+
+    if (!mounted) return;
+
+    _nudgeController.forward();
+    _hasNudged = true;
   }
 
   List<ExerciseBaseline> _filterBaselines(List<ExerciseBaseline> baselines) {
@@ -608,7 +663,7 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
                           ? targetMusclesText
                           : '$bodyPartLabel · $targetMusclesText';
 
-                      return Slidable(
+                      final slidableWidget = Slidable(
                         key: ValueKey(baseline.id),
                         endActionPane: ActionPane(
                           motion: const ScrollMotion(),
@@ -811,6 +866,21 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
                               ),
                         ),
                       );
+
+                      // [Nudge Animation] 첫 번째 아이템에 더블 바운스 애니메이션 적용
+                      if (index == 0) {
+                        return AnimatedBuilder(
+                          animation: _nudgeAnimation,
+                          builder: (context, child) {
+                            return Transform.translate(
+                              offset: Offset(_nudgeAnimation.value, 0),
+                              child: child,
+                            );
+                          },
+                          child: slidableWidget,
+                        );
+                      }
+                      return slidableWidget;
                     },
                   ),
                   ),
@@ -885,7 +955,72 @@ class _RoutinesTab extends ConsumerStatefulWidget {
   ConsumerState<_RoutinesTab> createState() => _RoutinesTabState();
 }
 
-class _RoutinesTabState extends ConsumerState<_RoutinesTab> {
+class _RoutinesTabState extends ConsumerState<_RoutinesTab>
+    with SingleTickerProviderStateMixin {
+  // [Nudge Animation] 첫 번째 아이템 더블 바운스 힌트용
+  late final AnimationController _nudgeController;
+  late final Animation<double> _nudgeAnimation;
+  bool _hasNudged = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // [Nudge Animation] 500ms 동안 더블 바운스 애니메이션
+    _nudgeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
+
+    // TweenSequence: 왼쪽으로 갔다가 돌아오고, 다시 왼쪽으로 갔다가 돌아옴
+    _nudgeAnimation = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween(begin: 0.0, end: -20.0)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 25,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: -20.0, end: 0.0)
+            .chain(CurveTween(curve: Curves.easeIn)),
+        weight: 25,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 0.0, end: -20.0)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 25,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: -20.0, end: 0.0)
+            .chain(CurveTween(curve: Curves.easeIn)),
+        weight: 25,
+      ),
+    ]).animate(_nudgeController);
+
+    // 화면 렌더링 후 애니메이션 트리거
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _triggerNudgeAnimation();
+    });
+  }
+
+  @override
+  void dispose() {
+    _nudgeController.dispose();
+    super.dispose();
+  }
+
+  /// [Nudge Animation] 첫 번째 루틴 아이템 더블 바운스 애니메이션
+  Future<void> _triggerNudgeAnimation() async {
+    if (_hasNudged) return;
+
+    // 데이터 로딩 및 렌더링 완료 대기
+    await Future.delayed(const Duration(milliseconds: 300));
+
+    if (!mounted) return;
+
+    _nudgeController.forward();
+    _hasNudged = true;
+  }
+
   /// 루틴 생성 모달 표시
   Future<void> _showCreateRoutineModal(BuildContext context) async {
     final selectedBaselineIds = <String>{};
@@ -1185,24 +1320,82 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab> {
                   ? const Center(
                       child: Text('저장된 루틴이 없습니다'),
                     )
-                  : ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: routines.length,
-                      itemBuilder: (context, index) {
-                        final routine = routines[index];
-                        return Card(
-                          child: ListTile(
-                            title: Text(routine.name),
-                            subtitle: Text(
-                              '${routine.routineItems?.length ?? 0}개 운동',
+                  // [Phase 2] SlidableAutoCloseBehavior로 감싸서 다른 Slidable 열 때 자동 닫힘
+                  : SlidableAutoCloseBehavior(
+                      child: ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: routines.length,
+                        itemBuilder: (context, index) {
+                          final routine = routines[index];
+                          // [Phase 2] Slidable + InkWell로 변경
+                          final slidableWidget = Slidable(
+                            key: ValueKey('routine_${routine.id}'),
+                            // [Phase 1 Fix] 왼쪽 스와이프 시 2개 버튼 표시
+                            // extentRatio 0.5 → 0.6으로 증가 (한글 텍스트 오버플로우 방지)
+                            endActionPane: ActionPane(
+                              motion: const ScrollMotion(),
+                              extentRatio: 0.6,
+                              children: [
+                                // "저장된 운동" 버튼 (Phase 3에서 Detail 페이지로 이동)
+                                SlidableAction(
+                                  onPressed: (_) => _navigateToRoutineDetail(routine),
+                                  backgroundColor: Colors.blue,
+                                  foregroundColor: Colors.white,
+                                  icon: Icons.list_alt,
+                                  label: '저장된 운동',
+                                  spacing: 4, // 아이콘과 텍스트 간격 조정
+                                ),
+                                // "루틴 삭제" 버튼
+                                SlidableAction(
+                                  onPressed: (_) => _deleteRoutine(routine),
+                                  backgroundColor: Colors.red,
+                                  foregroundColor: Colors.white,
+                                  icon: Icons.delete,
+                                  label: '루틴 삭제',
+                                  spacing: 4,
+                                ),
+                              ],
                             ),
-                            trailing: const Icon(Icons.arrow_forward_ios),
-                            onTap: () {
-                              _showRoutineActionSheet(context, routine);
-                            },
-                          ),
-                        );
-                      },
+                            // [Phase 1 Fix] Long-Press 시각적 피드백 추가
+                            // GestureDetector → Material + InkWell로 변경 (ripple 효과)
+                            child: Card(
+                              clipBehavior: Clip.antiAlias,
+                              child: InkWell(
+                                onLongPress: () => _showRoutinePlanSheet(routine),
+                                borderRadius: BorderRadius.circular(12),
+                                child: ListTile(
+                                  title: Text(routine.name),
+                                  subtitle: Text(
+                                    '${routine.routineItems?.length ?? 0}개 운동 · 길게 눌러 운동 시작',
+                                  ),
+                                  // 스와이프 힌트 아이콘
+                                  trailing: const Icon(
+                                    Icons.chevron_left,
+                                    color: Colors.grey,
+                                    size: 20,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+
+                          // [Nudge Animation] 첫 번째 아이템만 더블 바운스 애니메이션 적용
+                          if (index == 0) {
+                            return AnimatedBuilder(
+                              animation: _nudgeAnimation,
+                              builder: (context, child) {
+                                return Transform.translate(
+                                  offset: Offset(_nudgeAnimation.value, 0),
+                                  child: child,
+                                );
+                              },
+                              child: slidableWidget,
+                            );
+                          }
+
+                          return slidableWidget;
+                        },
+                      ),
                     ),
             ),
           ],
@@ -1215,199 +1408,313 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab> {
     );
   }
 
-  /// 루틴 액션 Bottom Sheet 표시
-  void _showRoutineActionSheet(BuildContext context, Routine routine) {
-    showModalBottomSheet(
+  /// [Phase 3] 루틴 상세 페이지로 이동
+  void _navigateToRoutineDetail(Routine routine) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => RoutineDetailScreen(routine: routine),
+      ),
+    );
+  }
+
+  /// [Phase 2] 루틴 계획 캘린더 시트 표시 (Long-Press 시 호출)
+  Future<void> _showRoutinePlanSheet(Routine routine) async {
+    if (routine.routineItems == null || routine.routineItems!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('루틴에 운동이 없습니다.')),
+      );
+      return;
+    }
+
+    // 캘린더 상태 관리
+    DateTime focusedDay = DateTime.now();
+    DateTime? selectedDay;
+    Map<DateTime, PlannedWorkout> plannedWorkoutsByDate = {};
+
+    // Planned workouts 로드 함수
+    Future<void> loadPlannedWorkouts(DateTime month) async {
+      try {
+        final repository = ref.read(workoutRepositoryProvider);
+        final startDate = DateTime(month.year, month.month, 1);
+        final endDate = DateTime(month.year, month.month + 1, 0);
+
+        final plannedWorkouts = await repository.getPlannedWorkoutsByDateRange(
+          startDate,
+          endDate,
+        );
+
+        plannedWorkoutsByDate = {};
+        for (final workout in plannedWorkouts) {
+          if (workout.isConvertedToLog) continue;
+          final dateKey = DateTime(
+            workout.scheduledDate.year,
+            workout.scheduledDate.month,
+            workout.scheduledDate.day,
+          );
+          plannedWorkoutsByDate.putIfAbsent(dateKey, () => workout);
+        }
+      } catch (e) {
+        plannedWorkoutsByDate = {};
+      }
+    }
+
+    // 초기 로드
+    await loadPlannedWorkouts(focusedDay);
+
+    if (!mounted) return;
+
+    // BottomSheet 표시
+    await showModalBottomSheet(
       context: context,
-      builder: (context) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.add),
-                title: const Text('운동 추가하기'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _showAddExercisesToRoutineFlow(routine);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.play_arrow),
-                title: const Text('운동 시작하기'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _startRoutine(routine);
-                },
-              ),
-              // [추가] 구분선
-              const Divider(),
-              // [추가] 루틴 삭제 옵션 (빨간색)
-              ListTile(
-                leading: const Icon(Icons.delete, color: Colors.red),
-                title: const Text(
-                  '루틴 삭제',
-                  style: TextStyle(color: Colors.red),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final screenHeight = MediaQuery.of(context).size.height;
+            final sheetHeight = screenHeight * 2 / 3;
+
+            return Container(
+              height: sheetHeight,
+              decoration: BoxDecoration(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(20),
                 ),
-                onTap: () {
-                  Navigator.pop(context);
-                  _deleteRoutine(routine);
-                },
               ),
-            ],
-          ),
+              child: Column(
+                children: [
+                  // 드래그 핸들
+                  Container(
+                    margin: const EdgeInsets.only(top: 12, bottom: 8),
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[400],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  // 헤더
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              routine.name,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              '${routine.routineItems!.length}개 운동 · 운동할 날짜를 선택하세요',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ],
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(),
+                  // 캘린더
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: TableCalendar(
+                        firstDay: DateTime.now(),
+                        lastDay: DateTime.now().add(const Duration(days: 365)),
+                        focusedDay: focusedDay,
+                        selectedDayPredicate: (day) =>
+                            selectedDay != null && isSameDay(selectedDay!, day),
+                        locale: 'ko_KR',
+                        calendarFormat: CalendarFormat.month,
+                        startingDayOfWeek: StartingDayOfWeek.monday,
+                        eventLoader: (day) {
+                          final dayDate = DateTime(day.year, day.month, day.day);
+                          final plannedWorkout = plannedWorkoutsByDate[dayDate];
+                          return plannedWorkout != null ? [plannedWorkout] : [];
+                        },
+                        onDaySelected: (selected, focused) {
+                          setSheetState(() {
+                            selectedDay = selected;
+                            focusedDay = focused;
+                          });
+                        },
+                        onPageChanged: (focused) async {
+                          setSheetState(() {
+                            focusedDay = focused;
+                          });
+                          await loadPlannedWorkouts(focused);
+                          setSheetState(() {});
+                        },
+                        calendarStyle: CalendarStyle(
+                          todayDecoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .primary
+                                .withValues(alpha: 0.5),
+                            shape: BoxShape.circle,
+                          ),
+                          selectedDecoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.primary,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        calendarBuilders: CalendarBuilders(
+                          markerBuilder: (context, date, events) {
+                            if (events.isEmpty) return null;
+                            final plannedWorkout =
+                                events.whereType<PlannedWorkout>().firstOrNull;
+                            if (plannedWorkout != null) {
+                              return Container(
+                                width: 6,
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  color: Color(int.parse(plannedWorkout.colorHex)),
+                                  shape: BoxShape.circle,
+                                ),
+                              );
+                            }
+                            return null;
+                          },
+                        ),
+                        headerStyle: const HeaderStyle(
+                          formatButtonVisible: false,
+                          titleCentered: true,
+                        ),
+                      ),
+                    ),
+                  ),
+                  // 하단 버튼 (날짜 선택 시에만 표시)
+                  if (selectedDay != null)
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.1),
+                            blurRadius: 4,
+                            offset: const Offset(0, -2),
+                          ),
+                        ],
+                      ),
+                      child: SafeArea(
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: () async {
+                              await _planRoutineForDate(routine, selectedDay!);
+                              if (sheetContext.mounted) {
+                                Navigator.pop(sheetContext);
+                              }
+                            },
+                            icon: const Icon(Icons.check),
+                            label: Text(
+                              isSameDay(selectedDay!, DateTime.now())
+                                  ? '오늘 운동 시작하기'
+                                  : '${selectedDay!.month}월 ${selectedDay!.day}일에 계획하기',
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
         );
       },
     );
   }
 
-  /// 루틴에 운동 추가 플로우
-  Future<void> _showAddExercisesToRoutineFlow(Routine routine) async {
+  /// [Phase 2] 선택한 날짜에 루틴의 모든 운동 계획/시작
+  Future<void> _planRoutineForDate(Routine routine, DateTime selectedDate) async {
     final messenger = ScaffoldMessenger.of(context);
-    final selectedBaselineIds = <String>{};
-    String selectedBodyPart = '상체';
-
-    // 운동 선택 모달 표시
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) {
-          return SizedBox(
-            height: MediaQuery.of(context).size.height * 0.8,
-            child: Column(
-              children: [
-                // 헤더
-                AppBar(
-                  title: const Text('운동 선택'),
-                  automaticallyImplyLeading: false,
-                  actions: [
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                      },
-                      child: const Text('완료'),
-                    ),
-                  ],
-                ),
-                // 필터 칩
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Wrap(
-                    spacing: 8,
-                    children: ['상체', '하체', '전신'].map((part) {
-                      return FilterChip(
-                        label: Text(part),
-                        selected: selectedBodyPart == part,
-                        onSelected: (selected) {
-                          if (selected) {
-                            setModalState(() {
-                              selectedBodyPart = part;
-                            });
-                          }
-                        },
-                      );
-                    }).toList(),
-                  ),
-                ),
-                // 운동 목록
-                Expanded(
-                  child: Consumer(
-                    builder: (context, ref, child) {
-                      final baselinesAsync = ref.watch(archivedBaselinesProvider);
-                      return baselinesAsync.when(
-                        data: (baselines) {
-                          final selectedBodyPartEnum = BodyPartParsing.fromKorean(selectedBodyPart);
-                          final filtered = baselines.where((baseline) {
-                            return baseline.bodyPart == selectedBodyPartEnum;
-                          }).toList();
-
-                          if (filtered.isEmpty) {
-                            return const Center(
-                              child: Text('해당 부위의 운동이 없습니다'),
-                            );
-                          }
-
-                          return ListView.builder(
-                            padding: const EdgeInsets.all(16),
-                            itemCount: filtered.length,
-                            itemBuilder: (context, index) {
-                              final baseline = filtered[index];
-                              final isSelected =
-                                  selectedBaselineIds.contains(baseline.id);
-
-                              return CheckboxListTile(
-                                value: isSelected,
-                                onChanged: (value) {
-                                  setModalState(() {
-                                    if (value == true) {
-                                      selectedBaselineIds.add(baseline.id);
-                                    } else {
-                                      selectedBaselineIds.remove(baseline.id);
-                                    }
-                                  });
-                                },
-                                title: Text(baseline.exerciseName),
-                                subtitle: Text(
-                                  ((baseline.targetMuscles != null &&
-                                              baseline.targetMuscles!
-                                                  .isNotEmpty)
-                                          ? baseline.targetMuscles!.join(', ')
-                                          : '부위 미설정')
-                                      .toString(),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              );
-                            },
-                          );
-                        },
-                        loading: () =>
-                            const Center(child: CircularProgressIndicator()),
-                        error: (error, stack) => Center(
-                          child: Text('오류: $error'),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
+    final navigator = Navigator.of(context);
+    final now = DateTime.now();
+    final normalizedToday = DateTime(now.year, now.month, now.day);
+    final normalizedSelected = DateTime(
+      selectedDate.year,
+      selectedDate.month,
+      selectedDate.day,
     );
+    final isFutureDate = normalizedSelected.isAfter(normalizedToday);
 
-    // 선택된 운동이 없으면 종료
-    if (selectedBaselineIds.isEmpty) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('선택된 운동이 없습니다.')),
-      );
-      return;
-    }
-
-    // Repository를 통해 루틴에 운동 추가
     try {
-      final repository = ref.read(workoutRepositoryProvider);
-      await repository.addExercisesToRoutine(
-        routine.id,
-        selectedBaselineIds.toList(),
-      );
+      if (!isFutureDate) {
+        // [Case A: 오늘] - 기존 _startRoutine 로직 재사용
+        _startRoutine(routine);
+      } else {
+        // [Case B: 미래 날짜] - planned_workouts 테이블에 저장
+        final repository = ref.read(workoutRepositoryProvider);
+        final userId = SupabaseService.currentUser?.id;
+        if (userId == null) {
+          throw Exception('로그인이 필요합니다.');
+        }
 
-      // [Fix] async gap 후 mounted 체크 필수
-      if (!mounted) return;
+        // 각 루틴 운동에 대해 planned_workout 생성
+        final plannedWorkouts = <PlannedWorkout>[];
+        for (final item in routine.routineItems!) {
+          // 1. exercise_baseline을 DB에 확보
+          final persistedBaseline = await repository.ensureExerciseVisible(
+            item.exerciseName,
+            item.bodyPart?.code ?? 'full',
+            [], // RoutineItem에는 targetMuscles가 없음
+          );
 
-      // Provider 갱신
-      ref.invalidate(routinesProvider);
+          // 2. planned_workout 생성 (Manual Addition)
+          final plannedWorkout = PlannedWorkout(
+            id: const Uuid().v4(),
+            userId: userId,
+            baselineId: persistedBaseline.id,
+            scheduledDate: normalizedSelected,
+            targetWeight: 0.0,
+            targetReps: 0,
+            targetSets: 1,
+            exerciseName: item.exerciseName,
+            isCompleted: false,
+            isConvertedToLog: false,
+            colorHex: '0xFF9C27B0', // 보라색 (루틴 계획 구분)
+            createdAt: DateTime.now(),
+          );
 
+          plannedWorkouts.add(plannedWorkout);
+        }
+
+        // 3. planned_workouts 테이블에 일괄 저장
+        await repository.savePlannedWorkouts(plannedWorkouts);
+
+        // 4. 캘린더 화면 갱신 트리거
+        ref.read(plannedWorkoutsRefreshProvider.notifier).state++;
+
+        navigator.popUntil((route) => route.isFirst);
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              '${routine.name} 루틴이 ${selectedDate.month}월 ${selectedDate.day}일에 계획되었습니다.',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-            content: Text('${selectedBaselineIds.length}개 운동이 루틴에 추가되었습니다.')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(content: Text('운동 추가 오류: $e')),
+          content: Text('운동 계획 실패: $e'),
+          backgroundColor: Colors.red,
+        ),
       );
     }
   }

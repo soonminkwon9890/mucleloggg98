@@ -38,8 +38,8 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
   final Map<String, FocusNode> _weightFocusNodes = {};
   final Map<String, FocusNode> _repsFocusNodes = {};
 
-  // [NEW - Requirement 4] 저장 완료 상태 추적
-  bool _isSavedAndCompleted = false;
+  // [Phase 2] 저장 완료 상태 추적 (입력 필드는 유지)
+  bool _hasSaved = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -443,7 +443,8 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
       if (!mounted) return;
 
       // 2. 상태 갱신 (순서 중요)
-      ref.invalidate(baselinesProvider); // 홈 화면 갱신
+      // [Phase 3] baselinesProvider 갱신 제거 - 전체 새로고침 시 카드 순서가 변경됨
+      // 대신 widget.onUpdated를 통해 해당 카드만 부분 업데이트하여 순서 유지
       ref.invalidate(workoutDatesProvider); // 캘린더 갱신
 
       // [핵심] 보관함 데이터 즉시 리로드 & 대기 (refresh 사용)
@@ -456,9 +457,9 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
         const SnackBar(content: Text('기록이 저장되었습니다.')),
       );
 
-      // [NEW - Requirement 4] 저장 완료 상태로 전환 (UI 변경)
+      // [Phase 2] 저장 완료 상태로 전환 (입력 필드는 유지)
       setState(() {
-        _isSavedAndCompleted = true;
+        _hasSaved = true;
       });
 
       // 부분 업데이트: 저장 반영된 baseline으로 해당 카드만 교체 (전체 새로고침 없음)
@@ -571,81 +572,18 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
   Widget build(BuildContext context) {
     super.build(context); // AutomaticKeepAliveClientMixin 필수
 
-    // [NEW - Requirement 4] 저장 완료 상태인 경우 간소화된 UI 표시
-    if (_isSavedAndCompleted) {
-      return _buildCompletedCard(context);
-    }
-
-    // [기존] 입력 모드 UI
+    // [Phase 2] 항상 입력 카드 표시 (저장 후에도 입력 필드 유지)
     return _buildInputCard(context);
   }
 
-  /// [NEW - Requirement 4] 저장 완료 후 표시되는 간소화된 카드 UI
-  Widget _buildCompletedCard(BuildContext context) {
-    // 저장된 세트 요약 계산
-    final totalSets = _sets.length;
-    double totalVolume = 0.0;
-    for (final set in _sets.values) {
-      totalVolume += set.weight * set.reps;
-    }
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.check_circle, color: Colors.green, size: 24),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    widget.baseline.exerciseName,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            // 세트 요약 정보
-            Text(
-              '$totalSets세트 완료 · 총 볼륨 ${totalVolume.toStringAsFixed(1)}kg',
-              style: TextStyle(
-                fontSize: 14,
-                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-              ),
-            ),
-            const SizedBox(height: 12),
-            // 기록 보기 버튼
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  // TODO: 운동 분석/기록 화면으로 이동
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('기록 보기 기능은 프로필 > 캘린더에서 확인하세요.')),
-                  );
-                },
-                icon: const Icon(Icons.history),
-                label: const Text('기록 보기'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// [기존] 입력 모드 카드 UI
+  /// [Phase 2] 입력 카드 UI (저장 후에도 입력 필드 유지)
   Widget _buildInputCard(BuildContext context) {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
+      // [Phase 2] 저장 완료 시 배경색 변경
+      color: _hasSaved
+          ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.1)
+          : null,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -653,6 +591,11 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
           children: [
             Row(
               children: [
+                // [Phase 2] 저장 완료 시 체크 아이콘 표시
+                if (_hasSaved) ...[
+                  const Icon(Icons.check_circle, color: Colors.green, size: 24),
+                  const SizedBox(width: 8),
+                ],
                 Expanded(
                   child: Text(
                     widget.baseline.exerciseName,
@@ -755,7 +698,8 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
                 Expanded(
                   child: ElevatedButton(
                     onPressed: _saveWorkoutCard,
-                    child: const Text('기록 저장'),
+                    // [Phase 2] 저장 완료 시 버튼 텍스트 변경
+                    child: Text(_hasSaved ? '다시 저장' : '기록 저장'),
                   ),
                 ),
               ],

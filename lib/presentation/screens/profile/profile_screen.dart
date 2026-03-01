@@ -23,23 +23,60 @@ class ProfileScreen extends ConsumerStatefulWidget {
   ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+class _ProfileScreenState extends ConsumerState<ProfileScreen>
+    with SingleTickerProviderStateMixin {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
   List<ExerciseBaseline>? _selectedDayWorkouts;
   bool _isLoadingWorkouts = false;
   bool _isSearchSheetOpen = false;
-  
+
   // 계획된 운동 상태
   Map<DateTime, PlannedWorkout> _plannedWorkoutsByDate = {};
   List<PlannedWorkout> _selectedDayPlannedWorkouts = [];
   Map<String, String> _exerciseNameMap = {}; // baselineId -> exerciseName 매핑
   // [REMOVED] _isConvertingToLog - 운동 완료 버튼 제거로 불필요
   bool _isGeneratingRoutine = false; // AI 루틴 생성 중 로딩 상태
-  
+
+  // [Nudge Animation] 첫 번째 아이템 더블 바운스 힌트용
+  late final AnimationController _nudgeController;
+  late final Animation<double> _nudgeAnimation;
+  bool _hasNudged = false;
+
   @override
   void initState() {
     super.initState();
+
+    // [Nudge Animation] 500ms 동안 더블 바운스 애니메이션
+    _nudgeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
+
+    // TweenSequence: 왼쪽으로 갔다가 돌아오고, 다시 왼쪽으로 갔다가 돌아옴
+    _nudgeAnimation = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween(begin: 0.0, end: -20.0)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 25,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: -20.0, end: 0.0)
+            .chain(CurveTween(curve: Curves.easeIn)),
+        weight: 25,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 0.0, end: -20.0)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 25,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: -20.0, end: 0.0)
+            .chain(CurveTween(curve: Curves.easeIn)),
+        weight: 25,
+      ),
+    ]).animate(_nudgeController);
+
     // 초기 로드
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadPlannedWorkoutsForMonth(_focusedDay);
@@ -48,7 +85,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   @override
   void dispose() {
+    _nudgeController.dispose();
     super.dispose();
+  }
+
+  /// [Nudge Animation] 첫 번째 운동 아이템 더블 바운스 애니메이션
+  Future<void> _triggerNudgeAnimation() async {
+    if (_hasNudged) return;
+
+    // 렌더링 완료 대기
+    await Future.delayed(const Duration(milliseconds: 300));
+
+    if (!mounted) return;
+
+    // 더블 바운스 애니메이션 실행
+    _nudgeController.forward();
+    _hasNudged = true;
   }
 
   Future<void> _openExerciseSearchSheet() async {
@@ -274,6 +326,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           _selectedDayWorkouts = workouts;
           _isLoadingWorkouts = false;
         });
+
+        // [Nudge Animation] 운동 데이터 로드 후 더블 바운스 애니메이션 트리거
+        if (workouts.isNotEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _triggerNudgeAnimation();
+          });
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -752,8 +811,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                               // [Task 1] SlidableAutoCloseBehavior로 감싸서 하나만 열리도록
                               SlidableAutoCloseBehavior(
                                 child: Column(
-                                  children: _selectedDayWorkouts!.map((baseline) {
-                                    return Slidable(
+                                  children: _selectedDayWorkouts!.asMap().entries.map((entry) {
+                                    final index = entry.key;
+                                    final baseline = entry.value;
+                                    final slidableWidget = Slidable(
                                       key: ValueKey('completed_${baseline.id}'),
                                       // [Task 1] 완료된 운동: 왼쪽으로 스와이프 시 "기록 보기" 버튼 1개
                                       endActionPane: ActionPane(
@@ -828,6 +889,21 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                         },
                                       ),
                                     );
+
+                                    // [Nudge Animation] 첫 번째 아이템에 더블 바운스 애니메이션 적용
+                                    if (index == 0) {
+                                      return AnimatedBuilder(
+                                        animation: _nudgeAnimation,
+                                        builder: (context, child) {
+                                          return Transform.translate(
+                                            offset: Offset(_nudgeAnimation.value, 0),
+                                            child: child,
+                                          );
+                                        },
+                                        child: slidableWidget,
+                                      );
+                                    }
+                                    return slidableWidget;
                                   }).toList(),
                                 ),
                               ),

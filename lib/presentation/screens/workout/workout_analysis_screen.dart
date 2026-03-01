@@ -930,7 +930,52 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
       builder: (context) => RoutineGenerationDialog(routines: plans),
     );
     if (result == null || !mounted) return;
+
+    // [Phase 4] 유지 모드 처리: 지난 7일 운동을 다음 주로 복사
+    if (result.isMaintainMode) {
+      await _handleMaintainMode(result.colorHex);
+      return;
+    }
+
     await _savePlannedWorkouts(result.routines, result.colorHex);
+  }
+
+  /// [Phase 4] 유지 모드: 지난 7일 운동을 다음 주로 복사
+  Future<void> _handleMaintainMode(String colorHex) async {
+    try {
+      final repository = ref.read(workoutRepositoryProvider);
+      final count = await repository.duplicatePastWeekToNextWeek(colorHex);
+
+      if (!mounted) return;
+
+      if (count == 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('지난 7일간 운동 기록이 없습니다.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$count개 운동이 다음 주에 복사되었습니다.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      // 캘린더 갱신 트리거
+      ref.read(plannedWorkoutsRefreshProvider.notifier).state++;
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('유지 모드 저장 실패: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   /// 다이얼로그에서 반환된 루틴을 캘린더에 저장 (단 하루에 일괄 저장)

@@ -1305,6 +1305,31 @@ class WorkoutRepository {
     return result ?? routine;
   }
 
+  /// [Phase 3] 루틴 이름만 수정
+  Future<void> updateRoutineName(String routineId, String newName) async {
+    final userId = SupabaseService.currentUser?.id;
+    if (userId == null) {
+      throw Exception('로그인이 필요합니다.');
+    }
+
+    await _client
+        .from('routines')
+        .update({'name': newName})
+        .eq('id', routineId)
+        .eq('user_id', userId);
+  }
+
+  /// [Phase 3] 루틴에서 개별 운동 삭제
+  Future<void> removeExerciseFromRoutine(String routineItemId) async {
+    final userId = SupabaseService.currentUser?.id;
+    if (userId == null) {
+      throw Exception('로그인이 필요합니다.');
+    }
+
+    // routine_item 삭제 (routine_id로 user 권한 확인은 RLS에서 처리)
+    await _client.from('routine_items').delete().eq('id', routineItemId);
+  }
+
   /// 루틴 삭제 (과거 운동 기록 보존)
   ///
   /// 삭제 순서 (중요!):
@@ -2157,6 +2182,129 @@ class WorkoutRepository {
     }).toList();
 
     await _client.from('planned_workouts').insert(dataList);
+  }
+
+  /// [Phase 4] 유지 모드: 지난 7일 운동을 다음 주로 복사
+  ///
+  /// [colorHex] 계획 색상
+  /// 반환: 생성된 planned_workouts 개수
+  ///
+  /// 로직:
+  /// 1. 지난 7일간의 완료된 workout_sets를 exercise_baselines와 JOIN하여 조회
+  /// 2. 각 날짜별, 운동별로 최대 무게/횟수/세트 수 계산
+  /// 3. 각 운동의 날짜에 7일을 더해 다음 주 같은 요일로 계획 생성
+  /// 4. planned_workouts 테이블에 일괄 삽입
+  Future<int> duplicatePastWeekToNextWeek(String colorHex) async {
+    await _ensureProfileExists();
+    final userId = SupabaseService.currentUser?.id;
+    if (userId == null) throw Exception('로그인 필요');
+
+    // 날짜 범위 계산: 오늘 기준 지난 7일
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final sevenDaysAgo = today.subtract(const Duration(days: 7));
+
+    final startStr = DateFormat('yyyy-MM-dd').format(sevenDaysAgo);
+    final endStr = DateFormat('yyyy-MM-dd').format(today.subtract(const Duration(days: 1))); // 어제까지
+
+    // Step A: 지난 7일간의 workout_sets 조회 (exercise_baselines JOIN)
+    final response = await _client
+        .from('workout_sets')
+        .select('''
+          id,
+          baseline_id,
+          weight,
+          reps,
+          sets,
+          created_at,
+          exercise_baselines!inner(
+            id,
+            user_id,
+            exercise_name,
+            body_part
+          )
+        ''')
+        .eq('exercise_baselines.user_id', userId)
+        .gte('created_at', '${startStr}T00:00:00')
+        .lte('created_at', '${endStr}T23:59:59')
+        .order('created_at', ascending: true);
+
+    if ((response as List).isEmpty) {
+      return 0; // 지난 7일간 운동 기록 없음
+    }
+
+    // Step B: 날짜별, 운동별로 그룹화하여 최대값 계산
+    // key: "yyyy-MM-dd|exercise_name", value: {maxWeight, maxReps, totalSets, baselineId}
+    final Map<String, Map<String, dynamic>> workoutsByDateAndExercise = {};
+
+    for (final row in response) {
+      final createdAt = DateTime.parse(row['created_at']);
+      final dateKey = DateFormat('yyyy-MM-dd').format(createdAt);
+      final baseline = row['exercise_baselines'];
+      final exerciseName = baseline['exercise_name'] as String;
+      final baselineId = baseline['id'] as String;
+      final weight = (row['weight'] as num).toDouble();
+      final reps = row['reps'] as int;
+
+      final key = '$dateKey|$exerciseName';
+
+      if (!workoutsByDateAndExercise.containsKey(key)) {
+        workoutsByDateAndExercise[key] = {
+          'dateKey': dateKey,
+          'exerciseName': exerciseName,
+          'baselineId': baselineId,
+          'maxWeight': weight,
+          'maxReps': reps,
+          'totalSets': 1,
+        };
+      } else {
+        final existing = workoutsByDateAndExercise[key]!;
+        // 최대 무게 업데이트
+        if (weight > (existing['maxWeight'] as double)) {
+          existing['maxWeight'] = weight;
+        }
+        // 최대 횟수 업데이트
+        if (reps > (existing['maxReps'] as int)) {
+          existing['maxReps'] = reps;
+        }
+        // 세트 수 누적
+        existing['totalSets'] = (existing['totalSets'] as int) + 1;
+      }
+    }
+
+    // Step C: PlannedWorkout 생성 (날짜 + 7일)
+    final plannedWorkouts = <PlannedWorkout>[];
+    const uuid = Uuid();
+
+    for (final entry in workoutsByDateAndExercise.values) {
+      final originalDate = DateTime.parse(entry['dateKey']);
+      final nextWeekDate = originalDate.add(const Duration(days: 7));
+
+      final plannedWorkout = PlannedWorkout(
+        id: uuid.v4(),
+        userId: userId,
+        baselineId: entry['baselineId'],
+        scheduledDate: nextWeekDate,
+        targetWeight: entry['maxWeight'],
+        targetReps: entry['maxReps'],
+        targetSets: entry['totalSets'],
+        exerciseName: entry['exerciseName'],
+        aiComment: '지난주 운동 유지',
+        isCompleted: false,
+        isConvertedToLog: false,
+        colorHex: colorHex,
+        createdAt: DateTime.now(),
+      );
+
+      plannedWorkouts.add(plannedWorkout);
+    }
+
+    // Step D: 일괄 삽입
+    if (plannedWorkouts.isNotEmpty) {
+      await savePlannedWorkouts(plannedWorkouts);
+    }
+
+    return plannedWorkouts.length;
   }
 
   /// ID 목록으로 운동 정보 일괄 조회

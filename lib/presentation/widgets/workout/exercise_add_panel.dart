@@ -37,16 +37,20 @@ class _ExerciseAddPanelState extends ConsumerState<ExerciseAddPanel> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      // Drawer 대신 Container 사용
-      decoration: BoxDecoration(
-        color: Theme.of(context).scaffoldBackgroundColor, // 배경색만 지정
-      ),
-      child: SafeArea(
-        child: Form(
-          key: _formKey,
-          child: Column(
-            children: [
+    // [Phase 1 Fix] GestureDetector로 감싸서 빈 공간 탭 시 키보드만 내리고 모달은 유지
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Container(
+        // Drawer 대신 Container 사용
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor, // 배경색만 지정
+        ),
+        child: SafeArea(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              children: [
               AppBar(
                 title: const Text('신규 운동 추가'),
                 automaticallyImplyLeading: false,
@@ -200,7 +204,8 @@ class _ExerciseAddPanelState extends ConsumerState<ExerciseAddPanel> {
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 
   // [NEW] 날짜 포맷 헬퍼 함수

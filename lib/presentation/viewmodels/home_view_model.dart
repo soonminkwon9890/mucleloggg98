@@ -20,6 +20,13 @@ class HomeViewModel extends StateNotifier<HomeState> {
     _lastLoadedDate = DateTime.now();
   }
 
+  /// [CRITICAL FIX] 로그아웃 시 모든 로컬 상태 초기화
+  /// 이전 사용자의 데이터가 메모리에 남아있는 것을 방지합니다.
+  void clearState() {
+    _lastLoadedDate = null;
+    state = const HomeState(); // 모든 필드를 기본값으로 리셋
+  }
+
   /// 데이터 로드
   ///
   /// [forceRefresh]: true일 때만 DB에서 강제로 가져옵니다.
@@ -545,13 +552,26 @@ class HomeViewModel extends StateNotifier<HomeState> {
 
   /// 저장 후 해당 카드만 교체 (전체 새로고침 없이 순서 유지)
   /// [Preserve List Order] map을 사용하여 기존 인덱스(순서)가 유지되도록 교체합니다.
+  /// [Phase 3] 원본 createdAt을 보존하여 정렬 순서 변경 방지
   void replaceBaselineAfterSave(
     String oldBaselineId,
     ExerciseBaseline persistedBaseline,
   ) {
-    // 1. 저장된 항목 교체 (기존 로직)
+    // [Phase 3] 원본 baseline의 createdAt 및 routineId 보존
+    // DB에서 가져온 persistedBaseline의 타임스탬프가 다를 수 있어 순서가 변경되는 것을 방지
+    final originalBaseline = state.baselines.firstWhere(
+      (b) => b.id == oldBaselineId,
+      orElse: () => persistedBaseline,
+    );
+
+    final preservedBaseline = persistedBaseline.copyWith(
+      createdAt: originalBaseline.createdAt, // 원본 생성 시간 유지
+      routineId: originalBaseline.routineId, // 원본 루틴 ID 유지 (그룹 유지)
+    );
+
+    // 1. 저장된 항목 교체 (순서 보존)
     final newBaselines = state.baselines
-        .map((b) => b.id == oldBaselineId ? persistedBaseline : b)
+        .map((b) => b.id == oldBaselineId ? preservedBaseline : b)
         .toList();
 
     // 2. 나머지 항목들의 Draft 보존 (수정된 로직)
@@ -562,7 +582,7 @@ class HomeViewModel extends StateNotifier<HomeState> {
       state.baselines.where((b) => b.id != oldBaselineId).toList(),
     );
 
-    // 3. 상태 갱신
+    // 3. 상태 갱신 (정렬 순서 유지됨 - createdAt이 보존되었으므로)
     final groupedWorkouts = _groupWorkouts(mergedBaselines);
     final allTodayWorkouts =
         groupedWorkouts.values.expand((list) => list).toList();

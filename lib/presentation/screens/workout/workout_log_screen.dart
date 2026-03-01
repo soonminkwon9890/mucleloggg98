@@ -116,45 +116,48 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         // 주 선택기 UI
+                        // [Phase 3] Center로 감싸서 날짜 네비게이션 중앙 정렬
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 8.0),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.chevron_left),
-                                onPressed: () {
-                                  setState(() {
-                                    final next = _selectedWeekStart
-                                        .subtract(const Duration(days: 7));
-                                    _selectedWeekStart =
-                                        _normalizeWeekStart(next);
-                                  });
-                                },
-                              ),
-                              Text(
-                                _formatWeekRange(_selectedWeekStart),
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                              IconButton(
-                                icon: Icon(
-                                  Icons.chevron_right,
-                                  color: _canMoveToNextWeek()
-                                      ? Theme.of(context).iconTheme.color
-                                      : Theme.of(context).disabledColor,
+                          child: Center(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.chevron_left),
+                                  onPressed: () {
+                                    setState(() {
+                                      final next = _selectedWeekStart
+                                          .subtract(const Duration(days: 7));
+                                      _selectedWeekStart =
+                                          _normalizeWeekStart(next);
+                                    });
+                                  },
                                 ),
-                                onPressed: _canMoveToNextWeek()
-                                    ? () {
-                                        setState(() {
-                                          final next = _selectedWeekStart
-                                              .add(const Duration(days: 7));
-                                          _selectedWeekStart =
-                                              _normalizeWeekStart(next);
-                                        });
-                                      }
-                                    : null, // 미래 주는 비활성화
-                              ),
-                            ],
+                                Text(
+                                  _formatWeekRange(_selectedWeekStart),
+                                  style: Theme.of(context).textTheme.titleMedium,
+                                ),
+                                IconButton(
+                                  icon: Icon(
+                                    Icons.chevron_right,
+                                    color: _canMoveToNextWeek()
+                                        ? Theme.of(context).iconTheme.color
+                                        : Theme.of(context).disabledColor,
+                                  ),
+                                  onPressed: _canMoveToNextWeek()
+                                      ? () {
+                                          setState(() {
+                                            final next = _selectedWeekStart
+                                                .add(const Duration(days: 7));
+                                            _selectedWeekStart =
+                                                _normalizeWeekStart(next);
+                                          });
+                                        }
+                                      : null, // 미래 주는 비활성화
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                         _PremiumGate(

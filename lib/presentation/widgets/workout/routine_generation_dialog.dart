@@ -8,22 +8,24 @@ import '../../../data/models/planned_workout_dto.dart';
 import '../../providers/subscription_provider.dart';
 import '../../../utils/premium_guidance_dialog.dart';
 
-/// 강도 모드: High(+2.5kg), Normal(원본), Condition(85%), Rest(휴식)
-enum RoutineIntensity { high, normal, condition, rest }
+/// 강도 모드: High(+2.5kg), Normal(원본), Condition(85%), Maintain(유지)
+enum RoutineIntensity { high, normal, condition, maintain }
 
 /// 모드별 색상 (0xFFRRGGBB, 앱 기존 형식)
 const Map<RoutineIntensity, String> _intensityColorHex = {
   RoutineIntensity.high: '0xFFF44336',
   RoutineIntensity.normal: '0xFF2196F3',
   RoutineIntensity.condition: '0xFF4CAF50',
-  RoutineIntensity.rest: '0xFF9E9E9E',
+  RoutineIntensity.maintain: '0xFF9C27B0', // 보라색 (유지 모드)
 };
 
 /// 다이얼로그 적용 결과 (날짜가 주입된 루틴 + 선택 색상)
 class RoutineApplyResult {
   final List<PlannedWorkoutDto> routines;
   final String colorHex;
-  RoutineApplyResult(this.routines, this.colorHex);
+  /// [Phase 4] 유지 모드 여부 - true이면 지난주 운동을 다음 주로 복사
+  final bool isMaintainMode;
+  RoutineApplyResult(this.routines, this.colorHex, {this.isMaintainMode = false});
 }
 
 class RoutineGenerationDialog extends ConsumerStatefulWidget {
@@ -60,7 +62,8 @@ class _RoutineGenerationDialogState extends ConsumerState<RoutineGenerationDialo
   }
 
   void _applyModeToDisplay() {
-    if (_selectedMode == RoutineIntensity.rest) {
+    // [Phase 4] 유지 모드: 빈 리스트 표시 (실제 데이터는 저장 시 past 7 days에서 가져옴)
+    if (_selectedMode == RoutineIntensity.maintain) {
       displayRoutines = [];
       return;
     }
@@ -79,7 +82,7 @@ class _RoutineGenerationDialogState extends ConsumerState<RoutineGenerationDialo
           final val = (baseVal * 0.85 / 2.5).round() * 2.5;
           newTarget = math.max(0.0, val);
           break;
-        case RoutineIntensity.rest:
+        case RoutineIntensity.maintain:
           newTarget = baseVal;
           break;
       }
@@ -126,8 +129,10 @@ class _RoutineGenerationDialogState extends ConsumerState<RoutineGenerationDialo
 
     // 프리미엄 사용자: 기존 저장 로직 실행
     final colorHex = _intensityColorHex[_selectedMode]!;
-    if (_selectedMode == RoutineIntensity.rest) {
-      Navigator.pop(context, RoutineApplyResult([], colorHex));
+    // [Phase 4] 유지 모드: isMaintainMode 플래그를 true로 설정하여 반환
+    // 실제 past 7 days 데이터 fetching은 parent에서 처리
+    if (_selectedMode == RoutineIntensity.maintain) {
+      Navigator.pop(context, RoutineApplyResult([], colorHex, isMaintainMode: true));
       return;
     }
     if (!_unifyDate) {
@@ -143,8 +148,9 @@ class _RoutineGenerationDialogState extends ConsumerState<RoutineGenerationDialo
   @override
   Widget build(BuildContext context) {
     final dateLabel = DateFormat('yyyy-MM-dd (E)', 'ko_KR').format(_selectedDate);
-    final isRest = _selectedMode == RoutineIntensity.rest;
-    final applyButtonLabel = isRest ? '오늘은 저장 없이 쉬기' : '운동 계획 저장하기';
+    // [Phase 4] rest → maintain 변경
+    final isMaintain = _selectedMode == RoutineIntensity.maintain;
+    final applyButtonLabel = isMaintain ? '지난주 운동 유지하기' : '운동 계획 저장하기';
     final unifyApplyButtonLabel = DateFormat('M월 d일', 'ko_KR').format(_selectedDate);
 
     return AlertDialog(
@@ -156,11 +162,29 @@ class _RoutineGenerationDialogState extends ConsumerState<RoutineGenerationDialo
           children: [
             _buildIntensitySelector(),
             const SizedBox(height: 16),
-            if (isRest)
-              const Center(
+            // [Phase 4] 유지 모드: "오늘은 휴식입니다" 제거, 설명 메시지로 대체
+            if (isMaintain)
+              Center(
                 child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 24),
-                  child: Text('오늘은 휴식입니다.'),
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.repeat,
+                        size: 48,
+                        color: Colors.purple[300],
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        '지난 7일간의 운동을',
+                        style: TextStyle(fontSize: 16),
+                      ),
+                      const Text(
+                        '다음 주에 그대로 반복합니다.',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
                 ),
               )
             else
@@ -192,7 +216,7 @@ class _RoutineGenerationDialogState extends ConsumerState<RoutineGenerationDialo
                 ),
               ),
             const SizedBox(height: 16),
-            if (!isRest) _buildDatePicker(dateLabel: dateLabel),
+            if (!isMaintain) _buildDatePicker(dateLabel: dateLabel),
           ],
         ),
       ),
@@ -204,7 +228,7 @@ class _RoutineGenerationDialogState extends ConsumerState<RoutineGenerationDialo
         ElevatedButton(
           onPressed: _apply,
           child: Text(
-            isRest
+            isMaintain
                 ? applyButtonLabel
                 : (_unifyDate ? '$unifyApplyButtonLabel에 루틴 예약하기' : applyButtonLabel),
           ),
@@ -270,10 +294,11 @@ class _RoutineGenerationDialogState extends ConsumerState<RoutineGenerationDialo
           label: Text('조절'),
           icon: Icon(Icons.air, size: 18),
         ),
+        // [Phase 4] 휴식 → 유지 변경
         ButtonSegment(
-          value: RoutineIntensity.rest,
-          label: Text('휴식'),
-          icon: Icon(Icons.hotel, size: 18),
+          value: RoutineIntensity.maintain,
+          label: Text('유지'),
+          icon: Icon(Icons.repeat, size: 18),
         ),
       ],
       selected: {_selectedMode},

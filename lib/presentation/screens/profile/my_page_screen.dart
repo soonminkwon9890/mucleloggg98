@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/subscription_provider.dart';
 import '../../providers/user_provider.dart';
+import '../../providers/workout_provider.dart'; // [Phase 1] 로그아웃 시 데이터 캐시 무효화용
 import '../admin/admin_screen.dart';
 import '../subscription/subscription_screen.dart';
 
@@ -37,10 +38,34 @@ class _MyPageScreenState extends ConsumerState<MyPageScreen> {
         Navigator.of(context).popUntil((route) => route.isFirst);
       }
       await ref.read(authRepositoryProvider).signOut();
-      ref.invalidate(currentProfileProvider);
+      // [Phase 1 Fix] 로그아웃 시 모든 사용자 데이터 캐시 무효화
+      // 이전 사용자의 데이터가 다음 사용자에게 노출되는 것을 방지
+      _invalidateAllUserDataProviders();
     } finally {
       if (mounted) setState(() => _isProcessing = false);
     }
+  }
+
+  /// [Phase 1 + Critical Fix] 모든 사용자 데이터 프로바이더 무효화
+  /// 로그아웃/계정 삭제 시 호출하여 이전 사용자 데이터 캐시 제거
+  ///
+  /// [CRITICAL] homeViewModelProvider는 StateNotifierProvider이므로
+  /// invalidate 전에 반드시 clearState()를 호출하여 메모리 내 데이터를 명시적으로 삭제해야 합니다.
+  void _invalidateAllUserDataProviders() {
+    // [CRITICAL FIX] HomeViewModel의 메모리 상태 명시적 초기화
+    // StateNotifierProvider는 invalidate만으로는 메모리가 즉시 해제되지 않을 수 있음
+    ref.read(homeViewModelProvider.notifier).clearState();
+
+    // 모든 사용자 데이터 프로바이더 무효화
+    ref.invalidate(homeViewModelProvider);      // [CRITICAL] 홈 화면 운동 데이터
+    ref.invalidate(currentProfileProvider);     // 사용자 프로필
+    ref.invalidate(routinesProvider);           // 루틴 목록
+    ref.invalidate(baselinesProvider);          // 운동 기준 정보
+    ref.invalidate(archivedBaselinesProvider);  // 보관함 운동 목록
+    ref.invalidate(workoutDatesProvider);       // 운동 날짜 목록 (캘린더)
+    ref.invalidate(exercisesWithHistoryProvider); // 프로필 검색용 운동 기록
+    ref.invalidate(plannedWorkoutsRefreshProvider); // 계획된 운동 갱신 트리거
+    ref.invalidate(profileSearchTriggerProvider);   // 프로필 검색 트리거
   }
 
   Future<void> _confirmAndDeleteAccount() async {
@@ -79,7 +104,8 @@ class _MyPageScreenState extends ConsumerState<MyPageScreen> {
 
       // delete_user_account(RPC) 이후에도 로컬 세션 토큰이 남을 수 있으니 signOut으로 정리
       await ref.read(authRepositoryProvider).signOut();
-      ref.invalidate(currentProfileProvider);
+      // [Phase 1 Fix] 계정 삭제 시에도 모든 데이터 캐시 무효화
+      _invalidateAllUserDataProviders();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
