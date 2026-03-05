@@ -48,6 +48,191 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     }
   }
 
+  /// 운동 추가 옵션 BottomSheet 표시
+  void _showAddWorkoutOptions(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 핸들 바
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[400],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              // 타이틀
+              const Text(
+                '운동 추가하기',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 20),
+              // Option 1: 보관함에서 불러오기 (Primary)
+              _buildOptionCard(
+                context,
+                icon: Icons.folder_special,
+                iconColor: Colors.blue,
+                title: '내 보관함에서 불러오기',
+                subtitle: '기존에 저장된 내 운동 리스트에서 선택합니다.',
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const ManagementScreen(),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+              // Option 2: 직접 신규 운동 입력하기 (Secondary)
+              _buildOptionCard(
+                context,
+                icon: Icons.edit_note,
+                iconColor: Colors.grey[700]!,
+                title: '직접 신규 운동 입력하기',
+                subtitle: '새로운 운동 이름과 부위를 직접 입력합니다.',
+                onTap: () {
+                  Navigator.pop(context);
+                  _openNewExercisePanel(context);
+                },
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// 옵션 카드 빌더
+  Widget _buildOptionCard(
+    BuildContext context, {
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey[300]!),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: iconColor, size: 28),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: Colors.grey[400]),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 신규 운동 추가 패널 열기 (기존 로직 보존)
+  Future<void> _openNewExercisePanel(BuildContext context) async {
+    await showGeneralDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: "Dismiss",
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 250),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        final panelWidth = math.max(
+          MediaQuery.of(context).size.width * 0.5,
+          300.0,
+        );
+        return Align(
+          alignment: Alignment.centerRight,
+          child: SizedBox(
+            width: panelWidth,
+            height: double.infinity,
+            child: GestureDetector(
+              onHorizontalDragUpdate: (details) {
+                // 오른쪽 방향(delta > 0) 스와이프 시 닫기
+                if (details.delta.dx > 0) {
+                  Navigator.of(context).pop();
+                }
+              },
+              child: Material(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                child: const SafeArea(
+                  child: ExerciseAddPanel(),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(1, 0),
+            end: Offset.zero,
+          ).animate(curved),
+          child: child,
+        );
+      },
+    );
+  }
+
   /// 루틴 저장 다이얼로그
   Future<void> _showSaveRoutineDialog(
       List<ExerciseBaseline> todayWorkouts) async {
@@ -137,62 +322,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     return Scaffold(
       resizeToAvoidBottomInset: true,
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          // 1. 창 열기 (우측 슬라이드 패널)
-          await showGeneralDialog<bool>(
-            context: context,
-            barrierDismissible: true,
-            barrierLabel: "Dismiss",
-            barrierColor: Colors.black54,
-            transitionDuration: const Duration(milliseconds: 250),
-            pageBuilder: (context, animation, secondaryAnimation) {
-              final panelWidth = math.max(
-                MediaQuery.of(context).size.width * 0.5,
-                300.0,
-              );
-              return Align(
-                alignment: Alignment.centerRight,
-                child: SizedBox(
-                  width: panelWidth,
-                  height: double.infinity,
-                  child: GestureDetector(
-                    onHorizontalDragUpdate: (details) {
-                      // 오른쪽 방향(delta > 0) 스와이프 시 닫기
-                      if (details.delta.dx > 0) {
-                        Navigator.of(context).pop();
-                      }
-                    },
-                    child: Material(
-                      color: Theme.of(context).scaffoldBackgroundColor,
-                      child: const SafeArea(
-                        child: ExerciseAddPanel(),
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
-            transitionBuilder: (context, animation, secondaryAnimation, child) {
-              final curved = CurvedAnimation(
-                parent: animation,
-                curve: Curves.easeOutCubic,
-                reverseCurve: Curves.easeInCubic,
-              );
-              return SlideTransition(
-                position: Tween<Offset>(
-                  begin: const Offset(1, 0),
-                  end: Offset.zero,
-                ).animate(curved),
-                child: child,
-              );
-            },
-          );
-
-          // 2. 창이 닫힌 후: addNewExercise는 메모리 전용이므로 loadBaselines() 호출 불필요
-          // Draft는 이미 state에 추가되었으므로 새로고침하지 않음
-        },
+        onPressed: () => _showAddWorkoutOptions(context),
         icon: const Icon(Icons.add),
-        label: const Text('신규 운동 추가'),
+        label: const Text('운동 추가하기'),
       ),
       body: SafeArea(
         child: authStateAsync.when(
@@ -255,34 +387,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Flexible(
-                              child: Text(
-                                '오늘 총 볼륨',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: appCard?.subTextColor ?? Colors.grey,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            TextButton.icon(
-                              onPressed: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const ManagementScreen(),
-                                ),
-                              ),
-                              icon: const Icon(Icons.inventory_2_outlined, size: 18),
-                              label: const Text('보관함'),
-                              style: TextButton.styleFrom(
-                                foregroundColor: appCard?.subTextColor ?? Colors.grey,
-                                padding: const EdgeInsets.symmetric(horizontal: 8),
-                              ),
-                            ),
-                          ],
+                        Text(
+                          '오늘 총 볼륨',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: appCard?.subTextColor ?? Colors.grey,
+                          ),
                         ),
                         const SizedBox(height: 8),
                         Text(
