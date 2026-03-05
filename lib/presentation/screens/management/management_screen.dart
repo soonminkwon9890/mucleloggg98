@@ -631,6 +631,16 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
           controller: _tabController,
           tabs: BodyPart.values.map((bodyPart) => Tab(text: bodyPart.label)).toList(),
         ),
+        // [Phase 2] 힌트 텍스트 - 상단 중앙으로 이동
+        if (!_isSelectionMode)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12.0),
+            child: Text(
+              '길게 눌러 운동을 선택하고 날짜를 지정하세요.',
+              style: TextStyle(color: Colors.grey, fontSize: 13),
+              textAlign: TextAlign.center,
+            ),
+          ),
         Expanded(
           child: baselinesAsync.when(
             data: (baselines) {
@@ -884,28 +894,6 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
                     },
                   ),
                   ),
-                  // [MODIFIED - Task 1] 힌트 텍스트 업데이트
-                  if (!_isSelectionMode)
-                    Positioned(
-                      bottom: 16,
-                      left: 16,
-                      right: 16,
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.black54,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Text(
-                          '길게 눌러 운동을 선택하고 날짜를 지정하세요.',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
                   // [MODIFIED - Task 1] 선택 모드 시 하단 버튼
                   // "루틴으로 저장" 제거, "운동 다시하기" -> 캘린더 시트 오픈
                   if (_isSelectionMode && _selectedBaselineIds.isNotEmpty)
@@ -1315,6 +1303,15 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab>
                 ),
               ),
             ),
+            // [Phase 3] 힌트 텍스트 - 상단 중앙 (운동 보관함과 동일)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12.0),
+              child: Text(
+                '길게 눌러 운동을 선택하고 날짜를 지정하세요.',
+                style: TextStyle(color: Colors.grey, fontSize: 13),
+                textAlign: TextAlign.center,
+              ),
+            ),
             Expanded(
               child: routines.isEmpty
                   ? const Center(
@@ -1366,7 +1363,7 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab>
                                 child: ListTile(
                                   title: Text(routine.name),
                                   subtitle: Text(
-                                    '${routine.routineItems?.length ?? 0}개 운동 · 길게 눌러 운동 시작',
+                                    '${routine.routineItems?.length ?? 0}개 운동',
                                   ),
                                   // 스와이프 힌트 아이콘
                                   trailing: const Icon(

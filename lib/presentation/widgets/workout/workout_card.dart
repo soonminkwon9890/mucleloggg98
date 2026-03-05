@@ -41,6 +41,11 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
   // [Phase 2] 저장 완료 상태 추적 (입력 필드는 유지)
   bool _hasSaved = false;
 
+  // [Bug Fix] 동적 저장 상태 판단 - Widget이 재생성되어도 데이터 기반으로 상태 복원
+  // 로컬 _hasSaved 또는 실제 데이터(isCompleted)를 확인하여 "저장됨" 상태 판단
+  bool get _isEffectivelySaved =>
+      _hasSaved || _sets.values.any((set) => set.isCompleted == true);
+
   @override
   bool get wantKeepAlive => true;
 
@@ -454,7 +459,7 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
 
       // 3. UI 피드백
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('기록이 저장되었습니다.')),
+        const SnackBar(content: Text('보관함과 캘린더에 저장되었습니다')),
       );
 
       // [Phase 2] 저장 완료 상태로 전환 (입력 필드는 유지)
@@ -580,8 +585,8 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
   Widget _buildInputCard(BuildContext context) {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
-      // [Phase 2] 저장 완료 시 배경색 변경
-      color: _hasSaved
+      // [Phase 2] 저장 완료 시 배경색 변경 - _isEffectivelySaved 사용 (Widget 재생성 대응)
+      color: _isEffectivelySaved
           ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.1)
           : null,
       child: Padding(
@@ -591,8 +596,8 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
           children: [
             Row(
               children: [
-                // [Phase 2] 저장 완료 시 체크 아이콘 표시
-                if (_hasSaved) ...[
+                // [Phase 2] 저장 완료 시 체크 아이콘 표시 - _isEffectivelySaved 사용 (Widget 재생성 대응)
+                if (_isEffectivelySaved) ...[
                   const Icon(Icons.check_circle, color: Colors.green, size: 24),
                   const SizedBox(width: 8),
                 ],
@@ -643,7 +648,7 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
                           border: OutlineInputBorder(),
                           isDense: true,
                         ),
-                        keyboardType: TextInputType.number,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
                         scrollPadding: const EdgeInsets.only(bottom: 150.0),
                         onTap: () {
                           final c = _controllers['weight_$setId'];
@@ -698,8 +703,8 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
                 Expanded(
                   child: ElevatedButton(
                     onPressed: _saveWorkoutCard,
-                    // [Phase 2] 저장 완료 시 버튼 텍스트 변경
-                    child: Text(_hasSaved ? '다시 저장' : '기록 저장'),
+                    // [Phase 2] 저장 완료 시 버튼 텍스트 변경 - _isEffectivelySaved 사용 (Widget 재생성 대응)
+                    child: Text(_isEffectivelySaved ? '다시 저장' : '기록 저장'),
                   ),
                 ),
               ],
