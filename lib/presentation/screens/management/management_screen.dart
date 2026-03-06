@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:uuid/uuid.dart';
 import '../../providers/subscription_provider.dart';
@@ -10,7 +9,6 @@ import 'routine_detail_screen.dart'; // [Phase 3]
 import '../../../data/models/exercise_baseline.dart';
 import '../../../data/models/planned_workout.dart';
 import '../../../utils/premium_guidance_dialog.dart';
-import '../../../data/models/workout_set.dart';
 import '../../../data/models/routine.dart';
 import '../../../data/models/routine_item.dart';
 import '../../../data/services/supabase_service.dart';
@@ -28,6 +26,10 @@ class _ManagementScreenState extends ConsumerState<ManagementScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
+  // [Phase 1] 운동 보관함 선택 상태 (탭 전환 시 유지)
+  bool _isSelectionMode = false;
+  final Set<String> _selectedBaselineIds = {};
+
   @override
   void initState() {
     super.initState();
@@ -38,6 +40,40 @@ class _ManagementScreenState extends ConsumerState<ManagementScreen>
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  /// 선택 모드 진입
+  void _enterSelectionMode() {
+    setState(() {
+      _isSelectionMode = true;
+    });
+  }
+
+  /// 선택 모드 종료 및 선택 초기화
+  void _exitSelectionMode() {
+    setState(() {
+      _isSelectionMode = false;
+      _selectedBaselineIds.clear();
+    });
+  }
+
+  /// 운동 선택 토글
+  void _toggleSelection(String baselineId) {
+    setState(() {
+      if (_selectedBaselineIds.contains(baselineId)) {
+        _selectedBaselineIds.remove(baselineId);
+      } else {
+        _selectedBaselineIds.add(baselineId);
+      }
+    });
+  }
+
+  /// 선택 초기화 (스케줄링 완료 후 호출)
+  void _clearSelection() {
+    setState(() {
+      _selectedBaselineIds.clear();
+      _isSelectionMode = false;
+    });
   }
 
   @override
@@ -56,9 +92,16 @@ class _ManagementScreenState extends ConsumerState<ManagementScreen>
       body: TabBarView(
         controller: _tabController,
         physics: const NeverScrollableScrollPhysics(),
-        children: const [
-          _ExerciseLibraryTab(),
-          _RoutinesTab(),
+        children: [
+          _ExerciseLibraryTab(
+            isSelectionMode: _isSelectionMode,
+            selectedBaselineIds: _selectedBaselineIds,
+            onEnterSelectionMode: _enterSelectionMode,
+            onExitSelectionMode: _exitSelectionMode,
+            onToggleSelection: _toggleSelection,
+            onClearSelection: _clearSelection,
+          ),
+          const _RoutinesTab(),
         ],
       ),
     );
@@ -67,7 +110,21 @@ class _ManagementScreenState extends ConsumerState<ManagementScreen>
 
 /// 탭 1: 운동 보관함
 class _ExerciseLibraryTab extends ConsumerStatefulWidget {
-  const _ExerciseLibraryTab();
+  final bool isSelectionMode;
+  final Set<String> selectedBaselineIds;
+  final VoidCallback onEnterSelectionMode;
+  final VoidCallback onExitSelectionMode;
+  final void Function(String) onToggleSelection;
+  final VoidCallback onClearSelection;
+
+  const _ExerciseLibraryTab({
+    required this.isSelectionMode,
+    required this.selectedBaselineIds,
+    required this.onEnterSelectionMode,
+    required this.onExitSelectionMode,
+    required this.onToggleSelection,
+    required this.onClearSelection,
+  });
 
   @override
   ConsumerState<_ExerciseLibraryTab> createState() =>
@@ -75,19 +132,12 @@ class _ExerciseLibraryTab extends ConsumerStatefulWidget {
 }
 
 class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
-    with TickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   BodyPart _selectedBodyPart = BodyPart.upper;
-  final Set<String> _selectedBaselineIds = {};
-  final Set<String> _expandedBaselineIds = {}; // 펼쳐진 운동 종목 추적
-  bool _isSelectionMode = false;
   late TabController _tabController;
-  // 더보기 상태 관리 (운동별로 관리)
-  final Map<String, bool> _showAllDates = {};
 
-  // [Nudge Animation] 첫 번째 아이템 더블 바운스 힌트용
-  late final AnimationController _nudgeController;
-  late final Animation<double> _nudgeAnimation;
-  bool _hasNudged = false;
+  @override
+  bool get wantKeepAlive => true; // 탭 전환 시 상태 유지
 
   @override
   void initState() {
@@ -98,67 +148,16 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
         setState(() {
           final tabs = [BodyPart.upper, BodyPart.lower, BodyPart.full];
           _selectedBodyPart = tabs[_tabController.index];
-          _selectedBaselineIds.clear();
-          _expandedBaselineIds.clear();
-          _isSelectionMode = false;
+          // 선택 상태는 유지 (부위 탭 전환 시에도 초기화하지 않음)
         });
       }
-    });
-
-    // [Nudge Animation] 500ms 동안 더블 바운스 애니메이션
-    _nudgeController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-    );
-
-    // TweenSequence: 왼쪽으로 갔다가 돌아오고, 다시 왼쪽으로 갔다가 돌아옴
-    _nudgeAnimation = TweenSequence<double>([
-      TweenSequenceItem(
-        tween: Tween(begin: 0.0, end: -20.0)
-            .chain(CurveTween(curve: Curves.easeOut)),
-        weight: 25,
-      ),
-      TweenSequenceItem(
-        tween: Tween(begin: -20.0, end: 0.0)
-            .chain(CurveTween(curve: Curves.easeIn)),
-        weight: 25,
-      ),
-      TweenSequenceItem(
-        tween: Tween(begin: 0.0, end: -20.0)
-            .chain(CurveTween(curve: Curves.easeOut)),
-        weight: 25,
-      ),
-      TweenSequenceItem(
-        tween: Tween(begin: -20.0, end: 0.0)
-            .chain(CurveTween(curve: Curves.easeIn)),
-        weight: 25,
-      ),
-    ]).animate(_nudgeController);
-
-    // 화면 렌더링 후 애니메이션 트리거
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _triggerNudgeAnimation();
     });
   }
 
   @override
   void dispose() {
     _tabController.dispose();
-    _nudgeController.dispose();
     super.dispose();
-  }
-
-  /// [Nudge Animation] 첫 번째 운동 아이템 더블 바운스 애니메이션
-  Future<void> _triggerNudgeAnimation() async {
-    if (_hasNudged) return;
-
-    // 데이터 로딩 및 렌더링 완료 대기
-    await Future.delayed(const Duration(milliseconds: 300));
-
-    if (!mounted) return;
-
-    _nudgeController.forward();
-    _hasNudged = true;
   }
 
   List<ExerciseBaseline> _filterBaselines(List<ExerciseBaseline> baselines) {
@@ -167,24 +166,43 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
     }).toList();
   }
 
-  void _handleLongPress(String baselineId) {
-    setState(() {
-      _isSelectionMode = true;
-      _selectedBaselineIds.add(baselineId);
-    });
-  }
-
-  void _toggleSelection(String baselineId) {
-    setState(() {
-      if (_selectedBaselineIds.contains(baselineId)) {
-        _selectedBaselineIds.remove(baselineId);
-        if (_selectedBaselineIds.isEmpty) {
-          _isSelectionMode = false;
-        }
-      } else {
-        _selectedBaselineIds.add(baselineId);
-      }
-    });
+  /// 운동 옵션 메뉴 표시 (운동 기록 보기, 삭제)
+  void _showExerciseOptions(ExerciseBaseline baseline) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.history, color: Colors.blue),
+                title: const Text('운동 기록 보기'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => WorkoutAnalysisScreen(
+                        exerciseName: baseline.exerciseName,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete, color: Colors.red),
+                title: const Text('삭제'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _confirmAndDeleteBaseline(baseline);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   // [REMOVED - Task 1] _addToToday() 제거
@@ -282,12 +300,12 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
   /// [NEW - Task 1] 운동 계획 시트 표시
   /// 2/3 높이의 BottomSheet에 캘린더를 표시하고, 날짜 선택 시 "운동 계획하기" 버튼 활성화
   Future<void> _showWorkoutPlanSheet() async {
-    if (_selectedBaselineIds.isEmpty) return;
+    if (widget.selectedBaselineIds.isEmpty) return;
 
     final messenger = ScaffoldMessenger.of(context);
     final baselines = ref.read(archivedBaselinesProvider).value ?? [];
     final selectedBaselines =
-        baselines.where((b) => _selectedBaselineIds.contains(b.id)).toList();
+        baselines.where((b) => widget.selectedBaselineIds.contains(b.id)).toList();
 
     if (selectedBaselines.isEmpty) {
       messenger.showSnackBar(
@@ -370,12 +388,24 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          '${selectedBaselines.length}개 운동 선택됨',
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${selectedBaselines.length}개 운동 선택됨',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              '운동할 날짜를 선택하세요',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ],
                         ),
                         IconButton(
                           icon: const Icon(Icons.close),
@@ -541,11 +571,8 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
           routineId: null,
         );
 
-        // 선택 모드 해제
-        setState(() {
-          _selectedBaselineIds.clear();
-          _isSelectionMode = false;
-        });
+        // 선택 초기화 (부모 상태)
+        widget.onClearSelection();
 
         messenger.showSnackBar(
           SnackBar(
@@ -596,11 +623,8 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
         // 4. 캘린더 화면 갱신 트리거
         ref.read(plannedWorkoutsRefreshProvider.notifier).state++;
 
-        // 선택 모드 해제
-        setState(() {
-          _selectedBaselineIds.clear();
-          _isSelectionMode = false;
-        });
+        // 선택 초기화 (부모 상태)
+        widget.onClearSelection();
 
         messenger.showSnackBar(
           SnackBar(
@@ -623,7 +647,10 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // AutomaticKeepAliveClientMixin 필수
     final baselinesAsync = ref.watch(archivedBaselinesProvider);
+    final isSelectionMode = widget.isSelectionMode;
+    final selectedIds = widget.selectedBaselineIds;
 
     return Column(
       children: [
@@ -631,16 +658,24 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
           controller: _tabController,
           tabs: BodyPart.values.map((bodyPart) => Tab(text: bodyPart.label)).toList(),
         ),
-        // [Phase 2] 힌트 텍스트 - 상단 중앙으로 이동
-        if (!_isSelectionMode)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12.0),
-            child: Text(
-              '길게 눌러 운동을 선택하고 날짜를 지정하세요.',
-              style: TextStyle(color: Colors.grey, fontSize: 13),
-              textAlign: TextAlign.center,
-            ),
-          ),
+        // [Phase 2] 헤더 영역: 선택 모드 토글
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12.0),
+          child: isSelectionMode
+              ? const Text(
+                  '운동을 선택하고 날짜를 지정하세요.',
+                  style: TextStyle(color: Colors.grey, fontSize: 13),
+                  textAlign: TextAlign.center,
+                )
+              : OutlinedButton.icon(
+                  onPressed: widget.onEnterSelectionMode,
+                  icon: const Icon(Icons.replay, size: 18),
+                  label: const Text('운동 다시하기'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  ),
+                ),
+        ),
         Expanded(
           child: baselinesAsync.when(
             data: (baselines) {
@@ -654,269 +689,122 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
 
               return Stack(
                 children: [
-                  SlidableAutoCloseBehavior(
-                    child: ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: filtered.length,
-                      itemBuilder: (context, index) {
+                  ListView.builder(
+                    padding: EdgeInsets.only(
+                      left: 16,
+                      right: 16,
+                      top: 8,
+                      // 하단 버튼이 있을 때 여백 확보
+                      bottom: (isSelectionMode && selectedIds.isNotEmpty) ? 130 : 16,
+                    ),
+                    itemCount: filtered.length,
+                    itemBuilder: (context, index) {
                       final baseline = filtered[index];
-                      final isSelected =
-                          _selectedBaselineIds.contains(baseline.id);
+                      final isSelected = selectedIds.contains(baseline.id);
                       final targetMusclesText =
-                          (baseline.targetMuscles != null &&
-                                  baseline.targetMuscles!.isNotEmpty)
+                          (baseline.targetMuscles != null && baseline.targetMuscles!.isNotEmpty)
                               ? baseline.targetMuscles!.join(', ')
                               : '부위 미설정';
                       final bodyPartLabel = baseline.bodyPart?.label;
-                      final subtitleText = (bodyPartLabel == null ||
-                              bodyPartLabel.trim().isEmpty)
+                      final subtitleText = (bodyPartLabel == null || bodyPartLabel.trim().isEmpty)
                           ? targetMusclesText
                           : '$bodyPartLabel · $targetMusclesText';
 
-                      final slidableWidget = Slidable(
-                        key: ValueKey(baseline.id),
-                        endActionPane: ActionPane(
-                          motion: const ScrollMotion(),
-                          extentRatio: 0.55,
-                          children: [
-                            SlidableAction(
-                              onPressed: (context) {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => WorkoutAnalysisScreen(
-                                      exerciseName: baseline.exerciseName,
+                      // [Phase 3] 선택 모드에 따라 카드 UI 변경
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        color: (isSelectionMode && isSelected)
+                            ? Colors.blue.withValues(alpha: 0.15)
+                            : null,
+                        child: InkWell(
+                          onTap: isSelectionMode
+                              ? () => widget.onToggleSelection(baseline.id)
+                              : null, // 비선택 모드에서는 탭 비활성화
+                          borderRadius: BorderRadius.circular(12),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            child: ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              // [Phase 3] 선택 모드에서만 체크박스 표시
+                              leading: isSelectionMode
+                                  ? Icon(
+                                      isSelected ? Icons.check_box : Icons.check_box_outline_blank,
+                                      color: isSelected ? Colors.blue : Colors.grey,
+                                      size: 28,
+                                    )
+                                  : Icon(
+                                      Icons.fitness_center,
+                                      color: Colors.grey[600],
+                                      size: 24,
                                     ),
-                                  ),
-                                );
-                              },
-                              backgroundColor: Colors.blue,
-                              foregroundColor: Colors.white,
-                              icon: Icons.history,
-                              label: '운동 기록',
-                              flex: 2,
-                            ),
-                            SlidableAction(
-                              onPressed: (context) =>
-                                  _confirmAndDeleteBaseline(baseline),
-                              backgroundColor: Colors.red,
-                              foregroundColor: Colors.white,
-                              icon: Icons.delete,
-                              label: '삭제',
-                              flex: 1,
-                            ),
-                          ],
-                        ),
-                        child: Card(
-                          color: isSelected
-                              ? Theme.of(context).colorScheme.primaryContainer
-                              : null,
-                          child: _isSelectionMode
-                              ? ListTile(
-                                  leading: Checkbox(
-                                    value: isSelected,
-                                    onChanged: (_) =>
-                                        _toggleSelection(baseline.id),
-                                  ),
-                                  title: Text(baseline.exerciseName),
-                                  subtitle: Text(
-                                    subtitleText,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  onTap: () => _toggleSelection(baseline.id),
-                                )
-                              : GestureDetector(
-                                  onLongPress: () {
-                                    _handleLongPress(baseline.id);
-                                  },
-                                  child: ExpansionTile(
-                                    key: PageStorageKey(
-                                        'exercise_${baseline.exerciseName}'),
-                                    leading: baseline.thumbnailUrl != null &&
-                                            baseline.thumbnailUrl!.isNotEmpty
-                                        ? ClipRRect(
-                                            borderRadius:
-                                                BorderRadius.circular(8),
-                                            child: Image.network(
-                                              baseline.thumbnailUrl!,
-                                              width: 50,
-                                              height: 50,
-                                              fit: BoxFit.cover,
-                                              errorBuilder:
-                                                  (context, error, stackTrace) {
-                                                return const Icon(
-                                                    Icons.fitness_center,
-                                                    size: 50);
-                                              },
-                                            ),
-                                          )
-                                        : const Icon(Icons.fitness_center,
-                                            size: 50),
-                                    title: Text(baseline.exerciseName),
-                                    subtitle: Text(
-                                      subtitleText,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    trailing: const Icon(
-                                      Icons.keyboard_double_arrow_left,
-                                    ),
-                                  initiallyExpanded: false,
-                                  children: [
-                                    // FutureBuilder로 날짜별 히스토리 비동기 로드
-                                    FutureBuilder<
-                                        Map<String, List<WorkoutSet>>>(
-                                      future: ref
-                                          .read(workoutRepositoryProvider)
-                                          .getHistoryByExerciseName(
-                                              baseline.exerciseName),
-                                      builder: (context, snapshot) {
-                                        if (snapshot.connectionState ==
-                                            ConnectionState.waiting) {
-                                          return const Padding(
-                                            padding: EdgeInsets.all(16),
-                                            child: Center(
-                                                child:
-                                                    CircularProgressIndicator()),
-                                          );
-                                        }
-                                        if (!snapshot.hasData ||
-                                            snapshot.data!.isEmpty) {
-                                          return const Padding(
-                                            padding: EdgeInsets.all(16),
-                                            child: Text('기록이 없습니다'),
-                                          );
-                                        }
-                                        final history = snapshot.data!;
-
-                                        // [Step 3] 날짜별 기록을 최신순으로 정렬하고, 최대 5개만 먼저 표시
-                                        final sortedEntries = history.entries
-                                            .toList()
-                                          ..sort((a, b) =>
-                                              b.key.compareTo(a.key)); // 최신순 정렬
-
-                                        // 더보기 기능을 위한 상태 관리
-                                        return StatefulBuilder(
-                                          builder: (context, setState) {
-                                            final showAll =
-                                                _showAllDates[baseline.id] ??
-                                                    false;
-                                            final displayedEntries = showAll
-                                                ? sortedEntries
-                                                : sortedEntries
-                                                    .take(5)
-                                                    .toList();
-                                            final hasMore =
-                                                sortedEntries.length > 5;
-
-                                            return Column(
-                                              children: [
-                                                // 날짜별 기록 리스트
-                                                ...displayedEntries
-                                                    .map((entry) {
-                                                  final dateSets = entry.value;
-                                                  final totalSets = dateSets
-                                                      .length; // 실제 세트 개수
-
-                                                  // 총 볼륨과 총 횟수 계산
-                                                  final totalVolume = dateSets.fold<double>(
-                                                    0.0,
-                                                    (sum, set) => sum + (set.weight * set.reps),
-                                                  );
-                                                  final totalReps = dateSets.fold<int>(
-                                                    0,
-                                                    (sum, set) => sum + set.reps,
-                                                  );
-
-                                                  return ExpansionTile(
-                                                    key: PageStorageKey(
-                                                        'date_${baseline.exerciseName}_${entry.key}'),
-                                                    initiallyExpanded: false,
-                                                    title: Text(
-                                                        '${entry.key} ($totalSets세트)'),
-                                                    children: [
-                                                      ListTile(
-                                                        dense: true,
-                                                        title: Text(
-                                                          '총 볼륨: ${totalVolume.toStringAsFixed(1)}kg / 총 횟수: $totalReps회',
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  );
-                                                }),
-
-                                                // 더보기 버튼
-                                                if (hasMore && !showAll)
-                                                  Padding(
-                                                    padding:
-                                                        const EdgeInsets.all(
-                                                            8.0),
-                                                    child: TextButton.icon(
-                                                      onPressed: () {
-                                                        setState(() {
-                                                          _showAllDates[baseline
-                                                              .id] = true;
-                                                        });
-                                                      },
-                                                      icon: const Icon(
-                                                          Icons.expand_more),
-                                                      label: Text(
-                                                          '더보기 (${sortedEntries.length - 5}개 더)'),
-                                                    ),
-                                                  ),
-                                              ],
-                                            );
-                                          },
-                                        );
-                                      },
-                                    ),
-                                  ],
+                              title: Text(
+                                baseline.exerciseName,
+                                style: TextStyle(
+                                  fontWeight: (isSelectionMode && isSelected)
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
                                 ),
                               ),
+                              subtitle: Text(
+                                subtitleText,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: (isSelectionMode && isSelected)
+                                      ? Colors.blue[700]
+                                      : Colors.grey[600],
+                                ),
+                              ),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.more_vert),
+                                onPressed: () => _showExerciseOptions(baseline),
+                              ),
+                            ),
+                          ),
                         ),
                       );
-
-                      // [Nudge Animation] 첫 번째 아이템에 더블 바운스 애니메이션 적용
-                      if (index == 0) {
-                        return AnimatedBuilder(
-                          animation: _nudgeAnimation,
-                          builder: (context, child) {
-                            return Transform.translate(
-                              offset: Offset(_nudgeAnimation.value, 0),
-                              child: child,
-                            );
-                          },
-                          child: slidableWidget,
-                        );
-                      }
-                      return slidableWidget;
                     },
                   ),
-                  ),
-                  // [MODIFIED - Task 1] 선택 모드 시 하단 버튼
-                  // "루틴으로 저장" 제거, "운동 다시하기" -> 캘린더 시트 오픈
-                  if (_isSelectionMode && _selectedBaselineIds.isNotEmpty)
+                  // [Phase 4] 하단 액션 바 (선택 모드 + 선택된 운동이 있을 때)
+                  if (isSelectionMode && selectedIds.isNotEmpty)
                     Positioned(
                       bottom: 0,
                       left: 0,
                       right: 0,
                       child: Container(
                         color: Theme.of(context).colorScheme.surface,
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                         child: SafeArea(
-                          child: SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: _showWorkoutPlanSheet,
-                              icon: const Icon(Icons.calendar_today),
-                              label: Text(
-                                '${_selectedBaselineIds.length}개 운동 다시하기',
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // 메인 액션 버튼
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton.icon(
+                                  onPressed: _showWorkoutPlanSheet,
+                                  icon: const Icon(Icons.calendar_today),
+                                  label: Text(
+                                    '${selectedIds.length}개 운동 다시하기',
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    minimumSize: const Size.fromHeight(48),
+                                  ),
+                                ),
                               ),
-                              style: ElevatedButton.styleFrom(
-                                minimumSize: const Size.fromHeight(48),
+                              const SizedBox(height: 8),
+                              // 취소 버튼
+                              TextButton(
+                                onPressed: widget.onExitSelectionMode,
+                                child: Text(
+                                  '취소하기',
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: 14,
+                                  ),
+                                ),
                               ),
-                            ),
+                            ],
                           ),
                         ),
                       ),
@@ -943,72 +831,7 @@ class _RoutinesTab extends ConsumerStatefulWidget {
   ConsumerState<_RoutinesTab> createState() => _RoutinesTabState();
 }
 
-class _RoutinesTabState extends ConsumerState<_RoutinesTab>
-    with SingleTickerProviderStateMixin {
-  // [Nudge Animation] 첫 번째 아이템 더블 바운스 힌트용
-  late final AnimationController _nudgeController;
-  late final Animation<double> _nudgeAnimation;
-  bool _hasNudged = false;
-
-  @override
-  void initState() {
-    super.initState();
-
-    // [Nudge Animation] 500ms 동안 더블 바운스 애니메이션
-    _nudgeController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-    );
-
-    // TweenSequence: 왼쪽으로 갔다가 돌아오고, 다시 왼쪽으로 갔다가 돌아옴
-    _nudgeAnimation = TweenSequence<double>([
-      TweenSequenceItem(
-        tween: Tween(begin: 0.0, end: -20.0)
-            .chain(CurveTween(curve: Curves.easeOut)),
-        weight: 25,
-      ),
-      TweenSequenceItem(
-        tween: Tween(begin: -20.0, end: 0.0)
-            .chain(CurveTween(curve: Curves.easeIn)),
-        weight: 25,
-      ),
-      TweenSequenceItem(
-        tween: Tween(begin: 0.0, end: -20.0)
-            .chain(CurveTween(curve: Curves.easeOut)),
-        weight: 25,
-      ),
-      TweenSequenceItem(
-        tween: Tween(begin: -20.0, end: 0.0)
-            .chain(CurveTween(curve: Curves.easeIn)),
-        weight: 25,
-      ),
-    ]).animate(_nudgeController);
-
-    // 화면 렌더링 후 애니메이션 트리거
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _triggerNudgeAnimation();
-    });
-  }
-
-  @override
-  void dispose() {
-    _nudgeController.dispose();
-    super.dispose();
-  }
-
-  /// [Nudge Animation] 첫 번째 루틴 아이템 더블 바운스 애니메이션
-  Future<void> _triggerNudgeAnimation() async {
-    if (_hasNudged) return;
-
-    // 데이터 로딩 및 렌더링 완료 대기
-    await Future.delayed(const Duration(milliseconds: 300));
-
-    if (!mounted) return;
-
-    _nudgeController.forward();
-    _hasNudged = true;
-  }
-
+class _RoutinesTabState extends ConsumerState<_RoutinesTab> {
   /// 루틴 생성 모달 표시
   Future<void> _showCreateRoutineModal(BuildContext context) async {
     final selectedBaselineIds = <String>{};
@@ -1281,6 +1104,15 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab>
 
     return routinesAsync.when(
       data: (routines) {
+        // [Freemium] 생성일 기준 오래된 순으로 정렬 (첫 3개가 무료)
+        // null인 경우 가장 최근으로 간주 (맨 뒤로)
+        final sortedRoutines = List<Routine>.from(routines)
+          ..sort((a, b) {
+            final aDate = a.createdAt ?? DateTime.now();
+            final bDate = b.createdAt ?? DateTime.now();
+            return aDate.compareTo(bDate);
+          });
+
         return Column(
           children: [
             Padding(
@@ -1303,96 +1135,34 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab>
                 ),
               ),
             ),
-            // [Phase 3] 힌트 텍스트 - 상단 중앙 (운동 보관함과 동일)
+            // 힌트 텍스트 - 상단 중앙
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 12.0),
               child: Text(
-                '길게 눌러 운동을 선택하고 날짜를 지정하세요.',
+                '루틴을 탭하여 운동 날짜를 지정하세요.',
                 style: TextStyle(color: Colors.grey, fontSize: 13),
                 textAlign: TextAlign.center,
               ),
             ),
             Expanded(
-              child: routines.isEmpty
+              child: sortedRoutines.isEmpty
                   ? const Center(
                       child: Text('저장된 루틴이 없습니다'),
                     )
-                  // [Phase 2] SlidableAutoCloseBehavior로 감싸서 다른 Slidable 열 때 자동 닫힘
-                  : SlidableAutoCloseBehavior(
-                      child: ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: routines.length,
-                        itemBuilder: (context, index) {
-                          final routine = routines[index];
-                          // [Phase 2] Slidable + InkWell로 변경
-                          final slidableWidget = Slidable(
-                            key: ValueKey('routine_${routine.id}'),
-                            // [Phase 1 Fix] 왼쪽 스와이프 시 2개 버튼 표시
-                            // extentRatio 0.5 → 0.6으로 증가 (한글 텍스트 오버플로우 방지)
-                            endActionPane: ActionPane(
-                              motion: const ScrollMotion(),
-                              extentRatio: 0.6,
-                              children: [
-                                // "저장된 운동" 버튼 (Phase 3에서 Detail 페이지로 이동)
-                                SlidableAction(
-                                  onPressed: (_) => _navigateToRoutineDetail(routine),
-                                  backgroundColor: Colors.blue,
-                                  foregroundColor: Colors.white,
-                                  icon: Icons.list_alt,
-                                  label: '저장된 운동',
-                                  spacing: 4, // 아이콘과 텍스트 간격 조정
-                                ),
-                                // "루틴 삭제" 버튼
-                                SlidableAction(
-                                  onPressed: (_) => _deleteRoutine(routine),
-                                  backgroundColor: Colors.red,
-                                  foregroundColor: Colors.white,
-                                  icon: Icons.delete,
-                                  label: '루틴 삭제',
-                                  spacing: 4,
-                                ),
-                              ],
-                            ),
-                            // [Phase 1 Fix] Long-Press 시각적 피드백 추가
-                            // GestureDetector → Material + InkWell로 변경 (ripple 효과)
-                            child: Card(
-                              clipBehavior: Clip.antiAlias,
-                              child: InkWell(
-                                onLongPress: () => _showRoutinePlanSheet(routine),
-                                borderRadius: BorderRadius.circular(12),
-                                child: ListTile(
-                                  title: Text(routine.name),
-                                  subtitle: Text(
-                                    '${routine.routineItems?.length ?? 0}개 운동',
-                                  ),
-                                  // 스와이프 힌트 아이콘
-                                  trailing: const Icon(
-                                    Icons.chevron_left,
-                                    color: Colors.grey,
-                                    size: 20,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: sortedRoutines.length,
+                      itemBuilder: (context, index) {
+                        final routine = sortedRoutines[index];
+                        // [Freemium] 무료 사용자는 index 0, 1, 2만 접근 가능
+                        final isLocked = !isPremium && index >= 3;
 
-                          // [Nudge Animation] 첫 번째 아이템만 더블 바운스 애니메이션 적용
-                          if (index == 0) {
-                            return AnimatedBuilder(
-                              animation: _nudgeAnimation,
-                              builder: (context, child) {
-                                return Transform.translate(
-                                  offset: Offset(_nudgeAnimation.value, 0),
-                                  child: child,
-                                );
-                              },
-                              child: slidableWidget,
-                            );
-                          }
-
-                          return slidableWidget;
-                        },
-                      ),
+                        return _buildRoutineCard(
+                          routine: routine,
+                          isLocked: isLocked,
+                          index: index,
+                        );
+                      },
                     ),
             ),
           ],
@@ -1405,7 +1175,97 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab>
     );
   }
 
-  /// [Phase 3] 루틴 상세 페이지로 이동
+  /// [Freemium] 루틴 카드 빌드 (잠금 상태 지원)
+  Widget _buildRoutineCard({
+    required Routine routine,
+    required bool isLocked,
+    required int index,
+  }) {
+    final cardContent = Card(
+      key: ValueKey('routine_${routine.id}'),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: isLocked
+            ? () => _showUpgradePrompt()
+            : () => _showRoutinePlanSheet(routine),
+        borderRadius: BorderRadius.circular(12),
+        child: ListTile(
+          title: Text(
+            routine.name,
+            style: TextStyle(
+              color: isLocked ? Colors.grey : null,
+            ),
+          ),
+          subtitle: Text(
+            '${routine.routineItems?.length ?? 0}개 운동',
+            style: TextStyle(
+              color: isLocked ? Colors.grey[400] : null,
+            ),
+          ),
+          // 3-dots 메뉴 버튼 (잠금 시 비활성화)
+          trailing: isLocked
+              ? const Icon(Icons.lock, color: Colors.grey)
+              : IconButton(
+                  icon: const Icon(Icons.more_vert),
+                  onPressed: () => _showRoutineOptionsSheet(routine),
+                ),
+        ),
+      ),
+    );
+
+    // [Freemium] 잠금 상태 UI
+    if (isLocked) {
+      return Stack(
+        children: [
+          // 카드에 반투명 효과
+          Opacity(
+            opacity: 0.6,
+            child: cardContent,
+          ),
+          // 프리미엄 배지 오버레이
+          Positioned(
+            top: 8,
+            right: 24,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.amber[700],
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.workspace_premium, size: 14, color: Colors.white),
+                  SizedBox(width: 4),
+                  Text(
+                    'PRO',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return cardContent;
+  }
+
+  /// [Freemium] 프리미엄 업그레이드 안내 표시
+  Future<void> _showUpgradePrompt() async {
+    final isPurchased = await showPremiumGuidanceDialog(context);
+    if (isPurchased == true && mounted) {
+      ref.invalidate(subscriptionProvider);
+      ref.invalidate(routinesProvider);
+    }
+  }
+
+  /// 루틴 상세 페이지로 이동
   void _navigateToRoutineDetail(Routine routine) {
     Navigator.push(
       context,
@@ -1415,7 +1275,70 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab>
     );
   }
 
-  /// [Phase 2] 루틴 계획 캘린더 시트 표시 (Long-Press 시 호출)
+  /// 루틴 옵션 BottomSheet 표시 (3-dots 메뉴)
+  void _showRoutineOptionsSheet(Routine routine) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 드래그 핸들
+              Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[400],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // 루틴 이름 헤더
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Text(
+                  routine.name,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const Divider(),
+              // 저장된 운동 보기
+              ListTile(
+                leading: const Icon(Icons.list_alt, color: Colors.blue),
+                title: const Text('저장된 운동 보기'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _navigateToRoutineDetail(routine);
+                },
+              ),
+              // 루틴 삭제
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                title: const Text(
+                  '루틴 삭제',
+                  style: TextStyle(color: Colors.red),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _deleteRoutine(routine);
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// 루틴 계획 캘린더 시트 표시 (단일 탭 시 호출)
   Future<void> _showRoutinePlanSheet(Routine routine) async {
     if (routine.routineItems == null || routine.routineItems!.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(

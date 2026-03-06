@@ -1,17 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:intl/intl.dart';
 import '../../../data/models/routine.dart';
 import '../../../data/models/routine_item.dart';
 import '../../../core/enums/exercise_enums.dart';
 import '../../providers/workout_provider.dart';
 
-/// [Phase 3] 루틴 상세 페이지
+/// 루틴 상세 페이지
 /// - 루틴 이름 수정 (AppBar)
 /// - 볼륨 차트 (루틴 수행 기록)
-/// - 운동 목록 (Slidable로 삭제 가능)
+/// - 운동 목록 (3-dots 메뉴로 삭제 가능)
 /// - 운동 추가 버튼
 class RoutineDetailScreen extends ConsumerStatefulWidget {
   final Routine routine;
@@ -832,55 +831,92 @@ class _RoutineDetailScreenState extends ConsumerState<RoutineDetailScreen> {
       );
     }
 
-    return SlidableAutoCloseBehavior(
-      child: Column(
-        children: items.map((item) {
-          return Slidable(
-            key: ValueKey('routine_item_${item.id}'),
-            endActionPane: ActionPane(
-              motion: const ScrollMotion(),
-              extentRatio: 0.25,
-              children: [
-                SlidableAction(
-                  onPressed: (_) => _removeExercise(item),
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                  icon: Icons.delete,
-                  label: '삭제',
-                ),
-              ],
-            ),
-            child: Card(
-              clipBehavior: Clip.antiAlias,
-              child: ListTile(
-                leading: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(
-                    Icons.fitness_center,
-                    color: Theme.of(context).colorScheme.primary,
-                    size: 20,
-                  ),
-                ),
-                title: Text(
-                  item.exerciseName,
-                  style: const TextStyle(fontWeight: FontWeight.w500),
-                ),
-                subtitle: Text(item.bodyPart?.label ?? '미분류'),
-                trailing: const Icon(
-                  Icons.chevron_left,
-                  color: Colors.grey,
-                  size: 20,
-                ),
+    return Column(
+      children: items.map((item) {
+        return Card(
+          key: ValueKey('routine_item_${item.id}'),
+          clipBehavior: Clip.antiAlias,
+          child: ListTile(
+            leading: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                Icons.fitness_center,
+                color: Theme.of(context).colorScheme.primary,
+                size: 20,
               ),
             ),
-          );
-        }).toList(),
+            title: Text(
+              item.exerciseName,
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+            subtitle: Text(item.bodyPart?.label ?? '미분류'),
+            // 3-dots 메뉴 버튼
+            trailing: IconButton(
+              icon: const Icon(Icons.more_vert),
+              onPressed: () => _showExerciseOptionsSheet(item),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  /// 운동 옵션 BottomSheet 표시 (3-dots 메뉴)
+  void _showExerciseOptionsSheet(RoutineItem item) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 드래그 핸들
+              Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[400],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // 운동 이름 헤더
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Text(
+                  item.exerciseName,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const Divider(),
+              // 삭제
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                title: const Text(
+                  '루틴에서 삭제',
+                  style: TextStyle(color: Colors.red),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _removeExercise(item);
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
     );
   }
 }

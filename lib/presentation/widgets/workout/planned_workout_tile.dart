@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_slidable/flutter_slidable.dart';
 import '../../../core/utils/adaptive_widgets.dart';
 import '../../../data/models/planned_workout.dart';
 import '../../providers/workout_provider.dart';
 
-/// [MODIFIED - Task 1] 캘린더 화면의 계획된 운동 타일
-/// Slidable로 변경: 왼쪽 스와이프 시 "날짜 수정", "삭제" 버튼 표시
+/// 캘린더 화면의 계획된 운동 타일
+/// 3-dots 메뉴 버튼으로 "날짜 수정", "삭제" 옵션 제공
 class PlannedWorkoutTile extends ConsumerWidget {
   final PlannedWorkout plannedWorkout;
   final String exerciseName;
@@ -21,73 +20,109 @@ class PlannedWorkoutTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // [Task 1] Slidable로 감싸서 스와이프 액션 제공
-    return Slidable(
+    return ListTile(
       key: ValueKey('planned_${plannedWorkout.id}'),
-      // [Task 1] 왼쪽으로 스와이프 시 "날짜 수정", "삭제" 버튼 2개 표시
-      endActionPane: ActionPane(
-        motion: const ScrollMotion(),
-        extentRatio: 0.5, // 화면의 50%만큼 열림
-        children: [
-          // [Task 1] 날짜 수정 버튼
-          SlidableAction(
-            onPressed: (ctx) => _changeDate(context, ref),
-            backgroundColor: Colors.blue,
-            foregroundColor: Colors.white,
-            icon: Icons.calendar_today,
-            label: '날짜 수정',
-          ),
-          // [Task 1] 삭제 버튼
-          SlidableAction(
-            onPressed: (ctx) => _showDeleteDialog(context, ref),
-            backgroundColor: Colors.red,
-            foregroundColor: Colors.white,
-            icon: Icons.delete,
-            label: '삭제',
-          ),
-        ],
-      ),
-      child: ListTile(
-        leading: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: Color(int.parse(plannedWorkout.colorHex)).withValues(alpha: 0.2),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(
-            Icons.fitness_center,
-            color: Color(int.parse(plannedWorkout.colorHex)),
-            size: 20,
-          ),
+      leading: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: Color(int.parse(plannedWorkout.colorHex)).withValues(alpha: 0.2),
+          borderRadius: BorderRadius.circular(8),
         ),
-        title: Text(
-          exerciseName,
-          style: const TextStyle(fontWeight: FontWeight.w500),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 4),
-            // Manual(0kg x 0회) vs AI Plan(값 있음) 구분 표시
-            Text(
-              plannedWorkout.targetWeight == 0 && plannedWorkout.targetReps == 0
-                  ? '${plannedWorkout.targetSets}세트 예정'
-                  : '${plannedWorkout.targetWeight}kg × ${plannedWorkout.targetReps}회 (${plannedWorkout.targetSets}세트)',
-            ),
-            if (plannedWorkout.aiComment != null && plannedWorkout.aiComment!.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              _buildCommentBadge(plannedWorkout.aiComment!),
-            ],
-          ],
-        ),
-        // [Task 1] 스와이프 힌트 아이콘으로 변경
-        trailing: const Icon(
-          Icons.chevron_left,
-          color: Colors.grey,
+        child: Icon(
+          Icons.fitness_center,
+          color: Color(int.parse(plannedWorkout.colorHex)),
           size: 20,
         ),
       ),
+      title: Text(
+        exerciseName,
+        style: const TextStyle(fontWeight: FontWeight.w500),
+      ),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 4),
+          // Manual(0kg x 0회) vs AI Plan(값 있음) 구분 표시
+          Text(
+            plannedWorkout.targetWeight == 0 && plannedWorkout.targetReps == 0
+                ? '${plannedWorkout.targetSets}세트 예정'
+                : '${plannedWorkout.targetWeight}kg × ${plannedWorkout.targetReps}회 (${plannedWorkout.targetSets}세트)',
+          ),
+          if (plannedWorkout.aiComment != null && plannedWorkout.aiComment!.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _buildCommentBadge(plannedWorkout.aiComment!),
+          ],
+        ],
+      ),
+      // 3-dots 메뉴 버튼
+      trailing: IconButton(
+        icon: const Icon(Icons.more_vert),
+        onPressed: () => _showOptionsSheet(context, ref),
+      ),
+    );
+  }
+
+  /// 옵션 BottomSheet 표시 (3-dots 메뉴)
+  void _showOptionsSheet(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 드래그 핸들
+              Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[400],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // 운동 이름 헤더
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Text(
+                  exerciseName,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const Divider(),
+              // 날짜 수정
+              ListTile(
+                leading: const Icon(Icons.calendar_today, color: Colors.blue),
+                title: const Text('날짜 수정'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _changeDate(context, ref);
+                },
+              ),
+              // 삭제
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                title: const Text(
+                  '삭제',
+                  style: TextStyle(color: Colors.red),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _showDeleteDialog(context, ref);
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
     );
   }
 

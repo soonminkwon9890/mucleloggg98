@@ -387,12 +387,55 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          '오늘 총 볼륨',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: appCard?.subTextColor ?? Colors.grey,
-                          ),
+                        // 상단 Row: "오늘 총 볼륨" + "보관함" 버튼
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Text(
+                              '오늘 총 볼륨',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: appCard?.subTextColor ?? Colors.grey,
+                              ),
+                            ),
+                            // 보관함 바로가기 버튼
+                            InkWell(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const ManagementScreen(),
+                                  ),
+                                );
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.inventory_2_outlined,
+                                      size: 16,
+                                      color: appCard?.subTextColor ?? Colors.grey,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '보관함',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: appCard?.subTextColor ?? Colors.grey,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 8),
                         Text(

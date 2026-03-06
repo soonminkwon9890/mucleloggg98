@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:uuid/uuid.dart';
@@ -23,8 +22,7 @@ class ProfileScreen extends ConsumerStatefulWidget {
   ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends ConsumerState<ProfileScreen>
-    with SingleTickerProviderStateMixin {
+class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
   List<ExerciseBaseline>? _selectedDayWorkouts;
@@ -35,72 +33,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   Map<DateTime, PlannedWorkout> _plannedWorkoutsByDate = {};
   List<PlannedWorkout> _selectedDayPlannedWorkouts = [];
   Map<String, String> _exerciseNameMap = {}; // baselineId -> exerciseName 매핑
-  // [REMOVED] _isConvertingToLog - 운동 완료 버튼 제거로 불필요
   bool _isGeneratingRoutine = false; // AI 루틴 생성 중 로딩 상태
-
-  // [Nudge Animation] 첫 번째 아이템 더블 바운스 힌트용
-  late final AnimationController _nudgeController;
-  late final Animation<double> _nudgeAnimation;
-  bool _hasNudged = false;
 
   @override
   void initState() {
     super.initState();
 
-    // [Nudge Animation] 500ms 동안 더블 바운스 애니메이션
-    _nudgeController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-    );
-
-    // TweenSequence: 왼쪽으로 갔다가 돌아오고, 다시 왼쪽으로 갔다가 돌아옴
-    _nudgeAnimation = TweenSequence<double>([
-      TweenSequenceItem(
-        tween: Tween(begin: 0.0, end: -20.0)
-            .chain(CurveTween(curve: Curves.easeOut)),
-        weight: 25,
-      ),
-      TweenSequenceItem(
-        tween: Tween(begin: -20.0, end: 0.0)
-            .chain(CurveTween(curve: Curves.easeIn)),
-        weight: 25,
-      ),
-      TweenSequenceItem(
-        tween: Tween(begin: 0.0, end: -20.0)
-            .chain(CurveTween(curve: Curves.easeOut)),
-        weight: 25,
-      ),
-      TweenSequenceItem(
-        tween: Tween(begin: -20.0, end: 0.0)
-            .chain(CurveTween(curve: Curves.easeIn)),
-        weight: 25,
-      ),
-    ]).animate(_nudgeController);
-
     // 초기 로드
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadPlannedWorkoutsForMonth(_focusedDay);
     });
-  }
-
-  @override
-  void dispose() {
-    _nudgeController.dispose();
-    super.dispose();
-  }
-
-  /// [Nudge Animation] 첫 번째 운동 아이템 더블 바운스 애니메이션
-  Future<void> _triggerNudgeAnimation() async {
-    if (_hasNudged) return;
-
-    // 렌더링 완료 대기
-    await Future.delayed(const Duration(milliseconds: 300));
-
-    if (!mounted) return;
-
-    // 더블 바운스 애니메이션 실행
-    _nudgeController.forward();
-    _hasNudged = true;
   }
 
   Future<void> _openExerciseSearchSheet() async {
@@ -326,13 +268,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           _selectedDayWorkouts = workouts;
           _isLoadingWorkouts = false;
         });
-
-        // [Nudge Animation] 운동 데이터 로드 후 더블 바운스 애니메이션 트리거
-        if (workouts.isNotEmpty) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            _triggerNudgeAnimation();
-          });
-        }
       }
     } catch (e) {
       if (mounted) {
@@ -342,6 +277,66 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         });
       }
     }
+  }
+
+  /// 완료된 운동 옵션 BottomSheet 표시 (3-dots 메뉴)
+  void _showCompletedWorkoutOptionsSheet(ExerciseBaseline baseline) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 드래그 핸들
+              Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[400],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // 운동 이름 헤더
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Text(
+                  baseline.exerciseName,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const Divider(),
+              // 기록 보기
+              ListTile(
+                leading: const Icon(Icons.history, color: Colors.blue),
+                title: const Text('기록 보기'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  final dateKey = DateFormat('yyyy-MM-dd').format(_selectedDay!);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => WorkoutAnalysisScreen(
+                        exerciseName: baseline.exerciseName,
+                        initialDateKey: dateKey,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   /// AI 루틴 생성 메서드
@@ -790,11 +785,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 else
                   Column(
                     children: [
-                      // [MODIFIED - Task 1] 완료된 운동 섹션 with Slidable
+                      // 완료된 운동 섹션
                       if (_selectedDayWorkouts != null &&
                           _selectedDayWorkouts!.isNotEmpty)
                         Card(
-                          clipBehavior: Clip.antiAlias, // Slidable이 Card 모서리를 넘지 않도록
+                          clipBehavior: Clip.antiAlias,
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -808,115 +803,67 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                   ),
                                 ),
                               ),
-                              // [Task 1] SlidableAutoCloseBehavior로 감싸서 하나만 열리도록
-                              SlidableAutoCloseBehavior(
-                                child: Column(
-                                  children: _selectedDayWorkouts!.asMap().entries.map((entry) {
-                                    final index = entry.key;
-                                    final baseline = entry.value;
-                                    final slidableWidget = Slidable(
-                                      key: ValueKey('completed_${baseline.id}'),
-                                      // [Task 1] 완료된 운동: 왼쪽으로 스와이프 시 "기록 보기" 버튼 1개
-                                      endActionPane: ActionPane(
-                                        motion: const ScrollMotion(),
-                                        extentRatio: 0.25,
-                                        children: [
-                                          SlidableAction(
-                                            onPressed: (context) {
-                                              final dateKey = DateFormat('yyyy-MM-dd').format(_selectedDay!);
-                                              Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (_) => WorkoutAnalysisScreen(
-                                                    exerciseName: baseline.exerciseName,
-                                                    initialDateKey: dateKey,
-                                                  ),
-                                                ),
-                                              );
-                                            },
-                                            backgroundColor: Colors.blue,
-                                            foregroundColor: Colors.white,
-                                            icon: Icons.history,
-                                            label: '기록 보기',
-                                          ),
-                                        ],
-                                      ),
-                                      child: ListTile(
-                                        leading: baseline.thumbnailUrl != null
-                                            ? ClipRRect(
-                                                borderRadius: BorderRadius.circular(8),
-                                                child: Image.network(
-                                                  baseline.thumbnailUrl!,
-                                                  width: 50,
-                                                  height: 50,
-                                                  fit: BoxFit.cover,
-                                                  errorBuilder: (context, error, stackTrace) {
-                                                    return const Icon(
-                                                      Icons.fitness_center,
-                                                      size: 40,
-                                                    );
-                                                  },
-                                                ),
-                                              )
-                                            : const Icon(
-                                                Icons.fitness_center,
-                                                size: 40,
-                                              ),
-                                        title: Text(baseline.exerciseName),
-                                        subtitle: baseline.workoutSets != null &&
-                                                baseline.workoutSets!.isNotEmpty
-                                            ? Text(
-                                                '${baseline.workoutSets!.length}세트',
-                                              )
-                                            : null,
-                                        // [Task 1] trailing 버튼 제거 - 스와이프로 대체
-                                        trailing: const Icon(
-                                          Icons.chevron_left,
-                                          color: Colors.grey,
-                                          size: 20,
-                                        ),
-                                        onTap: () {
-                                          final dateKey = DateFormat('yyyy-MM-dd').format(_selectedDay!);
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (_) => WorkoutAnalysisScreen(
-                                                exerciseName: baseline.exerciseName,
-                                                initialDateKey: dateKey,
-                                              ),
+                              Column(
+                                children: _selectedDayWorkouts!.map((baseline) {
+                                  return ListTile(
+                                    key: ValueKey('completed_${baseline.id}'),
+                                    leading: baseline.thumbnailUrl != null
+                                        ? ClipRRect(
+                                            borderRadius: BorderRadius.circular(8),
+                                            child: Image.network(
+                                              baseline.thumbnailUrl!,
+                                              width: 50,
+                                              height: 50,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (context, error, stackTrace) {
+                                                return const Icon(
+                                                  Icons.fitness_center,
+                                                  size: 40,
+                                                );
+                                              },
                                             ),
-                                          );
-                                        },
-                                      ),
-                                    );
-
-                                    // [Nudge Animation] 첫 번째 아이템에 더블 바운스 애니메이션 적용
-                                    if (index == 0) {
-                                      return AnimatedBuilder(
-                                        animation: _nudgeAnimation,
-                                        builder: (context, child) {
-                                          return Transform.translate(
-                                            offset: Offset(_nudgeAnimation.value, 0),
-                                            child: child,
-                                          );
-                                        },
-                                        child: slidableWidget,
+                                          )
+                                        : const Icon(
+                                            Icons.fitness_center,
+                                            size: 40,
+                                          ),
+                                    title: Text(baseline.exerciseName),
+                                    subtitle: baseline.workoutSets != null &&
+                                            baseline.workoutSets!.isNotEmpty
+                                        ? Text(
+                                            '${baseline.workoutSets!.length}세트',
+                                          )
+                                        : null,
+                                    // 3-dots 메뉴 버튼
+                                    trailing: IconButton(
+                                      icon: const Icon(Icons.more_vert),
+                                      onPressed: () => _showCompletedWorkoutOptionsSheet(baseline),
+                                    ),
+                                    onTap: () {
+                                      final dateKey = DateFormat('yyyy-MM-dd').format(_selectedDay!);
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => WorkoutAnalysisScreen(
+                                            exerciseName: baseline.exerciseName,
+                                            initialDateKey: dateKey,
+                                          ),
+                                        ),
                                       );
-                                    }
-                                    return slidableWidget;
-                                  }).toList(),
-                                ),
+                                    },
+                                  );
+                                }).toList(),
                               ),
                             ],
                           ),
                         ),
-                      // [MODIFIED - Task 1] 계획된 운동 섹션 with Slidable
+                      // 계획된 운동 섹션
                       if (_selectedDayPlannedWorkouts.isNotEmpty) ...[
                         if (_selectedDayWorkouts != null &&
                             _selectedDayWorkouts!.isNotEmpty)
                           const SizedBox(height: 16),
                         Card(
-                          clipBehavior: Clip.antiAlias, // Slidable이 Card 모서리를 넘지 않도록
+                          clipBehavior: Clip.antiAlias,
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -930,29 +877,26 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                   ),
                                 ),
                               ),
-                              // [Task 1] SlidableAutoCloseBehavior로 감싸서 하나만 열리도록
-                              SlidableAutoCloseBehavior(
-                                child: Column(
-                                  children: _selectedDayPlannedWorkouts
-                                      .map((plannedWorkout) {
-                                    final exerciseName =
-                                        plannedWorkout.exerciseName ??
-                                            _exerciseNameMap[
-                                                plannedWorkout.baselineId] ??
-                                            '알 수 없음';
-                                    return PlannedWorkoutTile(
-                                      plannedWorkout: plannedWorkout,
-                                      exerciseName: exerciseName,
-                                      onUpdated: () {
-                                        _loadPlannedWorkoutsForDate(_selectedDay!);
-                                        _loadPlannedWorkoutsForMonth(
-                                            _focusedDay); // 캘린더 마커 갱신
-                                      },
-                                    );
-                                  }).toList(),
-                                ),
+                              Column(
+                                children: _selectedDayPlannedWorkouts
+                                    .map((plannedWorkout) {
+                                  final exerciseName =
+                                      plannedWorkout.exerciseName ??
+                                          _exerciseNameMap[
+                                              plannedWorkout.baselineId] ??
+                                          '알 수 없음';
+                                  return PlannedWorkoutTile(
+                                    plannedWorkout: plannedWorkout,
+                                    exerciseName: exerciseName,
+                                    onUpdated: () {
+                                      _loadPlannedWorkoutsForDate(_selectedDay!);
+                                      _loadPlannedWorkoutsForMonth(
+                                          _focusedDay); // 캘린더 마커 갱신
+                                    },
+                                  );
+                                }).toList(),
                               ),
-                              const SizedBox(height: 8), // 하단 여백만 유지
+                              const SizedBox(height: 8),
                             ],
                           ),
                         ),
