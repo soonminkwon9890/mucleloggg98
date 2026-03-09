@@ -16,7 +16,15 @@ import '../../../core/enums/exercise_enums.dart';
 
 /// 관리 페이지 (운동 보관함 및 루틴 관리)
 class ManagementScreen extends ConsumerStatefulWidget {
-  const ManagementScreen({super.key});
+  /// [Phase 1] 진입 경로에 따른 모드 설정
+  /// - true: Selection Mode (Path A: "+ 운동 추가하기" → "내 보관함에서 불러오기")
+  /// - false: Management Mode (Path B: "보관함" 버튼)
+  final bool isSelectionMode;
+
+  const ManagementScreen({
+    super.key,
+    required this.isSelectionMode,
+  });
 
   @override
   ConsumerState<ManagementScreen> createState() => _ManagementScreenState();
@@ -27,34 +35,25 @@ class _ManagementScreenState extends ConsumerState<ManagementScreen>
   late TabController _tabController;
 
   // [Phase 1] 운동 보관함 선택 상태 (탭 전환 시 유지)
-  bool _isSelectionMode = false;
+  // 초기값은 widget.isSelectionMode에서 설정됨 (initState에서)
+  late bool _isSelectionMode;
   final Set<String> _selectedBaselineIds = {};
+
+  // [Phase 1] 루틴 탭 선택 상태
+  final Set<String> _selectedRoutineIds = {};
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    // [Phase 1] 진입 경로에 따른 초기 모드 설정
+    _isSelectionMode = widget.isSelectionMode;
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
-  }
-
-  /// 선택 모드 진입
-  void _enterSelectionMode() {
-    setState(() {
-      _isSelectionMode = true;
-    });
-  }
-
-  /// 선택 모드 종료 및 선택 초기화
-  void _exitSelectionMode() {
-    setState(() {
-      _isSelectionMode = false;
-      _selectedBaselineIds.clear();
-    });
   }
 
   /// 운동 선택 토글
@@ -68,11 +67,28 @@ class _ManagementScreenState extends ConsumerState<ManagementScreen>
     });
   }
 
-  /// 선택 초기화 (스케줄링 완료 후 호출)
+  /// 선택 초기화 (스케줄링 완료 또는 선택 해제 시 호출)
   void _clearSelection() {
     setState(() {
       _selectedBaselineIds.clear();
-      _isSelectionMode = false;
+    });
+  }
+
+  /// 루틴 선택 토글
+  void _toggleRoutineSelection(String routineId) {
+    setState(() {
+      if (_selectedRoutineIds.contains(routineId)) {
+        _selectedRoutineIds.remove(routineId);
+      } else {
+        _selectedRoutineIds.add(routineId);
+      }
+    });
+  }
+
+  /// 루틴 선택 초기화
+  void _clearRoutineSelection() {
+    setState(() {
+      _selectedRoutineIds.clear();
     });
   }
 
@@ -96,12 +112,15 @@ class _ManagementScreenState extends ConsumerState<ManagementScreen>
           _ExerciseLibraryTab(
             isSelectionMode: _isSelectionMode,
             selectedBaselineIds: _selectedBaselineIds,
-            onEnterSelectionMode: _enterSelectionMode,
-            onExitSelectionMode: _exitSelectionMode,
             onToggleSelection: _toggleSelection,
             onClearSelection: _clearSelection,
           ),
-          const _RoutinesTab(),
+          _RoutinesTab(
+            isSelectionMode: _isSelectionMode,
+            selectedRoutineIds: _selectedRoutineIds,
+            onToggleSelection: _toggleRoutineSelection,
+            onClearSelection: _clearRoutineSelection,
+          ),
         ],
       ),
     );
@@ -112,16 +131,12 @@ class _ManagementScreenState extends ConsumerState<ManagementScreen>
 class _ExerciseLibraryTab extends ConsumerStatefulWidget {
   final bool isSelectionMode;
   final Set<String> selectedBaselineIds;
-  final VoidCallback onEnterSelectionMode;
-  final VoidCallback onExitSelectionMode;
   final void Function(String) onToggleSelection;
   final VoidCallback onClearSelection;
 
   const _ExerciseLibraryTab({
     required this.isSelectionMode,
     required this.selectedBaselineIds,
-    required this.onEnterSelectionMode,
-    required this.onExitSelectionMode,
     required this.onToggleSelection,
     required this.onClearSelection,
   });
@@ -658,24 +673,16 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
           controller: _tabController,
           tabs: BodyPart.values.map((bodyPart) => Tab(text: bodyPart.label)).toList(),
         ),
-        // [Phase 2] 헤더 영역: 선택 모드 토글
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12.0),
-          child: isSelectionMode
-              ? const Text(
-                  '운동을 선택하고 날짜를 지정하세요.',
-                  style: TextStyle(color: Colors.grey, fontSize: 13),
-                  textAlign: TextAlign.center,
-                )
-              : OutlinedButton.icon(
-                  onPressed: widget.onEnterSelectionMode,
-                  icon: const Icon(Icons.replay, size: 18),
-                  label: const Text('운동 다시하기'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  ),
-                ),
-        ),
+        // [Phase 2] 헤더 영역: Selection Mode에서만 안내 텍스트 표시
+        if (isSelectionMode)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12.0),
+            child: Text(
+              '운동을 선택하고 날짜를 지정하세요.',
+              style: TextStyle(color: Colors.grey, fontSize: 13),
+              textAlign: TextAlign.center,
+            ),
+          ),
         Expanded(
           child: baselinesAsync.when(
             data: (baselines) {
@@ -719,7 +726,7 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
                         child: InkWell(
                           onTap: isSelectionMode
                               ? () => widget.onToggleSelection(baseline.id)
-                              : null, // 비선택 모드에서는 탭 비활성화
+                              : () => _showExerciseOptions(baseline), // [Phase 3] Management Mode: 탭 시 옵션 시트 표시
                           borderRadius: BorderRadius.circular(12),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -755,10 +762,7 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
                                       : Colors.grey[600],
                                 ),
                               ),
-                              trailing: IconButton(
-                                icon: const Icon(Icons.more_vert),
-                                onPressed: () => _showExerciseOptions(baseline),
-                              ),
+                              // [Phase 3] 3-dots 메뉴 제거 - 카드 탭으로 대체
                             ),
                           ),
                         ),
@@ -793,11 +797,11 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
                                 ),
                               ),
                               const SizedBox(height: 8),
-                              // 취소 버튼
+                              // 취소 버튼 - 선택 해제 후 화면 유지
                               TextButton(
-                                onPressed: widget.onExitSelectionMode,
+                                onPressed: widget.onClearSelection,
                                 child: Text(
-                                  '취소하기',
+                                  '선택 해제',
                                   style: TextStyle(
                                     color: Colors.grey[600],
                                     fontSize: 14,
@@ -825,7 +829,17 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
 
 /// 탭 2: 나만의 루틴
 class _RoutinesTab extends ConsumerStatefulWidget {
-  const _RoutinesTab();
+  final bool isSelectionMode;
+  final Set<String> selectedRoutineIds;
+  final void Function(String) onToggleSelection;
+  final VoidCallback onClearSelection;
+
+  const _RoutinesTab({
+    required this.isSelectionMode,
+    required this.selectedRoutineIds,
+    required this.onToggleSelection,
+    required this.onClearSelection,
+  });
 
   @override
   ConsumerState<_RoutinesTab> createState() => _RoutinesTabState();
@@ -1097,10 +1111,384 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab> {
     }
   }
 
+  /// [Phase 2] 선택된 루틴들의 운동 계획 시트 표시
+  Future<void> _showSelectedRoutinesPlanSheet(List<Routine> allRoutines) async {
+    final selectedIds = widget.selectedRoutineIds;
+    if (selectedIds.isEmpty) return;
+
+    // 선택된 루틴들 필터링
+    final selectedRoutines = allRoutines
+        .where((r) => selectedIds.contains(r.id))
+        .toList();
+
+    if (selectedRoutines.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('선택된 루틴을 찾을 수 없습니다.')),
+      );
+      return;
+    }
+
+    // 선택된 루틴들의 모든 운동 수집
+    final allExerciseNames = <String>[];
+    for (final routine in selectedRoutines) {
+      if (routine.routineItems != null) {
+        for (final item in routine.routineItems!) {
+          allExerciseNames.add(item.exerciseName);
+        }
+      }
+    }
+
+    if (allExerciseNames.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('선택된 루틴에 운동이 없습니다.')),
+      );
+      return;
+    }
+
+    // 캘린더 상태 관리
+    DateTime focusedDay = DateTime.now();
+    DateTime? selectedDay;
+    Map<DateTime, PlannedWorkout> plannedWorkoutsByDate = {};
+
+    // Planned workouts 로드 함수
+    Future<void> loadPlannedWorkouts(DateTime month) async {
+      try {
+        final repository = ref.read(workoutRepositoryProvider);
+        final startDate = DateTime(month.year, month.month, 1);
+        final endDate = DateTime(month.year, month.month + 1, 0);
+
+        final plannedWorkouts = await repository.getPlannedWorkoutsByDateRange(
+          startDate,
+          endDate,
+        );
+
+        plannedWorkoutsByDate = {};
+        for (final workout in plannedWorkouts) {
+          if (workout.isConvertedToLog) continue;
+          final dateKey = DateTime(
+            workout.scheduledDate.year,
+            workout.scheduledDate.month,
+            workout.scheduledDate.day,
+          );
+          plannedWorkoutsByDate.putIfAbsent(dateKey, () => workout);
+        }
+      } catch (e) {
+        plannedWorkoutsByDate = {};
+      }
+    }
+
+    // 초기 로드
+    await loadPlannedWorkouts(focusedDay);
+
+    if (!mounted) return;
+
+    // BottomSheet 표시
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final screenHeight = MediaQuery.of(context).size.height;
+            final sheetHeight = screenHeight * 2 / 3;
+
+            return Container(
+              height: sheetHeight,
+              decoration: BoxDecoration(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(20),
+                ),
+              ),
+              child: Column(
+                children: [
+                  // 드래그 핸들
+                  Container(
+                    margin: const EdgeInsets.only(top: 12, bottom: 8),
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[400],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  // 헤더
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${selectedRoutines.length}개 루틴 선택됨',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              '총 ${allExerciseNames.length}개 운동 · 운동할 날짜를 선택하세요',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ],
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(),
+                  // 캘린더
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: TableCalendar(
+                        firstDay: DateTime.now(),
+                        lastDay: DateTime.now().add(const Duration(days: 365)),
+                        focusedDay: focusedDay,
+                        selectedDayPredicate: (day) =>
+                            selectedDay != null && isSameDay(selectedDay!, day),
+                        locale: 'ko_KR',
+                        calendarFormat: CalendarFormat.month,
+                        startingDayOfWeek: StartingDayOfWeek.monday,
+                        eventLoader: (day) {
+                          final dayDate = DateTime(day.year, day.month, day.day);
+                          final plannedWorkout = plannedWorkoutsByDate[dayDate];
+                          return plannedWorkout != null ? [plannedWorkout] : [];
+                        },
+                        onDaySelected: (selected, focused) {
+                          setSheetState(() {
+                            selectedDay = selected;
+                            focusedDay = focused;
+                          });
+                        },
+                        onPageChanged: (focused) async {
+                          setSheetState(() {
+                            focusedDay = focused;
+                          });
+                          await loadPlannedWorkouts(focused);
+                          setSheetState(() {});
+                        },
+                        calendarStyle: CalendarStyle(
+                          todayDecoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .primary
+                                .withValues(alpha: 0.5),
+                            shape: BoxShape.circle,
+                          ),
+                          selectedDecoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.primary,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        calendarBuilders: CalendarBuilders(
+                          markerBuilder: (context, date, events) {
+                            if (events.isEmpty) return null;
+                            final plannedWorkout =
+                                events.whereType<PlannedWorkout>().firstOrNull;
+                            if (plannedWorkout != null) {
+                              return Container(
+                                width: 6,
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  color: Color(int.parse(plannedWorkout.colorHex)),
+                                  shape: BoxShape.circle,
+                                ),
+                              );
+                            }
+                            return null;
+                          },
+                        ),
+                        headerStyle: const HeaderStyle(
+                          formatButtonVisible: false,
+                          titleCentered: true,
+                        ),
+                      ),
+                    ),
+                  ),
+                  // 하단 버튼 (날짜 선택 시에만 표시)
+                  if (selectedDay != null)
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.1),
+                            blurRadius: 4,
+                            offset: const Offset(0, -2),
+                          ),
+                        ],
+                      ),
+                      child: SafeArea(
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: () async {
+                              await _planSelectedRoutinesForDate(
+                                selectedRoutines,
+                                selectedDay!,
+                              );
+                              if (sheetContext.mounted) {
+                                Navigator.pop(sheetContext);
+                              }
+                            },
+                            icon: const Icon(Icons.check),
+                            label: Text(
+                              isSameDay(selectedDay!, DateTime.now())
+                                  ? '오늘 운동 시작하기'
+                                  : '${selectedDay!.month}월 ${selectedDay!.day}일에 계획하기',
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// [Phase 2] 선택된 루틴들을 특정 날짜에 계획
+  Future<void> _planSelectedRoutinesForDate(
+    List<Routine> selectedRoutines,
+    DateTime selectedDate,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    final now = DateTime.now();
+    final normalizedToday = DateTime(now.year, now.month, now.day);
+    final normalizedSelected = DateTime(
+      selectedDate.year,
+      selectedDate.month,
+      selectedDate.day,
+    );
+    final isFutureDate = normalizedSelected.isAfter(normalizedToday);
+
+    try {
+      // 모든 루틴의 운동을 ExerciseBaseline 리스트로 변환
+      final userId = SupabaseService.currentUserId;
+      if (userId == null) {
+        throw Exception('로그인이 필요합니다.');
+      }
+
+      final allBaselines = <ExerciseBaseline>[];
+      for (final routine in selectedRoutines) {
+        if (routine.routineItems == null) continue;
+        for (final item in routine.routineItems!) {
+          allBaselines.add(ExerciseBaseline(
+            id: const Uuid().v4(),
+            userId: userId,
+            exerciseName: item.exerciseName,
+            bodyPart: item.bodyPart,
+            targetMuscles: const [],
+            workoutSets: const [],
+            routineId: routine.id,
+            isHiddenFromHome: false,
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          ));
+        }
+      }
+
+      if (allBaselines.isEmpty) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('선택된 루틴에 운동이 없습니다.')),
+        );
+        return;
+      }
+
+      if (!isFutureDate) {
+        // [Case A: 오늘] - 홈 화면에 추가
+        ref.read(homeViewModelProvider.notifier).addFromArchiveOrRoutine(
+          allBaselines,
+          routineId: selectedRoutines.length == 1 ? selectedRoutines.first.id : null,
+        );
+
+        // 선택 초기화
+        widget.onClearSelection();
+
+        navigator.popUntil((route) => route.isFirst);
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('${allBaselines.length}개 운동이 홈 화면에 추가되었습니다.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        // [Case B: 미래 날짜] - planned_workouts 테이블에 저장
+        final repository = ref.read(workoutRepositoryProvider);
+
+        final plannedWorkouts = <PlannedWorkout>[];
+        for (final baseline in allBaselines) {
+          final persistedBaseline = await repository.ensureExerciseVisible(
+            baseline.exerciseName,
+            baseline.bodyPart?.code ?? 'full',
+            [],
+          );
+
+          final plannedWorkout = PlannedWorkout(
+            id: const Uuid().v4(),
+            userId: userId,
+            baselineId: persistedBaseline.id,
+            scheduledDate: normalizedSelected,
+            targetWeight: 0.0,
+            targetReps: 0,
+            targetSets: 1,
+            exerciseName: baseline.exerciseName,
+            isCompleted: false,
+            isConvertedToLog: false,
+            colorHex: '0xFF9C27B0', // 보라색 (루틴 계획)
+            createdAt: DateTime.now(),
+          );
+
+          plannedWorkouts.add(plannedWorkout);
+        }
+
+        await repository.savePlannedWorkouts(plannedWorkouts);
+
+        ref.read(plannedWorkoutsRefreshProvider.notifier).state++;
+
+        // 선택 초기화
+        widget.onClearSelection();
+
+        navigator.popUntil((route) => route.isFirst);
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              '${allBaselines.length}개 운동이 ${selectedDate.month}월 ${selectedDate.day}일에 계획되었습니다.',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('운동 계획 실패: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final routinesAsync = ref.watch(routinesProvider);
     final isPremium = ref.watch(subscriptionProvider).isPremium;
+    final isSelectionMode = widget.isSelectionMode;
+    final selectedIds = widget.selectedRoutineIds;
 
     return routinesAsync.when(
       data: (routines) {
@@ -1115,54 +1503,111 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab> {
 
         return Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  // 3 Free Routines, then Premium required
-                  onPressed: (isPremium || routines.length < 3)
-                      ? () => _showCreateRoutineModal(context)
-                      : () async {
-                          final isPurchased = await showPremiumGuidanceDialog(context);
-                          if (isPurchased == true && context.mounted) {
-                            ref.invalidate(subscriptionProvider);
-                            ref.invalidate(routinesProvider);
-                          }
-                        },
-                  icon: const Icon(Icons.add),
-                  label: const Text('루틴 생성하기'),
+            // [Phase 2] "루틴 생성하기" 버튼: Management Mode에서만 표시
+            if (!isSelectionMode)
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    // 3 Free Routines, then Premium required
+                    onPressed: (isPremium || routines.length < 3)
+                        ? () => _showCreateRoutineModal(context)
+                        : () async {
+                            final isPurchased = await showPremiumGuidanceDialog(context);
+                            if (isPurchased == true && context.mounted) {
+                              ref.invalidate(subscriptionProvider);
+                              ref.invalidate(routinesProvider);
+                            }
+                          },
+                    icon: const Icon(Icons.add),
+                    label: const Text('루틴 생성하기'),
+                  ),
                 ),
               ),
-            ),
-            // 힌트 텍스트 - 상단 중앙
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12.0),
-              child: Text(
-                '루틴을 탭하여 운동 날짜를 지정하세요.',
-                style: TextStyle(color: Colors.grey, fontSize: 13),
-                textAlign: TextAlign.center,
+            // [Phase 2] 힌트 텍스트: Selection Mode에서만 표시
+            if (isSelectionMode)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12.0),
+                child: Text(
+                  '루틴을 선택하고 날짜를 지정하세요.',
+                  style: TextStyle(color: Colors.grey, fontSize: 13),
+                  textAlign: TextAlign.center,
+                ),
               ),
-            ),
             Expanded(
               child: sortedRoutines.isEmpty
                   ? const Center(
                       child: Text('저장된 루틴이 없습니다'),
                     )
-                  : ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: sortedRoutines.length,
-                      itemBuilder: (context, index) {
-                        final routine = sortedRoutines[index];
-                        // [Freemium] 무료 사용자는 index 0, 1, 2만 접근 가능
-                        final isLocked = !isPremium && index >= 3;
+                  : Stack(
+                      children: [
+                        ListView.builder(
+                          padding: EdgeInsets.only(
+                            left: 16,
+                            right: 16,
+                            top: 8,
+                            // 하단 버튼이 있을 때 여백 확보
+                            bottom: (isSelectionMode && selectedIds.isNotEmpty) ? 130 : 16,
+                          ),
+                          itemCount: sortedRoutines.length,
+                          itemBuilder: (context, index) {
+                            final routine = sortedRoutines[index];
+                            // [Freemium] 무료 사용자는 index 0, 1, 2만 접근 가능
+                            final isLocked = !isPremium && index >= 3;
 
-                        return _buildRoutineCard(
-                          routine: routine,
-                          isLocked: isLocked,
-                          index: index,
-                        );
-                      },
+                            return _buildRoutineCard(
+                              routine: routine,
+                              isLocked: isLocked,
+                              index: index,
+                            );
+                          },
+                        ),
+                        // [Phase 2] 하단 액션 바 (선택 모드 + 선택된 루틴이 있을 때)
+                        if (isSelectionMode && selectedIds.isNotEmpty)
+                          Positioned(
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                            child: Container(
+                              color: Theme.of(context).colorScheme.surface,
+                              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                              child: SafeArea(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    // 메인 액션 버튼
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: ElevatedButton.icon(
+                                        onPressed: () => _showSelectedRoutinesPlanSheet(sortedRoutines),
+                                        icon: const Icon(Icons.calendar_today),
+                                        label: Text(
+                                          '${selectedIds.length}개 루틴 다시하기',
+                                        ),
+                                        style: ElevatedButton.styleFrom(
+                                          minimumSize: const Size.fromHeight(48),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    // 취소 버튼 - 선택 해제 후 화면 유지
+                                    TextButton(
+                                      onPressed: widget.onClearSelection,
+                                      child: Text(
+                                        '선택 해제',
+                                        style: TextStyle(
+                                          color: Colors.grey[600],
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
             ),
           ],
@@ -1181,34 +1626,70 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab> {
     required bool isLocked,
     required int index,
   }) {
+    final isSelectionMode = widget.isSelectionMode;
+    final isSelected = widget.selectedRoutineIds.contains(routine.id);
+
+    // [Phase 3] onTap 동작 결정
+    VoidCallback? onTapAction;
+    if (isLocked) {
+      onTapAction = () => _showUpgradePrompt();
+    } else if (isSelectionMode) {
+      onTapAction = () => widget.onToggleSelection(routine.id);
+    } else {
+      // Management Mode: 카드 탭 시 옵션 시트 표시
+      onTapAction = () => _showRoutineOptionsSheet(routine);
+    }
+
     final cardContent = Card(
       key: ValueKey('routine_${routine.id}'),
       clipBehavior: Clip.antiAlias,
+      // [Phase 3] Selection Mode에서 선택된 카드 배경색
+      color: (isSelectionMode && isSelected && !isLocked)
+          ? Colors.blue.withValues(alpha: 0.15)
+          : null,
       child: InkWell(
-        onTap: isLocked
-            ? () => _showUpgradePrompt()
-            : () => _showRoutinePlanSheet(routine),
+        onTap: onTapAction,
         borderRadius: BorderRadius.circular(12),
-        child: ListTile(
-          title: Text(
-            routine.name,
-            style: TextStyle(
-              color: isLocked ? Colors.grey : null,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            // [Phase 3] Leading: 선택 모드에서는 체크박스, 관리 모드에서는 폴더 아이콘
+            leading: isSelectionMode
+                ? Icon(
+                    isSelected ? Icons.check_box : Icons.check_box_outline_blank,
+                    color: isSelected ? Colors.blue : Colors.grey,
+                    size: 28,
+                  )
+                : Icon(
+                    Icons.folder_outlined,
+                    color: isLocked ? Colors.grey : Colors.grey[600],
+                    size: 24,
+                  ),
+            title: Text(
+              routine.name,
+              style: TextStyle(
+                color: isLocked ? Colors.grey : null,
+                fontWeight: (isSelectionMode && isSelected)
+                    ? FontWeight.bold
+                    : FontWeight.normal,
+              ),
             ),
-          ),
-          subtitle: Text(
-            '${routine.routineItems?.length ?? 0}개 운동',
-            style: TextStyle(
-              color: isLocked ? Colors.grey[400] : null,
+            subtitle: Text(
+              '${routine.routineItems?.length ?? 0}개 운동',
+              style: TextStyle(
+                color: isLocked
+                    ? Colors.grey[400]
+                    : (isSelectionMode && isSelected)
+                        ? Colors.blue[700]
+                        : Colors.grey[600],
+              ),
             ),
+            // [Phase 3] Trailing: 잠금 아이콘만 표시 (3-dots 메뉴 제거)
+            trailing: isLocked
+                ? const Icon(Icons.lock, color: Colors.grey)
+                : null,
           ),
-          // 3-dots 메뉴 버튼 (잠금 시 비활성화)
-          trailing: isLocked
-              ? const Icon(Icons.lock, color: Colors.grey)
-              : IconButton(
-                  icon: const Icon(Icons.more_vert),
-                  onPressed: () => _showRoutineOptionsSheet(routine),
-                ),
         ),
       ),
     );
@@ -1335,360 +1816,6 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab> {
           ),
         );
       },
-    );
-  }
-
-  /// 루틴 계획 캘린더 시트 표시 (단일 탭 시 호출)
-  Future<void> _showRoutinePlanSheet(Routine routine) async {
-    if (routine.routineItems == null || routine.routineItems!.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('루틴에 운동이 없습니다.')),
-      );
-      return;
-    }
-
-    // 캘린더 상태 관리
-    DateTime focusedDay = DateTime.now();
-    DateTime? selectedDay;
-    Map<DateTime, PlannedWorkout> plannedWorkoutsByDate = {};
-
-    // Planned workouts 로드 함수
-    Future<void> loadPlannedWorkouts(DateTime month) async {
-      try {
-        final repository = ref.read(workoutRepositoryProvider);
-        final startDate = DateTime(month.year, month.month, 1);
-        final endDate = DateTime(month.year, month.month + 1, 0);
-
-        final plannedWorkouts = await repository.getPlannedWorkoutsByDateRange(
-          startDate,
-          endDate,
-        );
-
-        plannedWorkoutsByDate = {};
-        for (final workout in plannedWorkouts) {
-          if (workout.isConvertedToLog) continue;
-          final dateKey = DateTime(
-            workout.scheduledDate.year,
-            workout.scheduledDate.month,
-            workout.scheduledDate.day,
-          );
-          plannedWorkoutsByDate.putIfAbsent(dateKey, () => workout);
-        }
-      } catch (e) {
-        plannedWorkoutsByDate = {};
-      }
-    }
-
-    // 초기 로드
-    await loadPlannedWorkouts(focusedDay);
-
-    if (!mounted) return;
-
-    // BottomSheet 표시
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            final screenHeight = MediaQuery.of(context).size.height;
-            final sheetHeight = screenHeight * 2 / 3;
-
-            return Container(
-              height: sheetHeight,
-              decoration: BoxDecoration(
-                color: Theme.of(context).scaffoldBackgroundColor,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(20),
-                ),
-              ),
-              child: Column(
-                children: [
-                  // 드래그 핸들
-                  Container(
-                    margin: const EdgeInsets.only(top: 12, bottom: 8),
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[400],
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  // 헤더
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              routine.name,
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              '${routine.routineItems!.length}개 운동 · 운동할 날짜를 선택하세요',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                          ],
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Divider(),
-                  // 캘린더
-                  Expanded(
-                    child: SingleChildScrollView(
-                      child: TableCalendar(
-                        firstDay: DateTime.now(),
-                        lastDay: DateTime.now().add(const Duration(days: 365)),
-                        focusedDay: focusedDay,
-                        selectedDayPredicate: (day) =>
-                            selectedDay != null && isSameDay(selectedDay!, day),
-                        locale: 'ko_KR',
-                        calendarFormat: CalendarFormat.month,
-                        startingDayOfWeek: StartingDayOfWeek.monday,
-                        eventLoader: (day) {
-                          final dayDate = DateTime(day.year, day.month, day.day);
-                          final plannedWorkout = plannedWorkoutsByDate[dayDate];
-                          return plannedWorkout != null ? [plannedWorkout] : [];
-                        },
-                        onDaySelected: (selected, focused) {
-                          setSheetState(() {
-                            selectedDay = selected;
-                            focusedDay = focused;
-                          });
-                        },
-                        onPageChanged: (focused) async {
-                          setSheetState(() {
-                            focusedDay = focused;
-                          });
-                          await loadPlannedWorkouts(focused);
-                          setSheetState(() {});
-                        },
-                        calendarStyle: CalendarStyle(
-                          todayDecoration: BoxDecoration(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .primary
-                                .withValues(alpha: 0.5),
-                            shape: BoxShape.circle,
-                          ),
-                          selectedDecoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.primary,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        calendarBuilders: CalendarBuilders(
-                          markerBuilder: (context, date, events) {
-                            if (events.isEmpty) return null;
-                            final plannedWorkout =
-                                events.whereType<PlannedWorkout>().firstOrNull;
-                            if (plannedWorkout != null) {
-                              return Container(
-                                width: 6,
-                                height: 6,
-                                decoration: BoxDecoration(
-                                  color: Color(int.parse(plannedWorkout.colorHex)),
-                                  shape: BoxShape.circle,
-                                ),
-                              );
-                            }
-                            return null;
-                          },
-                        ),
-                        headerStyle: const HeaderStyle(
-                          formatButtonVisible: false,
-                          titleCentered: true,
-                        ),
-                      ),
-                    ),
-                  ),
-                  // 하단 버튼 (날짜 선택 시에만 표시)
-                  if (selectedDay != null)
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surface,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.1),
-                            blurRadius: 4,
-                            offset: const Offset(0, -2),
-                          ),
-                        ],
-                      ),
-                      child: SafeArea(
-                        child: SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: () async {
-                              await _planRoutineForDate(routine, selectedDay!);
-                              if (sheetContext.mounted) {
-                                Navigator.pop(sheetContext);
-                              }
-                            },
-                            icon: const Icon(Icons.check),
-                            label: Text(
-                              isSameDay(selectedDay!, DateTime.now())
-                                  ? '오늘 운동 시작하기'
-                                  : '${selectedDay!.month}월 ${selectedDay!.day}일에 계획하기',
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  /// [Phase 2] 선택한 날짜에 루틴의 모든 운동 계획/시작
-  Future<void> _planRoutineForDate(Routine routine, DateTime selectedDate) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final navigator = Navigator.of(context);
-    final now = DateTime.now();
-    final normalizedToday = DateTime(now.year, now.month, now.day);
-    final normalizedSelected = DateTime(
-      selectedDate.year,
-      selectedDate.month,
-      selectedDate.day,
-    );
-    final isFutureDate = normalizedSelected.isAfter(normalizedToday);
-
-    try {
-      if (!isFutureDate) {
-        // [Case A: 오늘] - 기존 _startRoutine 로직 재사용
-        _startRoutine(routine);
-      } else {
-        // [Case B: 미래 날짜] - planned_workouts 테이블에 저장
-        final repository = ref.read(workoutRepositoryProvider);
-        final userId = SupabaseService.currentUser?.id;
-        if (userId == null) {
-          throw Exception('로그인이 필요합니다.');
-        }
-
-        // 각 루틴 운동에 대해 planned_workout 생성
-        final plannedWorkouts = <PlannedWorkout>[];
-        for (final item in routine.routineItems!) {
-          // 1. exercise_baseline을 DB에 확보
-          final persistedBaseline = await repository.ensureExerciseVisible(
-            item.exerciseName,
-            item.bodyPart?.code ?? 'full',
-            [], // RoutineItem에는 targetMuscles가 없음
-          );
-
-          // 2. planned_workout 생성 (Manual Addition)
-          final plannedWorkout = PlannedWorkout(
-            id: const Uuid().v4(),
-            userId: userId,
-            baselineId: persistedBaseline.id,
-            scheduledDate: normalizedSelected,
-            targetWeight: 0.0,
-            targetReps: 0,
-            targetSets: 1,
-            exerciseName: item.exerciseName,
-            isCompleted: false,
-            isConvertedToLog: false,
-            colorHex: '0xFF9C27B0', // 보라색 (루틴 계획 구분)
-            createdAt: DateTime.now(),
-          );
-
-          plannedWorkouts.add(plannedWorkout);
-        }
-
-        // 3. planned_workouts 테이블에 일괄 저장
-        await repository.savePlannedWorkouts(plannedWorkouts);
-
-        // 4. 캘린더 화면 갱신 트리거
-        ref.read(plannedWorkoutsRefreshProvider.notifier).state++;
-
-        navigator.popUntil((route) => route.isFirst);
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              '${routine.name} 루틴이 ${selectedDate.month}월 ${selectedDate.day}일에 계획되었습니다.',
-            ),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('운동 계획 실패: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
-  /// 루틴 시작하기 - 메모리 전용 (DB 저장 X)
-  /// addFromArchiveOrRoutine을 사용하여 데이터 리셋 후 홈 화면에 표시합니다.
-  /// 실제 DB 저장은 사용자가 세트를 완료할 때 수행됩니다.
-  void _startRoutine(Routine routine) {
-    if (routine.routineItems == null || routine.routineItems!.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('루틴에 운동이 없습니다.')),
-      );
-      return;
-    }
-
-    final messenger = ScaffoldMessenger.of(context);
-    final navigator = Navigator.of(context);
-
-    // RoutineItem을 ExerciseBaseline으로 변환 (데이터 리셋 상태)
-    final userId = SupabaseService.currentUserId;
-    if (userId == null) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('로그인이 필요합니다.')),
-      );
-      return;
-    }
-
-    final now = DateTime.now();
-    final baselines = routine.routineItems!.map((item) {
-      return ExerciseBaseline(
-        id: const Uuid().v4(), // 임시 ID (addFromArchiveOrRoutine에서 다시 생성됨)
-        userId: userId,
-        exerciseName: item.exerciseName,
-        bodyPart: item.bodyPart,
-        targetMuscles: const [], // RoutineItem에는 targetMuscles 없음
-        workoutSets: const [], // 리셋: 빈 리스트
-        routineId: null, // addFromArchiveOrRoutine에서 설정됨
-        isHiddenFromHome: false,
-        createdAt: now,
-        updatedAt: now,
-      );
-    }).toList();
-
-    // 메모리 전용 추가: 새 UUID 생성 + 데이터 리셋 + 루틴 ID 연결
-    ref.read(homeViewModelProvider.notifier).addFromArchiveOrRoutine(
-      baselines,
-      routineId: routine.id, // 루틴 ID 전달
-    );
-
-    navigator.popUntil((route) => route.isFirst);
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text('${routine.routineItems!.length}개 운동이 홈 화면에 추가되었습니다.'),
-      ),
     );
   }
 

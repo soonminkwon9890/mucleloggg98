@@ -86,6 +86,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               ),
               const SizedBox(height: 20),
               // Option 1: 보관함에서 불러오기 (Primary)
+              // [Phase 1] Path A: Selection Mode로 진입
               _buildOptionCard(
                 context,
                 icon: Icons.folder_special,
@@ -97,7 +98,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => const ManagementScreen(),
+                      builder: (_) => const ManagementScreen(isSelectionMode: true),
                     ),
                   );
                 },
@@ -201,8 +202,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             height: double.infinity,
             child: GestureDetector(
               onHorizontalDragUpdate: (details) {
-                // 오른쪽 방향(delta > 0) 스와이프 시 닫기
-                if (details.delta.dx > 0) {
+                // [Swipe UX Fix] 명확한 오른쪽 스와이프만 패널 닫기 (임계값 > 7)
+                // 대각선 아래 스와이프나 미세한 움직임으로 인한 실수 방지
+                if (details.primaryDelta != null && details.primaryDelta! > 7) {
                   Navigator.of(context).pop();
                 }
               },
@@ -400,12 +402,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                               ),
                             ),
                             // 보관함 바로가기 버튼
+                            // [Phase 1] Path B: Management Mode로 진입
                             InkWell(
                               onTap: () {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) => const ManagementScreen(),
+                                    builder: (_) => const ManagementScreen(isSelectionMode: false),
                                   ),
                                 );
                               },

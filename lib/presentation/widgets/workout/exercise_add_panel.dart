@@ -63,7 +63,19 @@ class _ExerciseAddPanelState extends ConsumerState<ExerciseAddPanel> {
               ),
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
+                  padding: EdgeInsets.only(
+                    left: 16,
+                    right: 16,
+                    top: 16,
+                    // [Keyboard Fix] 키보드 높이만큼 하단 패딩 추가
+                    bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
+                  ),
+                  // [Keyboard Fix] 스크롤 시 키보드 자동 닫기
+                  keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                  // [Scroll UX Fix] 항상 스크롤 가능 + iOS 바운스 물리 효과
+                  physics: const AlwaysScrollableScrollPhysics(
+                    parent: BouncingScrollPhysics(),
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
