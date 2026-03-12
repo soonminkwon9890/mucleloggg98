@@ -2047,16 +2047,20 @@ class WorkoutRepository {
     });
   }
 
-  /// 지난주(최근 7일) 운동 세션 조회
+  /// 이번 주(월~일, 오늘 포함) 운동 세션 조회
   /// 반환: WorkoutSession 리스트
   Future<List<WorkoutSession>> getLastWeekSessions() async {
     final userId = SupabaseService.currentUser?.id;
     if (userId == null) throw Exception('로그인 필요');
 
+    // [AI Date Fix] 이번 주(월~일) 기준으로 계산 (오늘 포함)
     final now = DateTime.now();
-    final sevenDaysAgo = now.subtract(const Duration(days: 7));
-    final startDate = DateFormat('yyyy-MM-dd').format(sevenDaysAgo);
-    final endDate = DateFormat('yyyy-MM-dd').format(now);
+    final today = DateTime(now.year, now.month, now.day);
+    final startOfWeek = today.subtract(Duration(days: today.weekday - 1)); // 이번 주 월요일
+    final endOfWeek = startOfWeek.add(const Duration(days: 6)); // 이번 주 일요일
+
+    final startDate = DateFormat('yyyy-MM-dd').format(startOfWeek);
+    final endDate = DateFormat('yyyy-MM-dd').format(endOfWeek);
 
     final response = await _client
         .from('workout_sessions')
@@ -2190,7 +2194,7 @@ class WorkoutRepository {
   /// 반환: 생성된 planned_workouts 개수
   ///
   /// 로직:
-  /// 1. 지난 7일간의 완료된 workout_sets를 exercise_baselines와 JOIN하여 조회
+  /// 1. 이번 주(월~일, 오늘 포함) 완료된 workout_sets를 exercise_baselines와 JOIN하여 조회
   /// 2. 각 날짜별, 운동별로 최대 무게/횟수/세트 수 계산
   /// 3. 각 운동의 날짜에 7일을 더해 다음 주 같은 요일로 계획 생성
   /// 4. planned_workouts 테이블에 일괄 삽입
@@ -2199,15 +2203,17 @@ class WorkoutRepository {
     final userId = SupabaseService.currentUser?.id;
     if (userId == null) throw Exception('로그인 필요');
 
-    // 날짜 범위 계산: 오늘 기준 지난 7일
+    // [AI Date Fix] 이번 주(월~일) 기준으로 계산 (오늘 포함)
+    // weekday: 1=Monday, 7=Sunday
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final sevenDaysAgo = today.subtract(const Duration(days: 7));
+    final startOfWeek = today.subtract(Duration(days: today.weekday - 1)); // 이번 주 월요일
+    final endOfWeek = startOfWeek.add(const Duration(days: 6)); // 이번 주 일요일
 
-    final startStr = DateFormat('yyyy-MM-dd').format(sevenDaysAgo);
-    final endStr = DateFormat('yyyy-MM-dd').format(today.subtract(const Duration(days: 1))); // 어제까지
+    final startStr = DateFormat('yyyy-MM-dd').format(startOfWeek);
+    final endStr = DateFormat('yyyy-MM-dd').format(endOfWeek); // 일요일까지 (오늘 포함)
 
-    // Step A: 지난 7일간의 workout_sets 조회 (exercise_baselines JOIN)
+    // Step A: 이번 주(월~일) workout_sets 조회 (exercise_baselines JOIN)
     final response = await _client
         .from('workout_sets')
         .select('''
@@ -2230,7 +2236,7 @@ class WorkoutRepository {
         .order('created_at', ascending: true);
 
     if ((response as List).isEmpty) {
-      return 0; // 지난 7일간 운동 기록 없음
+      return 0; // 이번 주 운동 기록 없음
     }
 
     // Step B: 날짜별, 운동별로 그룹화하여 최대값 계산

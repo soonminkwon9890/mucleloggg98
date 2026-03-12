@@ -60,118 +60,121 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         showDragHandle: false,
         backgroundColor: Colors.transparent,
         builder: (context) {
-          return DraggableScrollableSheet(
-            initialChildSize: 0.5,
-            minChildSize: 0.4,
-            maxChildSize: 0.9,
-            builder: (context, scrollController) {
-              return Consumer(
-                builder: (context, ref, _) {
-                  final asyncItems = ref.watch(exercisesWithHistoryProvider);
-                  return asyncItems.when(
-                    data: (items) => ExerciseSearchSheet(
-                      items: items,
-                      scrollController: scrollController,
-                      onDateSelected: (date) {
-                        if (!mounted) return;
-                        setState(() {
-                          _selectedDay = date;
-                          _focusedDay = date;
-                        });
-                        _loadWorkoutsForDate(date);
-                        _loadPlannedWorkoutsForDate(date);
-                      },
+          // [Phase 1] 고정 높이 85%로 설정 (DraggableScrollableSheet 제거)
+          final sheetHeight = MediaQuery.of(context).size.height * 0.85;
+          return Consumer(
+            builder: (context, ref, _) {
+              final asyncItems = ref.watch(exercisesWithHistoryProvider);
+              return asyncItems.when(
+                data: (items) => SizedBox(
+                  height: sheetHeight,
+                  child: ExerciseSearchSheet(
+                    items: items,
+                    onDateSelected: (date) {
+                      if (!mounted) return;
+                      setState(() {
+                        _selectedDay = date;
+                        _focusedDay = date;
+                      });
+                      _loadWorkoutsForDate(date);
+                      _loadPlannedWorkoutsForDate(date);
+                    },
+                  ),
+                ),
+                loading: () => SizedBox(
+                  height: sheetHeight,
+                  child: Material(
+                    color: Theme.of(context).colorScheme.surface,
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(20),
                     ),
-                    loading: () => Material(
-                      color: Theme.of(context).colorScheme.surface,
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(20),
-                      ),
-                      child: const Padding(
-                        padding: EdgeInsets.fromLTRB(16, 8, 16, 16),
-                        child: Column(
-                          children: [
-                            Center(
-                              child: SizedBox(
-                                width: 44,
-                                height: 4,
-                                child: DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    color: Color(0xFFBDBDBD),
-                                    borderRadius:
-                                        BorderRadius.all(Radius.circular(999)),
-                                  ),
+                    child: const Padding(
+                      padding: EdgeInsets.fromLTRB(16, 8, 16, 16),
+                      child: Column(
+                        children: [
+                          Center(
+                            child: SizedBox(
+                              width: 44,
+                              height: 4,
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: Color(0xFFBDBDBD),
+                                  borderRadius:
+                                      BorderRadius.all(Radius.circular(999)),
                                 ),
                               ),
                             ),
-                            Expanded(
-                              child: Center(child: CircularProgressIndicator()),
-                            ),
-                          ],
+                          ),
+                          Expanded(
+                            child: Center(child: CircularProgressIndicator()),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                error: (e, _) => SizedBox(
+                      height: sheetHeight,
+                      child: Material(
+                        color: Theme.of(context).colorScheme.surface,
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(20),
                         ),
-                      ),
-                    ),
-                    error: (e, _) => Material(
-                      color: Theme.of(context).colorScheme.surface,
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(20),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                        child: Column(
-                          children: [
-                            const Center(
-                              child: SizedBox(
-                                width: 44,
-                                height: 4,
-                                child: DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    color: Color(0xFFBDBDBD),
-                                    borderRadius:
-                                        BorderRadius.all(Radius.circular(999)),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                          child: Column(
+                            children: [
+                              const Center(
+                                child: SizedBox(
+                                  width: 44,
+                                  height: 4,
+                                  child: DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      color: Color(0xFFBDBDBD),
+                                      borderRadius:
+                                          BorderRadius.all(Radius.circular(999)),
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(height: 12),
-                            Expanded(
-                              child: Center(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Text(
-                                      '데이터를 불러오지 못했습니다.',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
+                              const SizedBox(height: 12),
+                              Expanded(
+                                child: Center(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Text(
+                                        '데이터를 불러오지 못했습니다.',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      '$e',
-                                      textAlign: TextAlign.center,
-                                    ),
-                                    const SizedBox(height: 16),
-                                    OutlinedButton.icon(
-                                      onPressed: () {
-                                        ref.invalidate(
-                                            exercisesWithHistoryProvider);
-                                      },
-                                      icon: const Icon(Icons.refresh),
-                                      label: const Text('다시 시도'),
-                                    ),
-                                  ],
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        '$e',
+                                        textAlign: TextAlign.center,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      OutlinedButton.icon(
+                                        onPressed: () {
+                                          ref.invalidate(
+                                              exercisesWithHistoryProvider);
+                                        },
+                                        icon: const Icon(Icons.refresh),
+                                        label: const Text('다시 시도'),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   );
                 },
               );
-            },
-          );
         },
       );
     } finally {
@@ -348,17 +351,24 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const AlertDialog(
-        content: Row(
+      builder: (context) => AlertDialog(
+        content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(strokeWidth: 2),
+            const Icon(Icons.auto_awesome, size: 48, color: Colors.blue),
+            const SizedBox(height: 16),
+            const Text(
+              'AI가 루틴을 분석 중입니다...',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
-            SizedBox(width: 16),
-            Expanded(child: Text('AI가 루틴을 분석 중입니다...')),
+            const SizedBox(height: 8),
+            Text(
+              '이번 주 운동 기록을 기반으로\n최적의 다음 주 계획을 만들고 있어요.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey[600], fontSize: 13),
+            ),
+            const SizedBox(height: 20),
+            const LinearProgressIndicator(),
           ],
         ),
       ),
@@ -370,10 +380,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       if (sessions.isEmpty) {
         if (mounted) {
           Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('지난주 운동 기록이 없습니다. 운동을 시작해보세요!'),
-              backgroundColor: Colors.orange,
+          // [Phase 3] 개선된 빈 상태 다이얼로그
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              icon: const Icon(Icons.lightbulb_outline, size: 48, color: Colors.amber),
+              title: const Text('데이터 부족'),
+              content: const Text(
+                '이번 주(월~일)에 완료된 운동 기록이 있어야\nAI가 다음 주 계획을 만들어 드릴 수 있어요!\n\n운동을 완료하고 다시 시도해주세요.',
+                textAlign: TextAlign.center,
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('확인'),
+                ),
+              ],
             ),
           );
         }
@@ -406,10 +428,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       if (filteredSessions.isEmpty) {
         if (mounted) {
           Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('완료된 운동 기록이 없습니다. 운동을 완료하고 저장해주세요!'),
-              backgroundColor: Colors.orange,
+          // [Phase 3] 개선된 빈 상태 다이얼로그
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              icon: const Icon(Icons.fitness_center, size: 48, color: Colors.orange),
+              title: const Text('완료된 기록 없음'),
+              content: const Text(
+                '이번 주에 무게/횟수가 기록된 운동이 없어요.\n\n운동을 완료하고 세트 정보를 저장한 뒤\n다시 시도해주세요!',
+                textAlign: TextAlign.center,
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('확인'),
+                ),
+              ],
             ),
           );
         }

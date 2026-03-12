@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../providers/auth_provider.dart';
 import '../../providers/subscription_provider.dart';
@@ -20,6 +21,13 @@ class MyPageScreen extends ConsumerStatefulWidget {
 class _MyPageScreenState extends ConsumerState<MyPageScreen> {
   bool _isProcessing = false;
   bool _isActivatingCoupon = false;
+
+  Future<void> _launchURL(String urlString) async {
+    final Uri url = Uri.parse(urlString);
+    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+      debugPrint('Could not launch $urlString');
+    }
+  }
 
   String _displayName(User user) {
     final meta = user.userMetadata ?? {};
@@ -319,13 +327,43 @@ class _MyPageScreenState extends ConsumerState<MyPageScreen> {
                       const SizedBox(height: 32),
                       _TesterIdRow(userId: user.id),
                       const SizedBox(height: 16),
-                      Text(
-                        '이용 약관 | 개인정보 처리방침',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 12,
-                        ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          InkWell(
+                            onTap: () => _launchURL(
+                              'https://www.notion.so/musclelog-321ae95591cc802697bef9a9fb166aff?source=copy_link',
+                            ),
+                            child: Text(
+                              '이용 약관',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 12,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            ' | ',
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 12,
+                            ),
+                          ),
+                          InkWell(
+                            onTap: () => _launchURL(
+                              'https://www.notion.so/musclelog-321ae95591cc80eb985bce56b3f65eb9?source=copy_link',
+                            ),
+                            child: Text(
+                              '개인정보 처리방침',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 12,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 16),
                       SizedBox(
