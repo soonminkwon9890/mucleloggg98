@@ -4,6 +4,11 @@ import 'package:table_calendar/table_calendar.dart';
 import 'package:uuid/uuid.dart';
 import '../../providers/subscription_provider.dart';
 import '../../providers/workout_provider.dart';
+import '../../widgets/common/confirmation_dialog.dart';
+import '../../widgets/common/bottom_sheet_container.dart';
+import '../../widgets/common/loading_overlay.dart';
+import '../../widgets/common/selectable_list_tile.dart';
+import '../../widgets/common/empty_state_widget.dart';
 import '../workout/workout_analysis_screen.dart';
 import 'routine_detail_screen.dart'; // [Phase 3]
 import '../../../data/models/exercise_baseline.dart';
@@ -239,52 +244,24 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
       // 루틴에 포함되어 있으면 경고 다이얼로그
       final routineNames =
           routinesContainingExercise.map((r) => r.name).join(', ');
-      confirmDelete = await showDialog<bool>(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: const Text('운동 삭제 경고'),
-              content:
-                  Text('이 운동은 다음 루틴에 포함되어 있습니다: $routineNames\n\n모두 삭제하시겠습니까?'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('취소'),
-                ),
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                  ),
-                  child: const Text('삭제'),
-                ),
-              ],
-            ),
-          ) ??
-          false;
+      confirmDelete = await ConfirmationDialog.show(
+        context: context,
+        title: '운동 삭제 경고',
+        message: '이 운동은 다음 루틴에 포함되어 있습니다: $routineNames\n\n모두 삭제하시겠습니까?',
+        confirmText: '삭제',
+        confirmColor: Colors.red,
+        useElevatedButton: true,
+      );
     } else {
       // 루틴에 포함되어 있지 않으면 일반 확인 다이얼로그
-      confirmDelete = await showDialog<bool>(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: const Text('운동 삭제 확인'),
-              content: Text(
-                  '${baseline.exerciseName}을(를) 정말 삭제하시겠습니까?\n\n모든 기록이 삭제됩니다.'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('취소'),
-                ),
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                  ),
-                  child: const Text('삭제'),
-                ),
-              ],
-            ),
-          ) ??
-          false;
+      confirmDelete = await ConfirmationDialog.show(
+        context: context,
+        title: '운동 삭제 확인',
+        message: '${baseline.exerciseName}을(를) 정말 삭제하시겠습니까?\n\n모든 기록이 삭제됩니다.',
+        confirmText: '삭제',
+        confirmColor: Colors.red,
+        useElevatedButton: true,
+      );
     }
 
     if (!confirmDelete || !mounted) return;
@@ -367,38 +344,16 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
     if (!mounted) return;
 
     // BottomSheet 표시
-    await showModalBottomSheet(
+    await BottomSheetContainer.show(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      maxHeightRatio: 2 / 3,
       builder: (sheetContext) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
-            final screenHeight = MediaQuery.of(context).size.height;
-            final sheetHeight = screenHeight * 2 / 3; // 2/3 높이
-
-            return Container(
-              height: sheetHeight,
-              decoration: BoxDecoration(
-                color: Theme.of(context).scaffoldBackgroundColor,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(20),
-                ),
-              ),
-              child: Column(
-                children: [
-                  // 드래그 핸들
-                  Container(
-                    margin: const EdgeInsets.only(top: 12, bottom: 8),
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[400],
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  // 헤더
-                  Padding(
+            return Column(
+              children: [
+                // 헤더
+                Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -537,8 +492,7 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
                         ),
                       ),
                     ),
-                ],
-              ),
+              ],
             );
           },
         );
@@ -689,8 +643,9 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
               final filtered = _filterBaselines(baselines);
 
               if (filtered.isEmpty) {
-                return const Center(
-                  child: Text('해당 부위의 운동이 없습니다'),
+                return const FullScreenEmptyState(
+                  icon: Icons.fitness_center,
+                  title: '해당 부위의 운동이 없습니다',
                 );
               }
 
@@ -816,7 +771,7 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
                 ],
               );
             },
-            loading: () => const Center(child: CircularProgressIndicator()),
+            loading: () => const FullScreenLoading(),
             error: (error, stack) => Center(
               child: Text('오류: $error'),
             ),
@@ -904,8 +859,9 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab> {
                           }).toList();
 
                           if (filtered.isEmpty) {
-                            return const Center(
-                              child: Text('해당 부위의 운동이 없습니다'),
+                            return const FullScreenEmptyState(
+                              icon: Icons.fitness_center,
+                              title: '해당 부위의 운동이 없습니다',
                             );
                           }
 
@@ -917,53 +873,28 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab> {
                               final isSelected =
                                   selectedBaselineIds.contains(baseline.id);
 
-                              return CheckboxListTile(
-                                value: isSelected,
-                                onChanged: (value) {
+                              return SelectableImageListTile(
+                                isSelected: isSelected,
+                                onChanged: (selected) {
                                   setModalState(() {
-                                    if (value == true) {
+                                    if (selected) {
                                       selectedBaselineIds.add(baseline.id);
                                     } else {
                                       selectedBaselineIds.remove(baseline.id);
                                     }
                                   });
                                 },
-                                title: Text(baseline.exerciseName),
-                                subtitle: Text(
-                                  ((baseline.targetMuscles != null &&
-                                              baseline.targetMuscles!
-                                                  .isNotEmpty)
-                                          ? baseline.targetMuscles!.join(', ')
-                                          : '부위 미설정')
-                                      .toString(),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                secondary: baseline.thumbnailUrl != null &&
-                                        baseline.thumbnailUrl!.isNotEmpty
-                                    ? ClipRRect(
-                                        borderRadius: BorderRadius.circular(8),
-                                        child: Image.network(
-                                          baseline.thumbnailUrl!,
-                                          width: 50,
-                                          height: 50,
-                                          fit: BoxFit.cover,
-                                          errorBuilder:
-                                              (context, error, stackTrace) {
-                                            return const Icon(
-                                                Icons.fitness_center,
-                                                size: 50);
-                                          },
-                                        ),
-                                      )
-                                    : const Icon(Icons.fitness_center,
-                                        size: 50),
+                                title: baseline.exerciseName,
+                                subtitle: (baseline.targetMuscles != null &&
+                                        baseline.targetMuscles!.isNotEmpty)
+                                    ? baseline.targetMuscles!.join(', ')
+                                    : '부위 미설정',
+                                imageUrl: baseline.thumbnailUrl,
                               );
                             },
                           );
                         },
-                        loading: () =>
-                            const Center(child: CircularProgressIndicator()),
+                        loading: () => const FullScreenLoading(),
                         error: (error, stack) =>
                             Center(child: Text('오류: $error')),
                       );
@@ -1183,69 +1114,47 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab> {
     if (!mounted) return;
 
     // BottomSheet 표시
-    await showModalBottomSheet(
+    await BottomSheetContainer.show(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      maxHeightRatio: 2 / 3,
       builder: (sheetContext) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
-            final screenHeight = MediaQuery.of(context).size.height;
-            final sheetHeight = screenHeight * 2 / 3;
-
-            return Container(
-              height: sheetHeight,
-              decoration: BoxDecoration(
-                color: Theme.of(context).scaffoldBackgroundColor,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(20),
+            return Column(
+              children: [
+                // 헤더
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${selectedRoutines.length}개 루틴 선택됨',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            '총 ${allExerciseNames.length}개 운동 · 운동할 날짜를 선택하세요',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              child: Column(
-                children: [
-                  // 드래그 핸들
-                  Container(
-                    margin: const EdgeInsets.only(top: 12, bottom: 8),
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[400],
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  // 헤더
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${selectedRoutines.length}개 루틴 선택됨',
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              '총 ${allExerciseNames.length}개 운동 · 운동할 날짜를 선택하세요',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                          ],
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Divider(),
+                const Divider(),
                   // 캘린더
                   Expanded(
                     child: SingleChildScrollView(
@@ -1351,8 +1260,7 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab> {
                         ),
                       ),
                     ),
-                ],
-              ),
+              ],
             );
           },
         );
@@ -1537,8 +1445,9 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab> {
               ),
             Expanded(
               child: sortedRoutines.isEmpty
-                  ? const Center(
-                      child: Text('저장된 루틴이 없습니다'),
+                  ? const FullScreenEmptyState(
+                      icon: Icons.folder_open,
+                      title: '저장된 루틴이 없습니다',
                     )
                   : Stack(
                       children: [
@@ -1613,7 +1522,7 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab> {
           ],
         );
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const FullScreenLoading(),
       error: (error, stack) => Center(
         child: Text('오류: $error'),
       ),
@@ -1831,51 +1740,38 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab> {
     final messenger = ScaffoldMessenger.of(context);
 
     // 확인 다이얼로그 표시
-    final confirmed = await showDialog<bool>(
+    final confirmed = await ConfirmationDialog.show(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('루틴 삭제'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '${routine.name} 루틴을 정말 삭제하시겠습니까?',
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
+      title: '루틴 삭제',
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${routine.name} 루틴을 정말 삭제하시겠습니까?',
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
             ),
-            const SizedBox(height: 16),
-            const Text(
-              '• 이 작업은 되돌릴 수 없습니다.',
-              style: TextStyle(fontSize: 14),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              '• 과거 운동 기록은 보존됩니다.',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.green,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('취소'),
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.red,
+          const SizedBox(height: 16),
+          const Text(
+            '• 이 작업은 되돌릴 수 없습니다.',
+            style: TextStyle(fontSize: 14),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            '• 과거 운동 기록은 보존됩니다.',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.green,
+              fontWeight: FontWeight.bold,
             ),
-            child: const Text('삭제'),
           ),
         ],
       ),
+      confirmText: '삭제',
+      confirmColor: Colors.red,
     );
 
     // 사용자가 취소를 누른 경우

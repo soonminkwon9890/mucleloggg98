@@ -3,7 +3,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../../core/constants/workout_colors.dart';
 import '../../../core/utils/adaptive_widgets.dart';
+import '../../../core/utils/date_formatter.dart';
 import '../../../data/models/planned_workout_dto.dart';
 import '../../providers/subscription_provider.dart';
 import '../../../utils/premium_guidance_dialog.dart';
@@ -11,12 +13,12 @@ import '../../../utils/premium_guidance_dialog.dart';
 /// 강도 모드: High(+2.5kg), Normal(원본), Condition(85%), Maintain(유지)
 enum RoutineIntensity { high, normal, condition, maintain }
 
-/// 모드별 색상 (0xFFRRGGBB, 앱 기존 형식)
+/// 모드별 색상 (WorkoutColors 상수 사용)
 const Map<RoutineIntensity, String> _intensityColorHex = {
-  RoutineIntensity.high: '0xFFF44336',
-  RoutineIntensity.normal: '0xFF2196F3',
-  RoutineIntensity.condition: '0xFF4CAF50',
-  RoutineIntensity.maintain: '0xFF9C27B0', // 보라색 (유지 모드)
+  RoutineIntensity.high: WorkoutColors.highIntensityHex,
+  RoutineIntensity.normal: WorkoutColors.normalHex,
+  RoutineIntensity.condition: WorkoutColors.conditionHex,
+  RoutineIntensity.maintain: WorkoutColors.maintainHex,
 };
 
 /// 다이얼로그 적용 결과 (날짜가 주입된 루틴 + 선택 색상)

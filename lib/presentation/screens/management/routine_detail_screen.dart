@@ -7,6 +7,9 @@ import '../../../data/models/routine_item.dart';
 import '../../../data/models/exercise_baseline.dart';
 import '../../../core/enums/exercise_enums.dart';
 import '../../providers/workout_provider.dart';
+import '../../widgets/common/loading_overlay.dart';
+import '../../widgets/common/selectable_list_tile.dart';
+import '../../widgets/common/empty_state_widget.dart';
 import '../../widgets/workout/reorder_workout_dialog.dart';
 
 /// 루틴 상세 페이지
@@ -483,11 +486,11 @@ class _RoutineDetailScreenState extends ConsumerState<RoutineDetailScreen> {
                               final baseline = filtered[index];
                               final isSelected = selectedBaselineIds.contains(baseline.id);
 
-                              return CheckboxListTile(
-                                value: isSelected,
-                                onChanged: (value) {
+                              return SelectableListTile(
+                                isSelected: isSelected,
+                                onChanged: (selected) {
                                   setModalState(() {
-                                    if (value == true) {
+                                    if (selected) {
                                       selectedBaselineIds.add(baseline.id);
                                     } else {
                                       selectedBaselineIds.remove(baseline.id);
@@ -506,7 +509,7 @@ class _RoutineDetailScreenState extends ConsumerState<RoutineDetailScreen> {
                             },
                           );
                         },
-                        loading: () => const Center(child: CircularProgressIndicator()),
+                        loading: () => const FullScreenLoading(),
                         error: (error, stack) => Center(child: Text('오류: $error')),
                       );
                     },
@@ -581,11 +584,7 @@ class _RoutineDetailScreenState extends ConsumerState<RoutineDetailScreen> {
           if (_isUpdatingName)
             const Padding(
               padding: EdgeInsets.all(16),
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
+              child: ButtonLoadingIndicator(size: 20),
             )
           else
             TextButton(
@@ -776,30 +775,15 @@ class _RoutineDetailScreenState extends ConsumerState<RoutineDetailScreen> {
       return const Card(
         child: SizedBox(
           height: 200,
-          child: Center(child: CircularProgressIndicator()),
+          child: FullScreenLoading(),
         ),
       );
     }
 
     if (_chartSpots == null || _chartSpots!.isEmpty) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            children: [
-              Icon(
-                Icons.bar_chart,
-                size: 48,
-                color: Colors.grey[400],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '아직 수행 기록이 없습니다',
-                style: TextStyle(color: Colors.grey[600]),
-              ),
-            ],
-          ),
-        ),
+      return const EmptyStateCard(
+        icon: Icons.bar_chart,
+        title: '아직 수행 기록이 없습니다',
       );
     }
 
@@ -908,30 +892,11 @@ class _RoutineDetailScreenState extends ConsumerState<RoutineDetailScreen> {
     final items = _routine.routineItems ?? [];
 
     if (items.isEmpty) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            children: [
-              Icon(
-                Icons.fitness_center,
-                size: 48,
-                color: Colors.grey[400],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '루틴에 운동이 없습니다',
-                style: TextStyle(color: Colors.grey[600]),
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                onPressed: _showAddExerciseModal,
-                icon: const Icon(Icons.add),
-                label: const Text('운동 추가하기'),
-              ),
-            ],
-          ),
-        ),
+      return EmptyStateCard(
+        icon: Icons.fitness_center,
+        title: '루틴에 운동이 없습니다',
+        actionLabel: '운동 추가하기',
+        onAction: _showAddExerciseModal,
       );
     }
 

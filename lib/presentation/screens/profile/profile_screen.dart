@@ -5,6 +5,7 @@ import 'package:table_calendar/table_calendar.dart';
 import 'package:uuid/uuid.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/workout_provider.dart';
+import '../../widgets/common/empty_state_widget.dart';
 import '../../../data/models/exercise_baseline.dart';
 import '../../../data/models/planned_workout.dart';
 import '../../../data/models/planned_workout_dto.dart';
@@ -820,19 +821,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   const SizedBox.shrink()
                 else if (_selectedDayWorkouts!.isEmpty &&
                     _selectedDayPlannedWorkouts.isEmpty)
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Center(
-                        child: Text(
-                          '선택한 날짜에 운동 기록이 없습니다',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ),
-                    ),
+                  const EmptyStateCard(
+                    icon: Icons.event_busy,
+                    title: '선택한 날짜에 운동 기록이 없습니다',
                   )
                 else
                   Column(

@@ -3,10 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/enums/exercise_enums.dart';
+import '../../../core/utils/date_formatter.dart';
+import '../../../core/utils/validators.dart';
 import '../../../data/models/exercise_baseline.dart';
 import '../../../data/models/workout_set.dart';
-import '../../../core/utils/date_formatter.dart';
 import '../../providers/workout_provider.dart';
+import '../common/confirmation_dialog.dart';
 import 'workout_finish_dialog.dart';
 
 /// 저장 완료 시 호출되는 콜백: (저장 반영된 baseline, 기존 draft id)
@@ -44,10 +46,6 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
 
   // [Issue #2 Fix] 저장 중 상태 - 더블 서브밋 방지
   bool _isSaving = false;
-
-  // [Issue #3 Fix] 입력값 제한 상수
-  static const double _maxWeight = 999.0;
-  static const int _maxReps = 999;
 
   // [Bug Fix] 동적 저장 상태 판단 - Widget이 재생성되어도 데이터 기반으로 상태 복원
   // 로컬 _hasSaved 또는 실제 데이터(isCompleted)를 확인하여 "저장됨" 상태 판단
@@ -385,21 +383,11 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
       final weight = double.tryParse(weightText) ?? 0.0;
       final reps = int.tryParse(repsText) ?? 0;
 
-      if (weight > _maxWeight) {
+      // [D.2] 중앙화된 검증 로직 사용
+      final validationError = WorkoutValidators.validateWeightAndReps(weight, reps);
+      if (validationError != null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('무게는 ${_maxWeight.toInt()}kg를 초과할 수 없습니다.')),
-        );
-        return;
-      }
-      if (reps > _maxReps) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('횟수는 $_maxReps회를 초과할 수 없습니다.')),
-        );
-        return;
-      }
-      if (weight < 0 || reps < 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('무게와 횟수는 0 이상이어야 합니다.')),
+          SnackBar(content: Text(validationError)),
         );
         return;
       }
@@ -561,28 +549,15 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
 
   /// 삭제 확인 다이얼로그 표시 및 삭제 실행
   Future<void> _showDeleteConfirmation() async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await ConfirmationDialog.show(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('삭제하시겠습니까?'),
-        content: const Text('이 항목을 삭제하면 복구할 수 없습니다.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('취소'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.red,
-            ),
-            child: const Text('삭제'),
-          ),
-        ],
-      ),
+      title: '삭제하시겠습니까?',
+      message: '이 항목을 삭제하면 복구할 수 없습니다.',
+      confirmText: '삭제',
+      confirmColor: Colors.red,
     );
 
-    if (confirmed == true) {
+    if (confirmed) {
       await _performDeleteWorkout();
     }
   }
@@ -691,11 +666,8 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
                           isDense: true,
                         ),
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        // [Issue #3 Fix] 입력 제한: 숫자와 소수점만, 최대 6자리 (999.99)
-                        inputFormatters: [
-                          FilteringTextInputFormatter.allow(RegExp(r'^\d{0,3}\.?\d{0,2}')),
-                          LengthLimitingTextInputFormatter(6),
-                        ],
+                        // [D.2] 중앙화된 입력 제한 사용
+                        inputFormatters: WorkoutValidators.weightInputFormatters,
                         scrollPadding: const EdgeInsets.only(bottom: 150.0),
                         onTap: () {
                           final c = _controllers['weight_$setId'];
@@ -717,11 +689,8 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
                           isDense: true,
                         ),
                         keyboardType: TextInputType.number,
-                        // [Issue #3 Fix] 입력 제한: 정수만, 최대 3자리 (999)
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                          LengthLimitingTextInputFormatter(3),
-                        ],
+                        // [D.2] 중앙화된 입력 제한 사용
+                        inputFormatters: WorkoutValidators.repsInputFormatters,
                         scrollPadding: const EdgeInsets.only(bottom: 150.0),
                         onTap: () {
                           final c = _controllers['reps_$setId'];
