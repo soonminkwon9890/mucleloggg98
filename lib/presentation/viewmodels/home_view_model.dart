@@ -206,8 +206,10 @@ class HomeViewModel extends StateNotifier<HomeState> {
   /// [date]: 운동 예정 날짜. null이면 오늘 날짜 사용.
   ///
   /// [Critical Logic - Requirement 1 & 2]
-  /// - 오늘 날짜: 메모리 전용 Draft로 홈 화면에 즉시 추가
+  /// - 오늘 날짜: DB에 즉시 저장 + 홈 화면에 표시 (앱 재시작 시에도 유지)
   /// - 미래 날짜: planned_workouts 테이블에 저장 (캘린더에만 표시, 홈 화면에는 표시 안 함)
+  ///
+  /// [Bug Fix] 즉시 DB 저장으로 앱 재시작 시 운동 사라지는 문제 해결
   Future<void> addNewExercise(
     String name,
     String bodyPartCode,
@@ -222,17 +224,6 @@ class HomeViewModel extends StateNotifier<HomeState> {
     final normalizedToday = DateTime(today.year, today.month, today.day);
     final normalizedSelected = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
     final isFutureDate = normalizedSelected.isAfter(normalizedToday);
-
-    // BodyPart enum 변환
-    BodyPart? bodyPart;
-    try {
-      bodyPart = BodyPart.values.firstWhere(
-        (bp) => bp.code == bodyPartCode,
-        orElse: () => BodyPart.full,
-      );
-    } catch (e) {
-      bodyPart = BodyPart.full;
-    }
 
     // [MODIFIED] 미래 날짜인 경우: planned_workouts 테이블에 저장
     if (isFutureDate) {
@@ -263,30 +254,53 @@ class HomeViewModel extends StateNotifier<HomeState> {
       return; // 홈 화면 state에 추가하지 않고 종료
     }
 
-    // [기존 로직] 오늘 날짜인 경우: 메모리 전용 Draft로 홈 화면에 추가
-    final newBaseline = ExerciseBaseline(
-      id: _uuid.v4(),
-      userId: userId,
-      exerciseName: name,
-      targetMuscles: targetMuscles,
-      bodyPart: bodyPart,
-      workoutSets: const [],
-      routineId: null,
-      isHiddenFromHome: false,
-      createdAt: selectedDate,
-      updatedAt: selectedDate,
-    );
+    // [Bug Fix] 오늘 날짜인 경우: DB에 즉시 저장 + 홈 화면에 표시
+    // 정렬용 타임스탬프 계산: 현재 리스트의 max createdAt + 1초 (맨 끝에 추가)
+    final sortTimestamp = _getNextSortTimestamp();
 
-    final updatedBaselines = [...state.baselines, newBaseline];
-    final groupedWorkouts = _groupWorkouts(updatedBaselines);
-    final allWorkouts = groupedWorkouts.values.expand((list) => list).toList();
+    try {
+      // DB에 즉시 저장 (baseline + 빈 workout_set)
+      final persistedBaseline = await _repository.addTodayWorkoutWithPersistence(
+        exerciseName: name,
+        bodyPartCode: bodyPartCode,
+        targetMuscles: targetMuscles,
+        sortTimestamp: sortTimestamp,
+        routineId: null,
+      );
 
-    state = state.copyWith(
-      baselines: updatedBaselines,
-      groupedWorkouts: groupedWorkouts,
-      totalVolume: _calculateVolume(allWorkouts),
-      mainFocusArea: _getFocusArea(allWorkouts),
-    );
+      // 로컬 state에 추가
+      final updatedBaselines = [...state.baselines, persistedBaseline];
+      final groupedWorkouts = _groupWorkouts(updatedBaselines);
+      final allWorkouts = groupedWorkouts.values.expand((list) => list).toList();
+
+      state = state.copyWith(
+        baselines: updatedBaselines,
+        groupedWorkouts: groupedWorkouts,
+        totalVolume: _calculateVolume(allWorkouts),
+        mainFocusArea: _getFocusArea(allWorkouts),
+      );
+    } catch (e) {
+      state = state.copyWith(errorMessage: '운동 추가 실패: $e');
+    }
+  }
+
+  /// 정렬용 다음 타임스탬프 계산
+  /// 현재 리스트의 최대 createdAt + 1초 반환 (새 항목이 맨 끝에 오도록)
+  DateTime _getNextSortTimestamp() {
+    if (state.baselines.isEmpty) {
+      return DateTime.now();
+    }
+
+    DateTime maxTime = DateTime(1970);
+    for (final baseline in state.baselines) {
+      final createdAt = baseline.createdAt ?? DateTime(1970);
+      if (createdAt.isAfter(maxTime)) {
+        maxTime = createdAt;
+      }
+    }
+
+    // 최대 시간 + 1초 반환
+    return maxTime.add(const Duration(seconds: 1));
   }
 
   /// 루틴 저장
@@ -304,53 +318,55 @@ class HomeViewModel extends StateNotifier<HomeState> {
     }
   }
 
-  /// 보관함/루틴에서 홈 화면에 운동 추가 (메모리 전용, DB 저장 X)
+  /// 보관함/루틴에서 홈 화면에 운동 추가 (DB 즉시 저장)
   ///
   /// [Critical Requirement] 데이터 리셋:
   /// - 유지: exerciseName, bodyPart, targetMuscles
   /// - 리셋: workoutSets → 빈 리스트, isHiddenFromHome → false
-  /// - 새 UUID 생성 (DB 충돌 방지)
   ///
+  /// [Bug Fix] 즉시 DB 저장으로 앱 재시작 시 운동 사라지는 문제 해결
   /// [routineId]: 루틴에서 시작할 경우 루틴 ID 전달, 보관함에서는 null
-  void addFromArchiveOrRoutine(
+  Future<void> addFromArchiveOrRoutine(
     List<ExerciseBaseline> baselines, {
     String? routineId,
-  }) {
+  }) async {
     if (baselines.isEmpty) return;
 
-    final now = DateTime.now();
+    // 정렬용 기준 타임스탬프
+    var sortTimestamp = _getNextSortTimestamp();
+    final persistedBaselines = <ExerciseBaseline>[];
 
-    // 새로운 baseline 생성 (데이터 리셋 + 새 UUID)
-    final newBaselines = baselines.map((original) {
-      return ExerciseBaseline(
-        id: _uuid.v4(), // 새 UUID 생성
-        userId: original.userId,
-        exerciseName: original.exerciseName,
-        targetMuscles: original.targetMuscles,
-        bodyPart: original.bodyPart,
-        videoUrl: original.videoUrl,
-        thumbnailUrl: original.thumbnailUrl,
-        skeletonData: original.skeletonData,
-        feedbackPrompt: original.feedbackPrompt,
-        workoutSets: const [], // 리셋: 빈 리스트
-        routineId: routineId, // 루틴 ID 또는 null
-        isHiddenFromHome: false, // 홈에 표시
-        createdAt: now,
-        updatedAt: now,
+    try {
+      // 각 운동을 순차적으로 DB에 저장 (정렬 순서 보장)
+      for (final original in baselines) {
+        final persisted = await _repository.addTodayWorkoutWithPersistence(
+          exerciseName: original.exerciseName,
+          bodyPartCode: original.bodyPart?.code ?? 'FULL',
+          targetMuscles: original.targetMuscles ?? const [],
+          sortTimestamp: sortTimestamp,
+          routineId: routineId,
+        );
+
+        persistedBaselines.add(persisted);
+
+        // 다음 운동을 위해 타임스탬프 1초 증가
+        sortTimestamp = sortTimestamp.add(const Duration(seconds: 1));
+      }
+
+      // 현재 state에 추가
+      final updatedBaselines = [...state.baselines, ...persistedBaselines];
+      final groupedWorkouts = _groupWorkouts(updatedBaselines);
+      final allWorkouts = groupedWorkouts.values.expand((list) => list).toList();
+
+      state = state.copyWith(
+        baselines: updatedBaselines,
+        groupedWorkouts: groupedWorkouts,
+        totalVolume: _calculateVolume(allWorkouts),
+        mainFocusArea: _getFocusArea(allWorkouts),
       );
-    }).toList();
-
-    // 현재 state에 추가 (메모리 전용)
-    final updatedBaselines = [...state.baselines, ...newBaselines];
-    final groupedWorkouts = _groupWorkouts(updatedBaselines);
-    final allWorkouts = groupedWorkouts.values.expand((list) => list).toList();
-
-    state = state.copyWith(
-      baselines: updatedBaselines,
-      groupedWorkouts: groupedWorkouts,
-      totalVolume: _calculateVolume(allWorkouts),
-      mainFocusArea: _getFocusArea(allWorkouts),
-    );
+    } catch (e) {
+      state = state.copyWith(errorMessage: '운동 추가 실패: $e');
+    }
   }
 
   /// Draft 세트 리스트 병합 (Full Replacement)
@@ -393,6 +409,9 @@ class HomeViewModel extends StateNotifier<HomeState> {
   }
 
   /// 운동 그룹화 및 정렬
+  /// [Phase 2 Fix] 순서 변경: routineId 우선순위 제거, 순수 createdAt ASC (FIFO)
+  /// - 신규 운동이 항상 리스트 끝에 추가됨
+  /// - 앱 재시작 시에도 추가 순서가 유지됨
   Map<String, List<ExerciseBaseline>> _groupWorkouts(
       List<ExerciseBaseline> baselines) {
     // 중복 제거: 같은 baseline_id를 가진 운동은 한 번만 표시
@@ -405,15 +424,9 @@ class HomeViewModel extends StateNotifier<HomeState> {
       return true;
     }).toList();
 
-    // 정렬 로직
-    // 1순위: 신규 운동 (routineId == null, createdAt 오름차순 = FIFO)
-    // 2순위: 루틴 운동 (routineId != null, createdAt 오름차순)
+    // [Phase 2 Fix] 정렬 로직: 순수 createdAt ASC (FIFO)
+    // routineId 우선순위 제거 - 추가된 순서대로 표시
     uniqueFiltered.sort((a, b) {
-      // routineId가 null인 것을 먼저 (신규 운동)
-      if (a.routineId == null && b.routineId != null) return -1;
-      if (a.routineId != null && b.routineId == null) return 1;
-
-      // 같은 그룹 내에서는 createdAt 오름차순 (오래된 것이 먼저 = FIFO)
       final aTime = a.createdAt ?? DateTime(1970);
       final bTime = b.createdAt ?? DateTime(1970);
       return aTime.compareTo(bTime);
@@ -477,10 +490,13 @@ class HomeViewModel extends StateNotifier<HomeState> {
     return top.join(', ');
   }
 
-  /// 입력값 메모리 업데이트 (DB 호출 X, 화면 갱신만 수행)
-  /// 포커스가 해제될 때 호출되어 사용자 입력을 메모리에 반영합니다.
-  /// [Fix] Upsert 로직으로 변경 - 세트가 없으면 추가, 있으면 업데이트
+  /// 입력값 메모리 업데이트 + 자동 저장 (Draft 상태 유지)
+  /// 포커스가 해제될 때 호출되어 사용자 입력을 메모리에 반영하고 DB에 자동 저장합니다.
+  /// [Phase 1 Auto-Save] 앱 재시작 시 데이터 유실 방지를 위해 즉시 DB 저장
+  /// [Important] is_completed는 false로 유지 (Draft 상태)
   void updateSetInMemory(String setId, {double? weight, int? reps}) {
+    WorkoutSet? updatedSet;
+
     final updatedBaselines = state.baselines.map((baseline) {
       final currentSets = baseline.workoutSets ?? [];
 
@@ -491,10 +507,13 @@ class HomeViewModel extends StateNotifier<HomeState> {
         // Case A: 기존 세트 업데이트
         final updatedSets = currentSets.map((set) {
           if (set.id == setId) {
-            return set.copyWith(
+            final newSet = set.copyWith(
               weight: weight ?? set.weight,
               reps: reps ?? set.reps,
+              // [Phase 1] is_completed는 그대로 유지 (Draft 상태 보존)
             );
+            updatedSet = newSet;
+            return newSet;
           }
           return set;
         }).toList();
@@ -507,10 +526,19 @@ class HomeViewModel extends StateNotifier<HomeState> {
     }).toList();
 
     state = state.copyWith(baselines: updatedBaselines);
+
+    // [Phase 1 Auto-Save] 백그라운드에서 DB에 자동 저장 (UI 블로킹 없음)
+    if (updatedSet != null) {
+      _repository.upsertWorkoutSet(updatedSet!).catchError((e) {
+        // 저장 실패 시 로그만 남기고 사용자에게는 표시하지 않음
+        // 다음 저장 시 재시도됨
+      });
+    }
   }
 
-  /// 새로운 세트를 baseline에 추가 (Upsert)
+  /// 새로운 세트를 baseline에 추가 (Upsert) + 자동 저장
   /// WorkoutCard에서 로컬로 생성한 세트를 ViewModel에 동기화할 때 사용
+  /// [Phase 1 Auto-Save] 앱 재시작 시 데이터 유실 방지를 위해 즉시 DB 저장
   void upsertSetInMemory(
     String baselineId,
     String setId, {
@@ -519,6 +547,8 @@ class HomeViewModel extends StateNotifier<HomeState> {
     required int sets,
     required DateTime createdAt,
   }) {
+    WorkoutSet? upsertedSet;
+
     final updatedBaselines = state.baselines.map((baseline) {
       if (baseline.id != baselineId) return baseline;
 
@@ -527,27 +557,108 @@ class HomeViewModel extends StateNotifier<HomeState> {
 
       if (existingSetIndex != -1) {
         // Update existing set
-        currentSets[existingSetIndex] = currentSets[existingSetIndex].copyWith(
+        final updatedSet = currentSets[existingSetIndex].copyWith(
           weight: weight,
           reps: reps,
         );
+        currentSets[existingSetIndex] = updatedSet;
+        upsertedSet = updatedSet;
       } else {
         // Add new set
-        currentSets.add(WorkoutSet(
+        final newSet = WorkoutSet(
           id: setId,
           baselineId: baselineId,
           weight: weight,
           reps: reps,
           sets: sets,
-          isCompleted: false,
+          isCompleted: false, // [Phase 1] Draft 상태로 생성
           createdAt: createdAt,
-        ));
+        );
+        currentSets.add(newSet);
+        upsertedSet = newSet;
       }
 
       return baseline.copyWith(workoutSets: currentSets);
     }).toList();
 
     state = state.copyWith(baselines: updatedBaselines);
+
+    // [Phase 1 Auto-Save] 백그라운드에서 DB에 자동 저장 (UI 블로킹 없음)
+    if (upsertedSet != null) {
+      _repository.upsertWorkoutSet(upsertedSet!).catchError((e) {
+        // 저장 실패 시 로그만 남기고 사용자에게는 표시하지 않음
+      });
+    }
+  }
+
+  /// 세트 삭제 + 자동 저장
+  /// WorkoutCard에서 세트를 삭제할 때 호출
+  /// [Phase 1 Auto-Save] 앱 재시작 시 데이터 일관성을 위해 즉시 DB 삭제
+  void deleteSetInMemory(String baselineId, String setId) {
+    final updatedBaselines = state.baselines.map((baseline) {
+      if (baseline.id != baselineId) return baseline;
+
+      final currentSets = List<WorkoutSet>.from(baseline.workoutSets ?? []);
+      currentSets.removeWhere((s) => s.id == setId);
+
+      return baseline.copyWith(workoutSets: currentSets);
+    }).toList();
+
+    state = state.copyWith(baselines: updatedBaselines);
+
+    // [Phase 1 Auto-Save] 백그라운드에서 DB에서 삭제 (UI 블로킹 없음)
+    _repository.deleteWorkoutSet(setId).catchError((e) {
+      // 삭제 실패 시 로그만 남기고 사용자에게는 표시하지 않음
+    });
+  }
+
+  /// [Phase 4] 운동 순서 변경 (드래그 앤 드롭 후 호출)
+  /// 사용자가 재정렬한 순서를 반영하여 createdAt을 업데이트합니다.
+  ///
+  /// [Bug Fix] DB에 순서 저장으로 앱 재시작 후에도 사용자가 지정한 순서 유지
+  Future<void> reorderWorkouts(List<ExerciseBaseline> reorderedList) async {
+    if (reorderedList.isEmpty) return;
+
+    // 새로운 순서에 맞게 createdAt을 재할당
+    // 기준: 현재 시간부터 1ms씩 증가하여 순서 보장
+    final now = DateTime.now();
+    final updatedBaselines = <ExerciseBaseline>[];
+
+    for (int i = 0; i < reorderedList.length; i++) {
+      final baseline = reorderedList[i];
+      // 새로운 createdAt 할당 (순서 보존을 위해 인덱스 기반)
+      final newCreatedAt = now.add(Duration(milliseconds: i));
+      updatedBaselines.add(baseline.copyWith(createdAt: newCreatedAt));
+    }
+
+    // 기존 state.baselines에서 reorderedList에 없는 항목들 찾기
+    final reorderedIds = reorderedList.map((b) => b.id).toSet();
+    final remainingBaselines = state.baselines
+        .where((b) => !reorderedIds.contains(b.id))
+        .toList();
+
+    // 재정렬된 항목 + 나머지 항목 합치기
+    final finalBaselines = [...updatedBaselines, ...remainingBaselines];
+
+    final groupedWorkouts = _groupWorkouts(finalBaselines);
+    final allWorkouts = groupedWorkouts.values.expand((list) => list).toList();
+
+    // 로컬 상태 즉시 업데이트 (UI 반응성)
+    state = state.copyWith(
+      baselines: finalBaselines,
+      groupedWorkouts: groupedWorkouts,
+      totalVolume: _calculateVolume(allWorkouts),
+      mainFocusArea: _getFocusArea(allWorkouts),
+    );
+
+    // [Bug Fix] DB에 순서 저장 (백그라운드)
+    try {
+      final baselineIds = reorderedList.map((b) => b.id).toList();
+      await _repository.persistWorkoutOrder(baselineIds);
+    } catch (e) {
+      // DB 저장 실패해도 로컬 상태는 유지 (다음 저장 시 재시도)
+      // 에러 로그만 남기고 사용자에게는 표시하지 않음
+    }
   }
 
   /// 저장 후 해당 카드만 교체 (전체 새로고침 없이 순서 유지)

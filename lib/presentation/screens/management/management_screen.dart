@@ -580,8 +580,8 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
 
     try {
       if (!isFutureDate) {
-        // [Case A: 오늘] - 기존 _addToToday 로직 사용
-        ref.read(homeViewModelProvider.notifier).addFromArchiveOrRoutine(
+        // [Case A: 오늘] - 기존 _addToToday 로직 사용 (DB 즉시 저장)
+        await ref.read(homeViewModelProvider.notifier).addFromArchiveOrRoutine(
           selectedBaselines,
           routineId: null,
         );
@@ -1410,8 +1410,8 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab> {
       }
 
       if (!isFutureDate) {
-        // [Case A: 오늘] - 홈 화면에 추가
-        ref.read(homeViewModelProvider.notifier).addFromArchiveOrRoutine(
+        // [Case A: 오늘] - 홈 화면에 추가 (DB 즉시 저장)
+        await ref.read(homeViewModelProvider.notifier).addFromArchiveOrRoutine(
           allBaselines,
           routineId: selectedRoutines.length == 1 ? selectedRoutines.first.id : null,
         );

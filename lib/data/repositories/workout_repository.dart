@@ -1246,7 +1246,16 @@ class WorkoutRepository {
         .eq('user_id', userId)
         .order('created_at', ascending: false);
 
-    return (response as List).map((json) => Routine.fromJson(json)).toList();
+    // [Phase 4] 각 루틴의 routine_items를 sort_order 기준으로 정렬
+    return (response as List).map((json) {
+      final routine = Routine.fromJson(json);
+      if (routine.routineItems != null && routine.routineItems!.length > 1) {
+        final sortedItems = List<RoutineItem>.from(routine.routineItems!)
+          ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+        return routine.copyWith(routineItems: sortedItems);
+      }
+      return routine;
+    }).toList();
   }
 
   /// 특정 루틴 조회 (Join 쿼리로 RoutineItem 포함)
@@ -1265,7 +1274,15 @@ class WorkoutRepository {
 
     if (response == null) return null;
 
-    return Routine.fromJson(response);
+    // [Phase 4] routine_items를 sort_order 기준으로 정렬
+    final routine = Routine.fromJson(response);
+    if (routine.routineItems != null && routine.routineItems!.length > 1) {
+      final sortedItems = List<RoutineItem>.from(routine.routineItems!)
+        ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+      return routine.copyWith(routineItems: sortedItems);
+    }
+
+    return routine;
   }
 
   /// 루틴 수정
@@ -1328,6 +1345,24 @@ class WorkoutRepository {
 
     // routine_item 삭제 (routine_id로 user 권한 확인은 RLS에서 처리)
     await _client.from('routine_items').delete().eq('id', routineItemId);
+  }
+
+  /// [Phase 4] 루틴 내 운동 순서 변경
+  /// [newOrder]: 새로운 순서대로 정렬된 routine_item ID 리스트
+  Future<void> updateRoutineItemOrder(String routineId, List<String> newOrder) async {
+    final userId = SupabaseService.currentUser?.id;
+    if (userId == null) {
+      throw Exception('로그인이 필요합니다.');
+    }
+
+    // 각 routine_item의 sort_order를 업데이트
+    for (int i = 0; i < newOrder.length; i++) {
+      await _client
+          .from('routine_items')
+          .update({'sort_order': i})
+          .eq('id', newOrder[i])
+          .eq('routine_id', routineId);
+    }
   }
 
   /// 루틴 삭제 (과거 운동 기록 보존)
@@ -1863,6 +1898,142 @@ class WorkoutRepository {
 
     // Step 3: 숨겨진 세트가 없으면 신규 (아무것도 하지 않음)
     return false; // 신규 운동
+  }
+
+  /// [Bug Fix] 오늘의 운동에 즉시 추가 및 DB 저장
+  ///
+  /// 기존 addTodayWorkout와 달리, 이 메서드는:
+  /// 1. ExerciseBaseline을 DB에 즉시 생성/활성화
+  /// 2. 빈 WorkoutSet을 생성하여 오늘 날짜로 등록 (앱 재시작 시에도 표시됨)
+  /// 3. createdAt 기반 sort_order를 위해 지정된 timestamp 사용
+  ///
+  /// [sortTimestamp]: 정렬을 위한 타임스탬프. null이면 현재 시간 사용.
+  /// [routineId]: 루틴에서 불러온 경우 루틴 ID
+  Future<ExerciseBaseline> addTodayWorkoutWithPersistence({
+    required String exerciseName,
+    required String bodyPartCode,
+    required List<String> targetMuscles,
+    DateTime? sortTimestamp,
+    String? routineId,
+  }) async {
+    final userId = SupabaseService.currentUser?.id;
+    if (userId == null) {
+      throw Exception('로그인이 필요합니다.');
+    }
+
+    await _ensureProfileExists();
+
+    final now = sortTimestamp ?? DateTime.now();
+
+    // Step 1: 운동 기준 정보 생성/활성화 (ensureExerciseVisible과 유사하지만 createdAt 제어)
+    final trimmedName = exerciseName.trim();
+
+    // 기존 운동 조회
+    final existingBaseline = await _client
+        .from('exercise_baselines')
+        .select('*')
+        .eq('user_id', userId)
+        .ilike('exercise_name', trimmedName)
+        .maybeSingle();
+
+    ExerciseBaseline baseline;
+
+    if (existingBaseline == null) {
+      // Case A: 완전 신규 - 새로 생성
+      final newBaseline = ExerciseBaseline(
+        id: const Uuid().v4(),
+        userId: userId,
+        exerciseName: trimmedName,
+        bodyPart: BodyPartParsing.fromCode(bodyPartCode),
+        targetMuscles: targetMuscles.isEmpty ? null : targetMuscles,
+        routineId: routineId,
+        isHiddenFromHome: false,
+        createdAt: now, // 정렬용 타임스탬프 사용
+        updatedAt: now,
+      );
+      baseline = await upsertBaseline(newBaseline);
+    } else {
+      // Case B: 기존 운동 - 활성화 및 타임스탬프 갱신
+      final existing = ExerciseBaseline.fromJson(existingBaseline);
+
+      await _client
+          .from('exercise_baselines')
+          .update({
+            'is_hidden_from_home': false,
+            'routine_id': routineId,
+            'created_at': now.toIso8601String(), // 정렬용 타임스탬프 갱신
+            'updated_at': now.toIso8601String(),
+          })
+          .eq('id', existing.id)
+          .eq('user_id', userId);
+
+      // 숨겨진 세트 복구 시도
+      await recoverOrAddExercise(existing.id);
+
+      final updated = await getBaselineById(existing.id);
+      baseline = updated ?? existing;
+    }
+
+    // Step 2: 오늘 날짜로 빈 WorkoutSet 생성 (앱 재시작 시에도 표시되도록)
+    // 이미 오늘 날짜의 세트가 있는지 확인
+    final dateStr = DateFormat('yyyy-MM-dd').format(now);
+    final startStr = '${dateStr}T00:00:00Z';
+    final endStr = '${dateStr}T23:59:59.999Z';
+
+    final existingSets = await _client
+        .from('workout_sets')
+        .select('id')
+        .eq('baseline_id', baseline.id)
+        .eq('is_hidden', false)
+        .gte('created_at', startStr)
+        .lte('created_at', endStr);
+
+    // 오늘 날짜의 세트가 없으면 빈 세트 생성
+    if ((existingSets as List).isEmpty) {
+      final emptySet = WorkoutSet(
+        id: const Uuid().v4(),
+        baselineId: baseline.id,
+        weight: 0.0,
+        reps: 0,
+        sets: 1,
+        isCompleted: false, // 미완료 상태로 생성
+        createdAt: now,
+      );
+      await upsertWorkoutSet(emptySet);
+    }
+
+    // Step 3: 최신 상태 반환
+    final result = await getBaselineById(baseline.id);
+    return result ?? baseline;
+  }
+
+  /// [Bug Fix] 오늘의 운동 순서 변경 DB 저장
+  ///
+  /// 드래그 앤 드롭으로 순서 변경 후 호출하여 createdAt을 DB에 저장합니다.
+  /// createdAt을 순서대로 재할당하여 앱 재시작 후에도 순서가 유지됩니다.
+  Future<void> persistWorkoutOrder(List<String> baselineIds) async {
+    final userId = SupabaseService.currentUser?.id;
+    if (userId == null) {
+      throw Exception('로그인이 필요합니다.');
+    }
+
+    if (baselineIds.isEmpty) return;
+
+    // 현재 시간 기준으로 1ms씩 증가하는 타임스탬프 할당
+    final now = DateTime.now();
+
+    for (int i = 0; i < baselineIds.length; i++) {
+      final newCreatedAt = now.add(Duration(milliseconds: i));
+
+      await _client
+          .from('exercise_baselines')
+          .update({
+            'created_at': newCreatedAt.toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', baselineIds[i])
+          .eq('user_id', userId);
+    }
   }
 
   /// 특정 날짜의 세트 기록 삭제 (Soft Delete)

@@ -4,8 +4,10 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import '../../../data/models/routine.dart';
 import '../../../data/models/routine_item.dart';
+import '../../../data/models/exercise_baseline.dart';
 import '../../../core/enums/exercise_enums.dart';
 import '../../providers/workout_provider.dart';
+import '../../widgets/workout/reorder_workout_dialog.dart';
 
 /// 루틴 상세 페이지
 /// - 루틴 이름 수정 (AppBar)
@@ -332,6 +334,90 @@ class _RoutineDetailScreenState extends ConsumerState<RoutineDetailScreen> {
     }
   }
 
+  /// [Phase 4] 운동 순서 변경 다이얼로그 표시
+  Future<void> _showReorderDialog() async {
+    final items = _routine.routineItems ?? [];
+    if (items.length < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('순서를 변경하려면 2개 이상의 운동이 필요합니다.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    // RoutineItem을 ExerciseBaseline으로 변환 (다이얼로그 호환용)
+    final baselines = items.map((item) {
+      return ExerciseBaseline(
+        id: item.id,
+        userId: '',
+        exerciseName: item.exerciseName,
+        bodyPart: item.bodyPart,
+        targetMuscles: const [],
+        workoutSets: const [],
+        isHiddenFromHome: false,
+      );
+    }).toList();
+
+    showReorderWorkoutDialog(
+      context,
+      baselines,
+      (reorderedList) async {
+        // 순서가 변경되었는지 확인
+        bool hasChanged = false;
+        for (int i = 0; i < reorderedList.length; i++) {
+          if (reorderedList[i].id != items[i].id) {
+            hasChanged = true;
+            break;
+          }
+        }
+
+        if (!hasChanged) return;
+
+        // DB에 새로운 순서 저장
+        try {
+          final repository = ref.read(workoutRepositoryProvider);
+          final newOrder = reorderedList.map((b) => b.id).toList();
+          await repository.updateRoutineItemOrder(_routine.id, newOrder);
+
+          // 로컬 상태 업데이트: 새로운 순서에 맞게 routineItems 재정렬
+          final reorderedItems = <RoutineItem>[];
+          for (final baseline in reorderedList) {
+            final originalItem = items.firstWhere((i) => i.id == baseline.id);
+            reorderedItems.add(originalItem);
+          }
+
+          setState(() {
+            _routine = _routine.copyWith(routineItems: reorderedItems);
+          });
+
+          // Provider 갱신
+          ref.invalidate(routinesProvider);
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('순서가 변경되었습니다.'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 1),
+              ),
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('순서 변경 실패: $e'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      },
+    );
+  }
+
   /// 운동 추가 모달 표시
   Future<void> _showAddExerciseModal() async {
     final selectedBaselineIds = <String>{};
@@ -532,7 +618,7 @@ class _RoutineDetailScreenState extends ConsumerState<RoutineDetailScreen> {
               _buildVolumeChart(),
               const SizedBox(height: 16),
 
-              // 운동 목록 헤더
+              // 운동 목록 헤더 (순서 변경 + 운동 추가 버튼)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -543,10 +629,28 @@ class _RoutineDetailScreenState extends ConsumerState<RoutineDetailScreen> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  TextButton.icon(
-                    onPressed: _showAddExerciseModal,
-                    icon: const Icon(Icons.add),
-                    label: const Text('운동 추가'),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // [Phase 4] 순서 변경 버튼
+                      TextButton.icon(
+                        onPressed: _showReorderDialog,
+                        icon: const Icon(Icons.swap_vert, size: 18),
+                        label: const Text('순서 변경'),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                        ),
+                      ),
+                      // 운동 추가 버튼
+                      TextButton.icon(
+                        onPressed: _showAddExerciseModal,
+                        icon: const Icon(Icons.add, size: 18),
+                        label: const Text('운동 추가'),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -837,18 +941,10 @@ class _RoutineDetailScreenState extends ConsumerState<RoutineDetailScreen> {
           key: ValueKey('routine_item_${item.id}'),
           clipBehavior: Clip.antiAlias,
           child: ListTile(
-            leading: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                Icons.fitness_center,
-                color: Theme.of(context).colorScheme.primary,
-                size: 20,
-              ),
+            leading: Icon(
+              Icons.fitness_center,
+              color: Colors.grey[600],
+              size: 24,
             ),
             title: Text(
               item.exerciseName,

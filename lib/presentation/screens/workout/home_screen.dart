@@ -8,6 +8,7 @@ import '../../viewmodels/home_state.dart';
 import '../../../data/models/exercise_baseline.dart';
 import '../../widgets/workout/workout_card.dart';
 import '../../widgets/workout/exercise_add_panel.dart';
+import '../../widgets/workout/reorder_workout_dialog.dart';
 import '../management/management_screen.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../utils/premium_guidance_dialog.dart';
@@ -478,7 +479,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             ),
             const SizedBox(height: 32),
 
-            // 오늘의 운동 섹션 헤더 (루틴 저장 버튼 포함)
+            // 오늘의 운동 섹션 헤더 (순서 변경 + 루틴 저장 버튼 포함)
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -487,13 +488,38 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 ),
                 if (allTodayWorkouts.isNotEmpty)
-                  TextButton.icon(
-                    onPressed: () => _showSaveRoutineDialog(allTodayWorkouts),
-                    icon: const Icon(Icons.bookmark_add, size: 18),
-                    label: const Text('루틴 저장'),
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // [Phase 4] 순서 변경 버튼
+                      TextButton.icon(
+                        onPressed: () {
+                          showReorderWorkoutDialog(
+                            context,
+                            allTodayWorkouts,
+                            (reorderedList) {
+                              ref
+                                  .read(homeViewModelProvider.notifier)
+                                  .reorderWorkouts(reorderedList);
+                            },
+                          );
+                        },
+                        icon: const Icon(Icons.swap_vert, size: 18),
+                        label: const Text('순서 변경'),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                        ),
+                      ),
+                      // 루틴 저장 버튼
+                      TextButton.icon(
+                        onPressed: () => _showSaveRoutineDialog(allTodayWorkouts),
+                        icon: const Icon(Icons.bookmark_add, size: 18),
+                        label: const Text('루틴 저장'),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                        ),
+                      ),
+                    ],
                   ),
               ],
             ),
