@@ -27,6 +27,14 @@ class HomeViewModel extends StateNotifier<HomeState> {
     state = const HomeState(); // 모든 필드를 기본값으로 리셋
   }
 
+  /// [Issue #1 Fix] 에러 메시지 초기화
+  /// SnackBar 표시 후 호출하여 동일 에러가 반복 표시되지 않도록 합니다.
+  void clearError() {
+    if (state.errorMessage != null) {
+      state = state.copyWith(errorMessage: null);
+    }
+  }
+
   /// 데이터 로드
   ///
   /// [forceRefresh]: true일 때만 DB에서 강제로 가져옵니다.
@@ -532,6 +540,7 @@ class HomeViewModel extends StateNotifier<HomeState> {
       _repository.upsertWorkoutSet(updatedSet!).catchError((e) {
         // 저장 실패 시 로그만 남기고 사용자에게는 표시하지 않음
         // 다음 저장 시 재시도됨
+        return updatedSet!;
       });
     }
   }
@@ -587,6 +596,7 @@ class HomeViewModel extends StateNotifier<HomeState> {
     if (upsertedSet != null) {
       _repository.upsertWorkoutSet(upsertedSet!).catchError((e) {
         // 저장 실패 시 로그만 남기고 사용자에게는 표시하지 않음
+        return upsertedSet!;
       });
     }
   }
@@ -594,7 +604,11 @@ class HomeViewModel extends StateNotifier<HomeState> {
   /// 세트 삭제 + 자동 저장
   /// WorkoutCard에서 세트를 삭제할 때 호출
   /// [Phase 1 Auto-Save] 앱 재시작 시 데이터 일관성을 위해 즉시 DB 삭제
+  /// [Issue #1 Fix] 삭제 실패 시 상태 롤백 및 에러 메시지 표시
   void deleteSetInMemory(String baselineId, String setId) {
+    // [Issue #1 Fix] 롤백을 위해 변경 전 상태 저장
+    final previousBaselines = state.baselines;
+
     final updatedBaselines = state.baselines.map((baseline) {
       if (baseline.id != baselineId) return baseline;
 
@@ -604,11 +618,17 @@ class HomeViewModel extends StateNotifier<HomeState> {
       return baseline.copyWith(workoutSets: currentSets);
     }).toList();
 
+    // Optimistic UI 업데이트
     state = state.copyWith(baselines: updatedBaselines);
 
-    // [Phase 1 Auto-Save] 백그라운드에서 DB에서 삭제 (UI 블로킹 없음)
+    // [Phase 1 Auto-Save] 백그라운드에서 DB에서 삭제
+    // [Issue #1 Fix] 실패 시 상태 롤백 및 에러 메시지 설정
     _repository.deleteWorkoutSet(setId).catchError((e) {
-      // 삭제 실패 시 로그만 남기고 사용자에게는 표시하지 않음
+      // 삭제 실패: 이전 상태로 롤백하여 UI와 DB 상태 일치
+      state = state.copyWith(
+        baselines: previousBaselines,
+        errorMessage: '네트워크 오류로 세트를 삭제하지 못했습니다. 다시 시도해주세요.',
+      );
     });
   }
 

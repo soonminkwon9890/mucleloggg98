@@ -322,6 +322,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final homeState = ref.watch(homeViewModelProvider);
     final authStateAsync = ref.watch(authStateProvider);
 
+    // [Issue #1 Fix] 에러 메시지 변경 감지 및 SnackBar 표시
+    ref.listen<HomeState>(homeViewModelProvider, (previous, next) {
+      // 에러 메시지가 새로 설정된 경우에만 SnackBar 표시
+      if (next.errorMessage != null &&
+          next.errorMessage != previous?.errorMessage) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(next.errorMessage!),
+            backgroundColor: Colors.red[700],
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        // SnackBar 표시 후 에러 상태 초기화 (반복 표시 방지)
+        Future.microtask(() {
+          ref.read(homeViewModelProvider.notifier).clearError();
+        });
+      }
+    });
+
     return Scaffold(
       resizeToAvoidBottomInset: true,
       floatingActionButton: FloatingActionButton.extended(
@@ -354,9 +374,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (state.errorMessage != null) {
-      return Center(child: Text('오류: ${state.errorMessage}'));
-    }
+    // [Issue #1 Fix] 에러 메시지는 SnackBar로 표시하므로 전체 화면 에러 제거
+    // 사용자가 에러 발생 후에도 운동 리스트와 상호작용할 수 있도록 함
 
     final groupedWorkouts = state.groupedWorkouts;
     final allTodayWorkouts =

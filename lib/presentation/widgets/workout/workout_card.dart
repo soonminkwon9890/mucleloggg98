@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/enums/exercise_enums.dart';
@@ -41,13 +42,22 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
   // [Phase 2] 저장 완료 상태 추적 (입력 필드는 유지)
   bool _hasSaved = false;
 
+  // [Issue #2 Fix] 저장 중 상태 - 더블 서브밋 방지
+  bool _isSaving = false;
+
+  // [Issue #3 Fix] 입력값 제한 상수
+  static const double _maxWeight = 999.0;
+  static const int _maxReps = 999;
+
   // [Bug Fix] 동적 저장 상태 판단 - Widget이 재생성되어도 데이터 기반으로 상태 복원
   // 로컬 _hasSaved 또는 실제 데이터(isCompleted)를 확인하여 "저장됨" 상태 판단
   bool get _isEffectivelySaved =>
       _hasSaved || _sets.values.any((set) => set.isCompleted == true);
 
+  // [Issue #5 Fix] 조건부 KeepAlive - 저장되지 않은 데이터가 있을 때만 메모리에 유지
+  // 저장 완료 후에는 메모리에서 해제되어 메모리 누적 방지
   @override
-  bool get wantKeepAlive => true;
+  bool get wantKeepAlive => _isLocalDirty && !_isEffectivelySaved;
 
   /// 로컬 데이터가 Dirty 상태인지 판단 (세트 추가 또는 입력값 존재)
   /// [Fix] TextEditingController의 실제 값을 확인 (_sets는 포커스 해제 전까지 업데이트 안 됨)
@@ -165,12 +175,9 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
       _sets.remove(id);
       _controllers.remove('weight_$id')?.dispose();
       _controllers.remove('reps_$id')?.dispose();
-      _weightFocusNodes[id]?.removeListener(() {});
-      _weightFocusNodes[id]?.dispose();
-      _repsFocusNodes[id]?.removeListener(() {});
-      _repsFocusNodes[id]?.dispose();
-      _weightFocusNodes.remove(id);
-      _repsFocusNodes.remove(id);
+      // [Issue #5 Fix] dispose()가 리스너를 정리하므로 removeListener 호출 불필요
+      _weightFocusNodes.remove(id)?.dispose();
+      _repsFocusNodes.remove(id)?.dispose();
     }
   }
 
@@ -179,13 +186,11 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
     for (final controller in _controllers.values) {
       controller.dispose();
     }
-    // FocusNode 정리
+    // [Issue #5 Fix] FocusNode 정리 - dispose()가 리스너를 정리함
     for (final node in _weightFocusNodes.values) {
-      node.removeListener(() {});
       node.dispose();
     }
     for (final node in _repsFocusNodes.values) {
-      node.removeListener(() {});
       node.dispose();
     }
     _controllers.clear();
@@ -246,13 +251,12 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
     // 다른 카드 저장으로 인한 rebuild 시 이 카드의 Draft 입력값을 보존
     _syncPendingInputsToViewModel();
 
-    // FocusNode 정리
+    // [Issue #5 Fix] FocusNode 정리
+    // dispose()가 내부적으로 모든 리스너를 정리하므로 removeListener 호출 불필요
     for (final node in _weightFocusNodes.values) {
-      node.removeListener(() {});
       node.dispose();
     }
     for (final node in _repsFocusNodes.values) {
-      node.removeListener(() {});
       node.dispose();
     }
     _weightFocusNodes.clear();
@@ -371,6 +375,36 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
   Future<void> _saveWorkoutCard() async {
     if (!mounted) return;
 
+    // [Issue #2 Fix] 더블 서브밋 방지 - 이미 저장 중이면 무시
+    if (_isSaving) return;
+
+    // [Issue #3 Fix] 입력값 검증 - 저장 전 범위 체크
+    for (final set in _sets.values) {
+      final weightText = _controllers['weight_${set.id}']?.text.trim() ?? '0';
+      final repsText = _controllers['reps_${set.id}']?.text.trim() ?? '0';
+      final weight = double.tryParse(weightText) ?? 0.0;
+      final reps = int.tryParse(repsText) ?? 0;
+
+      if (weight > _maxWeight) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('무게는 ${_maxWeight.toInt()}kg를 초과할 수 없습니다.')),
+        );
+        return;
+      }
+      if (reps > _maxReps) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('횟수는 $_maxReps회를 초과할 수 없습니다.')),
+        );
+        return;
+      }
+      if (weight < 0 || reps < 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('무게와 횟수는 0 이상이어야 합니다.')),
+        );
+        return;
+      }
+    }
+
     // [추가] 다이얼로그 표시 전 총 볼륨 계산 (현재 카드의 세트들만)
     final totalVolume = _calculateCardTotalVolume();
 
@@ -383,6 +417,11 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
     );
 
     if (difficulty == null) return; // 취소 시 저장 중단
+
+    // [Issue #2 Fix] 저장 시작 - 플래그 설정
+    setState(() {
+      _isSaving = true;
+    });
 
     try {
       final repository = ref.read(workoutRepositoryProvider);
@@ -479,6 +518,13 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('저장 오류: $e')),
       );
+    } finally {
+      // [Issue #2 Fix] 저장 완료/실패 후 플래그 리셋
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
     }
   }
 
@@ -498,13 +544,9 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
         _controllers.remove('sets_$setId')?.dispose();
         _sets.remove(setId);
 
-        // [추가] FocusNode 정리
-        _weightFocusNodes[setId]?.removeListener(() {});
-        _weightFocusNodes[setId]?.dispose();
-        _repsFocusNodes[setId]?.removeListener(() {});
-        _repsFocusNodes[setId]?.dispose();
-        _weightFocusNodes.remove(setId);
-        _repsFocusNodes.remove(setId);
+        // [Issue #5 Fix] FocusNode 정리 - dispose()가 리스너를 정리함
+        _weightFocusNodes.remove(setId)?.dispose();
+        _repsFocusNodes.remove(setId)?.dispose();
       });
 
       // Provider 갱신 (홈 화면과 보관함 모두 갱신)
@@ -649,6 +691,11 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
                           isDense: true,
                         ),
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        // [Issue #3 Fix] 입력 제한: 숫자와 소수점만, 최대 6자리 (999.99)
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(RegExp(r'^\d{0,3}\.?\d{0,2}')),
+                          LengthLimitingTextInputFormatter(6),
+                        ],
                         scrollPadding: const EdgeInsets.only(bottom: 150.0),
                         onTap: () {
                           final c = _controllers['weight_$setId'];
@@ -670,6 +717,11 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
                           isDense: true,
                         ),
                         keyboardType: TextInputType.number,
+                        // [Issue #3 Fix] 입력 제한: 정수만, 최대 3자리 (999)
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(3),
+                        ],
                         scrollPadding: const EdgeInsets.only(bottom: 150.0),
                         onTap: () {
                           final c = _controllers['reps_$setId'];
@@ -702,9 +754,16 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
                 const SizedBox(width: 8),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: _saveWorkoutCard,
+                    // [Issue #2 Fix] 저장 중일 때 버튼 비활성화
+                    onPressed: _isSaving ? null : _saveWorkoutCard,
                     // [Phase 2] 저장 완료 시 버튼 텍스트 변경 - _isEffectivelySaved 사용 (Widget 재생성 대응)
-                    child: Text(_isEffectivelySaved ? '다시 저장' : '기록 저장'),
+                    child: _isSaving
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(_isEffectivelySaved ? '다시 저장' : '기록 저장'),
                   ),
                 ),
               ],

@@ -35,6 +35,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Map<String, String> _exerciseNameMap = {}; // baselineId -> exerciseName 매핑
   bool _isGeneratingRoutine = false; // AI 루틴 생성 중 로딩 상태
 
+  // [Issue #4 Fix] Race condition 방지를 위한 요청 추적
+  int _dateRequestId = 0;
+
   @override
   void initState() {
     super.initState();
@@ -72,12 +75,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     items: items,
                     onDateSelected: (date) {
                       if (!mounted) return;
+                      // [Issue #4 Fix] 새 요청 ID 생성하여 이전 요청 무효화
+                      _dateRequestId++;
+                      final currentRequestId = _dateRequestId;
+
                       setState(() {
                         _selectedDay = date;
                         _focusedDay = date;
                       });
-                      _loadWorkoutsForDate(date);
-                      _loadPlannedWorkoutsForDate(date);
+                      _loadWorkoutsForDate(date, requestId: currentRequestId);
+                      _loadPlannedWorkoutsForDate(date, requestId: currentRequestId);
                     },
                   ),
                 ),
@@ -227,29 +234,32 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   /// 특정 날짜의 계획된 운동 로드
-  Future<void> _loadPlannedWorkoutsForDate(DateTime date) async {
+  /// [Issue #4 Fix] requestId를 사용하여 stale 응답 무시
+  Future<void> _loadPlannedWorkoutsForDate(DateTime date, {required int requestId}) async {
     try {
       final repository = ref.read(workoutRepositoryProvider);
-      
+
       // 해당 날짜의 계획된 운동 조회 (운동 이름 포함)
       final (plannedWorkouts, exerciseNameMap) = await repository
           .getPlannedWorkoutsByDateRangeWithNames(date, date);
-      
-      if (mounted) {
-        setState(() {
-          // 변환 완료(로그로 저장된) 계획은 체크박스 목록에서 제외
-          _selectedDayPlannedWorkouts =
-              plannedWorkouts.where((p) => !p.isConvertedToLog).toList();
-          _exerciseNameMap = exerciseNameMap;
-        });
-      }
+
+      // [Issue #4 Fix] 요청 ID가 현재와 다르면 stale 응답이므로 무시
+      if (!mounted || requestId != _dateRequestId) return;
+
+      setState(() {
+        // 변환 완료(로그로 저장된) 계획은 체크박스 목록에서 제외
+        _selectedDayPlannedWorkouts =
+            plannedWorkouts.where((p) => !p.isConvertedToLog).toList();
+        _exerciseNameMap = exerciseNameMap;
+      });
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _selectedDayPlannedWorkouts = [];
-          _exerciseNameMap = {};
-        });
-      }
+      // [Issue #4 Fix] 에러 처리 시에도 요청 ID 확인
+      if (!mounted || requestId != _dateRequestId) return;
+
+      setState(() {
+        _selectedDayPlannedWorkouts = [];
+        _exerciseNameMap = {};
+      });
     }
   }
   
@@ -257,7 +267,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   // [REMOVED - Requirement 3] _completeAndConvertPlannedWorkouts method 제거
   // 계획된 운동은 이제 해당 날짜에 홈 화면에서 실행됩니다.
 
-  Future<void> _loadWorkoutsForDate(DateTime date) async {
+  /// [Issue #4 Fix] requestId를 사용하여 stale 응답 무시
+  Future<void> _loadWorkoutsForDate(DateTime date, {required int requestId}) async {
     setState(() {
       _isLoadingWorkouts = true;
     });
@@ -266,19 +277,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       final repository = ref.read(workoutRepositoryProvider);
       // [Fix] 캘린더는 완료된 운동만 표시 (홈 화면과 구분)
       final workouts = await repository.getWorkoutsByDate(date, completedOnly: true);
-      if (mounted) {
-        setState(() {
-          _selectedDayWorkouts = workouts;
-          _isLoadingWorkouts = false;
-        });
-      }
+
+      // [Issue #4 Fix] 요청 ID가 현재와 다르면 stale 응답이므로 무시
+      if (!mounted || requestId != _dateRequestId) return;
+
+      setState(() {
+        _selectedDayWorkouts = workouts;
+        _isLoadingWorkouts = false;
+      });
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _selectedDayWorkouts = [];
-          _isLoadingWorkouts = false;
-        });
-      }
+      // [Issue #4 Fix] 에러 처리 시에도 요청 ID 확인
+      if (!mounted || requestId != _dateRequestId) return;
+
+      setState(() {
+        _selectedDayWorkouts = [];
+        _isLoadingWorkouts = false;
+      });
     }
   }
 
@@ -660,12 +674,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                 return events;
                               },
                               onDaySelected: (selectedDay, focusedDay) {
+                                // [Issue #4 Fix] 새 요청 ID 생성하여 이전 요청 무효화
+                                _dateRequestId++;
+                                final currentRequestId = _dateRequestId;
+
                                 setState(() {
                                   _selectedDay = selectedDay;
                                   _focusedDay = focusedDay;
                                 });
-                                _loadWorkoutsForDate(selectedDay);
-                                _loadPlannedWorkoutsForDate(selectedDay);
+                                _loadWorkoutsForDate(selectedDay, requestId: currentRequestId);
+                                _loadPlannedWorkoutsForDate(selectedDay, requestId: currentRequestId);
                               },
                               onPageChanged: (focusedDay) {
                                 setState(() {
@@ -923,7 +941,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                     plannedWorkout: plannedWorkout,
                                     exerciseName: exerciseName,
                                     onUpdated: () {
-                                      _loadPlannedWorkoutsForDate(_selectedDay!);
+                                      // [Issue #4 Fix] 새 요청 ID 생성
+                                      _dateRequestId++;
+                                      final currentRequestId = _dateRequestId;
+
+                                      _loadPlannedWorkoutsForDate(_selectedDay!, requestId: currentRequestId);
                                       _loadPlannedWorkoutsForMonth(
                                           _focusedDay); // 캘린더 마커 갱신
                                     },
