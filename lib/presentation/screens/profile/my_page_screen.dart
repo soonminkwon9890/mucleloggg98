@@ -64,16 +64,11 @@ class _MyPageScreenState extends ConsumerState<MyPageScreen> {
     // StateNotifierProvider는 invalidate만으로는 메모리가 즉시 해제되지 않을 수 있음
     ref.read(homeViewModelProvider.notifier).clearState();
 
-    // 모든 사용자 데이터 프로바이더 무효화
-    ref.invalidate(homeViewModelProvider);      // [CRITICAL] 홈 화면 운동 데이터
-    ref.invalidate(currentProfileProvider);     // 사용자 프로필
-    ref.invalidate(routinesProvider);           // 루틴 목록
-    ref.invalidate(baselinesProvider);          // 운동 기준 정보
-    ref.invalidate(archivedBaselinesProvider);  // 보관함 운동 목록
-    ref.invalidate(workoutDatesProvider);       // 운동 날짜 목록 (캘린더)
-    ref.invalidate(exercisesWithHistoryProvider); // 프로필 검색용 운동 기록
-    ref.invalidate(plannedWorkoutsRefreshProvider); // 계획된 운동 갱신 트리거
-    ref.invalidate(profileSearchTriggerProvider);   // 프로필 검색 트리거
+    // 모든 운동 데이터 프로바이더 무효화 - C.3 중앙 집중화
+    ref.invalidateAllWorkoutData();
+
+    // 사용자 프로필 프로바이더 (auth_provider.dart)
+    ref.invalidate(currentProfileProvider);
   }
 
   Future<void> _confirmAndDeleteAccount() async {

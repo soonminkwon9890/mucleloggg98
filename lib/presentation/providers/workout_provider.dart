@@ -96,3 +96,69 @@ final dashboardStatsProvider = FutureProvider.family.autoDispose<
 
 /// 계획된 운동 데이터 갱신 트리거 (ProfileScreen 캘린더 동기화용)
 final plannedWorkoutsRefreshProvider = StateProvider<int>((ref) => 0);
+
+// ============================================================================
+// C.3: Provider Invalidation Helpers
+// ============================================================================
+//
+// 여러 곳에서 반복되는 ref.invalidate() 호출을 중앙 집중화하여
+// 일관성을 유지하고 누락을 방지합니다.
+// ============================================================================
+
+/// WidgetRef extension for centralized provider invalidation
+extension WorkoutProviderInvalidation on WidgetRef {
+  /// 운동 데이터 관련 프로바이더 무효화
+  ///
+  /// 사용 시점: 운동 추가, 삭제, 수정 후
+  /// 영향: baselines, archivedBaselines, workoutDates
+  void invalidateExerciseData() {
+    invalidate(baselinesProvider);
+    invalidate(archivedBaselinesProvider);
+    invalidate(workoutDatesProvider);
+  }
+
+  /// 운동 삭제 시 프로바이더 무효화 (루틴 포함)
+  ///
+  /// 사용 시점: 운동 삭제 후 (루틴에 포함된 운동일 수 있음)
+  /// 영향: baselines, archivedBaselines, workoutDates, routines
+  void invalidateExerciseWithRoutines() {
+    invalidate(baselinesProvider);
+    invalidate(archivedBaselinesProvider);
+    invalidate(workoutDatesProvider);
+    invalidate(routinesProvider);
+  }
+
+  /// 루틴 데이터 관련 프로바이더 무효화
+  ///
+  /// 사용 시점: 루틴 생성, 수정, 삭제 후
+  /// 영향: routines, baselines (루틴 그룹 변경 반영)
+  void invalidateRoutineData() {
+    invalidate(routinesProvider);
+    invalidate(baselinesProvider);
+  }
+
+  /// 운동 기록 저장 후 프로바이더 무효화
+  ///
+  /// 사용 시점: 운동 완료 및 저장 후
+  /// 영향: archivedBaselines, routines, workoutDates
+  void invalidateAfterWorkoutSave() {
+    invalidate(archivedBaselinesProvider);
+    invalidate(routinesProvider);
+    invalidate(workoutDatesProvider);
+  }
+
+  /// 전체 운동 데이터 프로바이더 무효화 (로그아웃/계정 전환 시)
+  ///
+  /// 사용 시점: 로그아웃, 계정 전환 후
+  /// 영향: 모든 운동 관련 프로바이더
+  void invalidateAllWorkoutData() {
+    invalidate(homeViewModelProvider);
+    invalidate(baselinesProvider);
+    invalidate(archivedBaselinesProvider);
+    invalidate(workoutDatesProvider);
+    invalidate(routinesProvider);
+    invalidate(exercisesWithHistoryProvider);
+    invalidate(plannedWorkoutsRefreshProvider);
+    invalidate(profileSearchTriggerProvider);
+  }
+}

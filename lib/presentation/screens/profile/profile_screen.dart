@@ -236,21 +236,21 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   /// 특정 날짜의 계획된 운동 로드
   /// [Issue #4 Fix] requestId를 사용하여 stale 응답 무시
+  /// [D.4] activeOnly 파라미터로 DB 레벨 필터링 (UI 필터링 제거)
   Future<void> _loadPlannedWorkoutsForDate(DateTime date, {required int requestId}) async {
     try {
       final repository = ref.read(workoutRepositoryProvider);
 
-      // 해당 날짜의 계획된 운동 조회 (운동 이름 포함)
+      // D.4: 변환되지 않은 운동만 DB에서 직접 조회 (네트워크 최적화)
       final (plannedWorkouts, exerciseNameMap) = await repository
-          .getPlannedWorkoutsByDateRangeWithNames(date, date);
+          .getPlannedWorkoutsByDateRangeWithNames(date, date, activeOnly: true);
 
       // [Issue #4 Fix] 요청 ID가 현재와 다르면 stale 응답이므로 무시
       if (!mounted || requestId != _dateRequestId) return;
 
       setState(() {
-        // 변환 완료(로그로 저장된) 계획은 체크박스 목록에서 제외
-        _selectedDayPlannedWorkouts =
-            plannedWorkouts.where((p) => !p.isConvertedToLog).toList();
+        // D.4: UI 레벨 필터링 제거됨 - DB에서 이미 필터링 완료
+        _selectedDayPlannedWorkouts = plannedWorkouts;
         _exerciseNameMap = exerciseNameMap;
       });
     } catch (e) {

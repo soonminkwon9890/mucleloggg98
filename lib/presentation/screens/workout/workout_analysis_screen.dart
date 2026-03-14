@@ -678,10 +678,8 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
         }
       });
 
-      // Provider 갱신 (다른 화면 동기화)
-      ref.invalidate(baselinesProvider);
-      ref.invalidate(archivedBaselinesProvider);
-      ref.invalidate(workoutDatesProvider);
+      // Provider 갱신 (다른 화면 동기화) - C.3 중앙 집중화
+      ref.invalidateExerciseData();
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

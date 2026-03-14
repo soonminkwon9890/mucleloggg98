@@ -309,10 +309,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('루틴이 저장되었습니다.')),
         );
-        // Provider 갱신
-        ref.invalidate(archivedBaselinesProvider);
-        ref.invalidate(routinesProvider);
-        ref.invalidate(workoutDatesProvider);
+        // Provider 갱신 - C.3 중앙 집중화
+        ref.invalidateAfterWorkoutSave();
       }
     }
   }
