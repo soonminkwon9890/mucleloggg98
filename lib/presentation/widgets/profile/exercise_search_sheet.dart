@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
+import '../../../core/utils/date_formatter.dart';
 import '../../../data/models/exercise_with_history.dart';
 
 class ExerciseSearchSheet extends StatefulWidget {
@@ -115,8 +115,7 @@ class _ExerciseSearchSheetState extends State<ExerciseSearchSheet> {
                                   FocusScope.of(context).unfocus(),
                               children: item.performedDates.map((d) {
                                 final label =
-                                    DateFormat('yyyy-MM-dd (E)', 'ko_KR')
-                                        .format(d);
+                                    DateFormatter.formatDateWithWeekday(d);
                                 return ListTile(
                                   title: Text(label),
                                   onTap: () {

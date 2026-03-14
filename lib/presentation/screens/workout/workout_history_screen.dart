@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/utils/date_formatter.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/workout_provider.dart';
 import '../../../data/models/exercise_baseline.dart';
@@ -311,7 +311,7 @@ class _WorkoutHistoryScreenState extends ConsumerState<WorkoutHistoryScreen> {
       if (mounted) {
         _clearSelection();
         final dateLabel =
-            DateFormat('M월 d일', 'ko_KR').format(routines.first.scheduledDate);
+            DateFormatter.formatMonthDay(routines.first.scheduledDate);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('$dateLabel에 운동이 추가되었습니다'),

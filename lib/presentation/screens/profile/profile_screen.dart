@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:uuid/uuid.dart';
+import '../../../core/utils/date_formatter.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/workout_provider.dart';
 import '../../widgets/common/empty_state_widget.dart';
@@ -337,7 +337,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 title: const Text('기록 보기'),
                 onTap: () {
                   Navigator.pop(sheetContext);
-                  final dateKey = DateFormat('yyyy-MM-dd').format(_selectedDay!);
+                  final dateKey = DateFormatter.getDateGroupKey(_selectedDay!);
                   Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -539,7 +539,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       // ProfileScreen 캘린더 즉시 갱신 (저장 성공 시)
       ref.read(plannedWorkoutsRefreshProvider.notifier).state++;
 
-      final dateLabel = DateFormat('M월 d일', 'ko_KR').format(routines.first.scheduledDate);
+      final dateLabel = DateFormatter.formatMonthDay(routines.first.scheduledDate);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('$dateLabel에 운동이 추가되었습니다'),
@@ -883,7 +883,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                       onPressed: () => _showCompletedWorkoutOptionsSheet(baseline),
                                     ),
                                     onTap: () {
-                                      final dateKey = DateFormat('yyyy-MM-dd').format(_selectedDay!);
+                                      final dateKey = DateFormatter.getDateGroupKey(_selectedDay!);
                                       Navigator.push(
                                         context,
                                         MaterialPageRoute(

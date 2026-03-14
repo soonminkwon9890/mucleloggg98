@@ -5,6 +5,7 @@ import '../../../data/models/exercise_baseline.dart';
 import '../../../data/models/workout_set.dart';
 import '../../../data/models/planned_workout.dart';
 import '../../../data/services/supabase_service.dart';
+import '../../../core/constants/workout_colors.dart';
 import '../../../core/utils/date_formatter.dart';
 import '../../../core/enums/exercise_enums.dart';
 import 'home_state.dart';
@@ -254,7 +255,7 @@ class HomeViewModel extends StateNotifier<HomeState> {
         exerciseName: name,
         isCompleted: false,
         isConvertedToLog: false,
-        colorHex: '0xFF4CAF50', // 녹색 (수동 추가 구분)
+        colorHex: WorkoutColors.manualAddHex, // 녹색 (수동 추가 구분)
         createdAt: DateTime.now(),
       );
 

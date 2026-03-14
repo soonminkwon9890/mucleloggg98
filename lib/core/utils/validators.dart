@@ -9,6 +9,9 @@ class WorkoutValidators {
   // 입력 제한 상수
   // ============================================
 
+  /// 운동 이름 최대 길이
+  static const int exerciseNameMaxLength = 50;
+
   /// 최대 무게 (kg)
   static const double maxWeight = 999.0;
 
@@ -24,6 +27,20 @@ class WorkoutValidators {
   // ============================================
   // 입력 검증 메서드
   // ============================================
+
+  /// 운동 이름 입력값 검증
+  ///
+  /// [name] 입력된 운동 이름
+  /// 반환: 유효하면 null, 아니면 에러 메시지
+  static String? validateExerciseName(String? name) {
+    if (name == null || name.trim().isEmpty) {
+      return '운동 이름을 입력해주세요.';
+    }
+    if (name.length > exerciseNameMaxLength) {
+      return '운동 이름은 $exerciseNameMaxLength자를 초과할 수 없습니다.';
+    }
+    return null;
+  }
 
   /// 무게 입력값 검증
   ///
@@ -96,5 +113,12 @@ class WorkoutValidators {
   static List<TextInputFormatter> get repsInputFormatters => [
     FilteringTextInputFormatter.digitsOnly,
     LengthLimitingTextInputFormatter(repsInputMaxLength),
+  ];
+
+  /// 운동 이름 입력 필드용 포맷터 목록
+  ///
+  /// 최대 50자
+  static List<TextInputFormatter> get exerciseNameInputFormatters => [
+    LengthLimitingTextInputFormatter(exerciseNameMaxLength),
   ];
 }

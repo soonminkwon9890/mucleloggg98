@@ -77,7 +77,8 @@ class WorkoutColors {
   ///
   /// 반환: 0xFF로 시작하는 색상 코드
   static String toHex(Color color) {
-    return '0x${color.value.toRadixString(16).toUpperCase().padLeft(8, '0')}';
+    final argb = color.toARGB32();
+    return '0x${argb.toRadixString(16).toUpperCase().padLeft(8, '0')}';
   }
 
   /// colorHex로 반투명 배경색 생성 (alpha 0.2)

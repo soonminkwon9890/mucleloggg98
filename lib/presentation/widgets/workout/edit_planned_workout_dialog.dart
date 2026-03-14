@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/constants/workout_colors.dart';
 import '../../../data/models/planned_workout.dart';
 import '../../providers/workout_provider.dart';
 
@@ -152,10 +153,10 @@ class _EditPlannedWorkoutDialogState extends ConsumerState<EditPlannedWorkoutDia
               Wrap(
                 spacing: 8,
                 children: [
-                  _buildColorChip('0xFFF44336', Colors.red, '강도 높음'),
-                  _buildColorChip('0xFF2196F3', Colors.blue, '보통'),
-                  _buildColorChip('0xFFFFEB3B', Colors.yellow, '컨디션 조절'),
-                  _buildColorChip('0xFF9E9E9E', Colors.grey, '휴식'),
+                  _buildColorChip(WorkoutColors.highIntensityHex, Colors.red, '강도 높음'),
+                  _buildColorChip(WorkoutColors.normalHex, Colors.blue, '보통'),
+                  _buildColorChip(WorkoutColors.conditionEditHex, Colors.yellow, '컨디션 조절'),
+                  _buildColorChip(WorkoutColors.restHex, Colors.grey, '휴식'),
                 ],
               ),
             ],

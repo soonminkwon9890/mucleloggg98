@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
+import '../../../core/utils/date_formatter.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/subscription_provider.dart';
 
@@ -101,7 +101,7 @@ class SubscriptionScreen extends ConsumerWidget {
     if (isPremium) {
       final localUntil = premiumUntil?.toLocal();
       final validUntilStr = localUntil != null
-          ? '${DateFormat('y년 M월 d일', 'ko_KR').format(localUntil)}까지 유효'
+          ? '${DateFormatter.formatSubscriptionDate(localUntil)}까지 유효'
           : null;
 
       return Card(

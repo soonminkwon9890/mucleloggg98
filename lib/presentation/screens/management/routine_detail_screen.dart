@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:intl/intl.dart';
+import '../../../core/utils/date_formatter.dart';
 import '../../../data/models/routine.dart';
 import '../../../data/models/routine_item.dart';
 import '../../../data/models/exercise_baseline.dart';
@@ -259,7 +259,7 @@ class _RoutineDetailScreenState extends ConsumerState<RoutineDetailScreen> {
         spots.add(FlSpot(i.toDouble(), volume));
 
         final date = DateTime.parse(dateKey);
-        labels[i] = DateFormat('MM.dd').format(date);
+        labels[i] = DateFormatter.formatChartLabel(date);
       }
 
       setState(() {

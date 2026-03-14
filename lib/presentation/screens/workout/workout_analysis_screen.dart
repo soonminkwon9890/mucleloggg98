@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
+import '../../../core/utils/date_formatter.dart';
 import '../../providers/workout_provider.dart';
 import '../../../data/models/workout_set.dart';
 import '../../../data/models/exercise_baseline.dart';
@@ -308,9 +308,9 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
 
       if (max1RM != null) {
         spots.add(FlSpot(i.toDouble(), max1RM));
-        // 날짜 포맷: MM.dd (intl 패키지 사용)
+        // 날짜 포맷: MM.dd
         final date = DateTime.parse(dateKey);
-        labels[i] = DateFormat('MM.dd').format(date);
+        labels[i] = DateFormatter.formatChartLabel(date);
       }
     }
 
@@ -1005,7 +1005,7 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
       }).toList();
       await repository.savePlannedWorkouts(plans);
       if (mounted) {
-        final dateLabel = DateFormat('M월 d일', 'ko_KR').format(routines.first.scheduledDate);
+        final dateLabel = DateFormatter.formatMonthDay(routines.first.scheduledDate);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('$dateLabel에 운동이 추가되었습니다'),

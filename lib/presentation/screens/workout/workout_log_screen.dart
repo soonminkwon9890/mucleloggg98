@@ -3,8 +3,8 @@ import 'dart:ui';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
+import '../../../core/utils/date_formatter.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/subscription_provider.dart';
 import '../../providers/workout_provider.dart';
@@ -58,8 +58,8 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
   /// 주 표시 포맷팅을 위한 유틸리티 함수
   String _formatWeekRange(DateTime weekStart) {
     final weekEnd = weekStart.add(const Duration(days: 6));
-    final startFormatted = DateFormat('yyyy년 M월 d일', 'ko_KR').format(weekStart);
-    final endFormatted = DateFormat('M월 d일', 'ko_KR').format(weekEnd);
+    final startFormatted = DateFormatter.formatDate(weekStart);
+    final endFormatted = DateFormatter.formatMonthDay(weekEnd);
     return '$startFormatted ~ $endFormatted';
   }
 
@@ -518,7 +518,7 @@ class WeeklyVolumeChartCard extends StatelessWidget {
                     touchTooltipData: BarTouchTooltipData(
                       getTooltipItem: (group, groupIndex, rod, rodIndex) {
                         final d = days[group.x.toInt()];
-                        final label = DateFormat('M/d (E)', 'ko_KR').format(d);
+                        final label = DateFormatter.formatShortDateWithWeekday(d);
                         final v = rod.toY;
                         return BarTooltipItem(
                           '$label\n${v.toStringAsFixed(0)} kg',

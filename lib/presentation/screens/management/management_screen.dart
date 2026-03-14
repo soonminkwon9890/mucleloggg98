@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:uuid/uuid.dart';
+import '../../../core/constants/workout_colors.dart';
 import '../../providers/subscription_provider.dart';
 import '../../providers/workout_provider.dart';
 import '../../widgets/common/confirmation_dialog.dart';
@@ -579,7 +580,7 @@ class _ExerciseLibraryTabState extends ConsumerState<_ExerciseLibraryTab>
             exerciseName: baseline.exerciseName,
             isCompleted: false,
             isConvertedToLog: false,
-            colorHex: '0xFF4CAF50', // 녹색 (수동 추가 구분)
+            colorHex: WorkoutColors.manualAddHex, // 녹색 (수동 추가 구분)
             createdAt: DateTime.now(),
           );
 
@@ -1357,7 +1358,7 @@ class _RoutinesTabState extends ConsumerState<_RoutinesTab> {
             exerciseName: baseline.exerciseName,
             isCompleted: false,
             isConvertedToLog: false,
-            colorHex: '0xFF9C27B0', // 보라색 (루틴 계획)
+            colorHex: WorkoutColors.maintainHex, // 보라색 (루틴 계획)
             createdAt: DateTime.now(),
           );
 

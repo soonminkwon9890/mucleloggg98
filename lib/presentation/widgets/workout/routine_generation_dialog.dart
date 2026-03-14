@@ -2,7 +2,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import '../../../core/constants/workout_colors.dart';
 import '../../../core/utils/adaptive_widgets.dart';
 import '../../../core/utils/date_formatter.dart';
@@ -149,11 +148,11 @@ class _RoutineGenerationDialogState extends ConsumerState<RoutineGenerationDialo
 
   @override
   Widget build(BuildContext context) {
-    final dateLabel = DateFormat('yyyy-MM-dd (E)', 'ko_KR').format(_selectedDate);
+    final dateLabel = DateFormatter.formatDateWithWeekday(_selectedDate);
     // [Phase 4] rest → maintain 변경
     final isMaintain = _selectedMode == RoutineIntensity.maintain;
     final applyButtonLabel = isMaintain ? '지난주 운동 유지하기' : '운동 계획 저장하기';
-    final unifyApplyButtonLabel = DateFormat('M월 d일', 'ko_KR').format(_selectedDate);
+    final unifyApplyButtonLabel = DateFormatter.formatMonthDay(_selectedDate);
 
     return AlertDialog(
       title: const Text('다음 주 루틴이 준비되었습니다! (AI)'),
