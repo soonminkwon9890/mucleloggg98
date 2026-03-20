@@ -36,9 +36,17 @@ class _ExerciseLibraryTabState extends ConsumerState<ExerciseLibraryTab>
 
   // 부위별 세부 필터 칩 목록
   static const Map<BodyPart, List<String>> _subPartChips = {
-    BodyPart.upper: ['전체', '가슴', '등', '어깨', '팔', '이두', '삼두', '코어'],
-    BodyPart.lower: ['전체', '대퇴사두', '햄스트링', '둔근', '종아리'],
+    BodyPart.upper: ['전체', '가슴', '등', '어깨', '이두', '삼두', '코어'],
+    BodyPart.lower: ['전체', '대퇴사두(앞)', '햄스트링(뒤)', '둔근(힙)', '종아리'],
     BodyPart.full: ['전체'],
+  };
+
+  // [Legacy Compatibility] 구버전 데이터 매핑
+  // 기존 DB에 '팔', '복근'으로 저장된 데이터를 새 필터로도 검색 가능하게 함
+  static const Map<String, List<String>> _legacyMuscleMapping = {
+    '이두': ['이두', '팔'],      // '이두' 필터 → '이두' 또는 '팔' 포함 시 매칭
+    '삼두': ['삼두', '팔'],      // '삼두' 필터 → '삼두' 또는 '팔' 포함 시 매칭
+    '코어': ['코어', '복근'],    // '코어' 필터 → '코어' 또는 '복근' 포함 시 매칭
   };
 
   @override
@@ -68,7 +76,7 @@ class _ExerciseLibraryTabState extends ConsumerState<ExerciseLibraryTab>
     super.dispose();
   }
 
-  /// [Smart Filter] 검색어 + 세부 부위 필터 적용
+  /// [Smart Filter] 검색어 + 세부 부위 필터 적용 (Legacy 호환 포함)
   List<ExerciseBaseline> _filterBaselines(List<ExerciseBaseline> baselines) {
     return baselines.where((baseline) {
       // 1. 메인 부위 필터 (탭 기준)
@@ -85,19 +93,26 @@ class _ExerciseLibraryTabState extends ConsumerState<ExerciseLibraryTab>
         return false;
       }
 
-      // 3. 세부 부위 필터 (MULTI-TARGET 지원: contains 사용)
+      // 3. 세부 부위 필터 (MULTI-TARGET 지원 + Legacy 호환)
       if (_selectedSubPart == '전체') {
         return true;
       }
 
       // targetMuscles 리스트에서 선택된 세부 부위를 포함하는지 확인
       final targetMuscles = baseline.targetMuscles ?? [];
+
+      // [Legacy Compatibility] 레거시 매핑이 있는 경우 해당 키워드들도 함께 검색
+      final searchKeywords = _legacyMuscleMapping[_selectedSubPart] ?? [_selectedSubPart];
+
       final matchesSubPart = targetMuscles.any((muscle) {
-        // 근육명이 선택된 필터를 포함하는지 (부분 매칭)
         final normalizedMuscle = muscle.replaceAll(' ', '').toLowerCase();
-        final normalizedSubPart = _selectedSubPart.replaceAll(' ', '').toLowerCase();
-        return normalizedMuscle.contains(normalizedSubPart) ||
-               normalizedSubPart.contains(normalizedMuscle);
+        // 모든 검색 키워드 중 하나라도 매칭되면 true
+        return searchKeywords.any((keyword) {
+          final normalizedKeyword = keyword.replaceAll(' ', '').toLowerCase();
+          // 부분 매칭: '대퇴사두(앞)' 필터가 '대퇴사두' 데이터와 매칭되도록
+          return normalizedMuscle.contains(normalizedKeyword) ||
+                 normalizedKeyword.contains(normalizedMuscle);
+        });
       });
 
       return matchesSubPart;

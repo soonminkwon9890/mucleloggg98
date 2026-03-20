@@ -65,8 +65,8 @@ class _ExerciseInputScreenState extends ConsumerState<ExerciseInputScreen> {
   }
 
   static const Map<BodyPart, List<String>> _targetMusclesByBodyPart = {
-    BodyPart.upper: ['가슴', '등', '어깨', '팔', '복근'],
-    BodyPart.lower: ['대퇴사두(앞)', '햄스트링(뒤)', '둔근(힙)'],
+    BodyPart.upper: ['가슴', '등', '어깨', '이두', '삼두', '코어'],
+    BodyPart.lower: ['대퇴사두(앞)', '햄스트링(뒤)', '둔근(힙)', '종아리'],
     BodyPart.full: [], // 전신은 하위 선택 없음
   };
 
