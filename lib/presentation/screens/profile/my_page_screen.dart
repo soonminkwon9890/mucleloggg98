@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/config/app_config.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/subscription_provider.dart';
 import '../../providers/user_provider.dart';
@@ -199,7 +200,69 @@ class _MyPageScreenState extends ConsumerState<MyPageScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      if (!subscription.isPremium && subscription.hasCoupon) ...[
+                      // [Feature Flag] 결제 비활성화 시 베타 무료 배너 표시
+                      if (!AppConfig.isPaymentEnabled) ...[
+                        Card(
+                          elevation: 2,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.green.shade600,
+                                  Colors.green.shade400,
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                            ),
+                            child: const Padding(
+                              padding: EdgeInsets.all(16),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.celebration,
+                                    color: Colors.white,
+                                    size: 28,
+                                  ),
+                                  SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '베타 런칭 이벤트',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                        SizedBox(height: 4),
+                                        Text(
+                                          '모든 프리미엄 기능을 무료로 이용하세요! 🎁',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      // [Feature Flag] 결제 활성화 시에만 쿠폰 카드 표시
+                      if (AppConfig.isPaymentEnabled &&
+                          !subscription.isPremium &&
+                          subscription.hasCoupon) ...[
                         Card(
                           elevation: 2,
                           shape: RoundedRectangleBorder(
@@ -261,43 +324,46 @@ class _MyPageScreenState extends ConsumerState<MyPageScreen> {
                         ),
                         const SizedBox(height: 12),
                       ],
-                      Card(
-                        child: ListTile(
-                          title: const Text(
-                            '멤버십 관리',
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          subtitle: const Text('구독 상태 확인 및 쿠폰 안내'),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const SubscriptionScreen(),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Card(
-                        child: ListTile(
-                          title: const Text(
-                            'Premium 멤버십 가입하기',
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          subtitle: const Text('더 많은 기능을 사용해보세요.'),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () {
-                            Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const SubscriptionScreen(),
+                      // [Feature Flag] 결제 활성화 시에만 멤버십 관리 메뉴 표시
+                      if (AppConfig.isPaymentEnabled) ...[
+                        Card(
+                          child: ListTile(
+                            title: const Text(
+                              '멤버십 관리',
+                              style: TextStyle(fontWeight: FontWeight.bold),
                             ),
-                          );
-                          },
+                            subtitle: const Text('구독 상태 확인 및 쿠폰 안내'),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const SubscriptionScreen(),
+                                ),
+                              );
+                            },
+                          ),
                         ),
-                      ),
+                        const SizedBox(height: 12),
+                        Card(
+                          child: ListTile(
+                            title: const Text(
+                              'Premium 멤버십 가입하기',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            subtitle: const Text('더 많은 기능을 사용해보세요.'),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const SubscriptionScreen(),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
                       if (subscription.isAdmin) ...[
                         const SizedBox(height: 12),
                         Card(

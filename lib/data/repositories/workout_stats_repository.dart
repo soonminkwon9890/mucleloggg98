@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import '../models/exercise_baseline.dart';
 import '../models/workout_set.dart';
@@ -646,6 +647,8 @@ class WorkoutStatsRepository with BaseRepositoryMixin {
     final startDate = DateFormat('yyyy-MM-dd').format(startOfWeek);
     final endDate = DateFormat('yyyy-MM-dd').format(endOfWeek);
 
+    debugPrint('[getLastWeekSessions] Query range: $startDate to $endDate');
+
     final response = await client
         .from('workout_sessions')
         .select('*')
@@ -654,19 +657,33 @@ class WorkoutStatsRepository with BaseRepositoryMixin {
         .lte('workout_date', endDate)
         .order('workout_date', ascending: false);
 
-    return (response as List)
+    debugPrint('[getLastWeekSessions] Raw response count: ${(response as List).length}');
+    for (final row in response) {
+      debugPrint('[getLastWeekSessions] Raw row: workout_date=${row['workout_date']}, baseline_id=${row['baseline_id']}');
+    }
+
+    final sessions = response
         .map((json) => WorkoutSession.fromJson(json))
         .toList();
+
+    for (final s in sessions) {
+      debugPrint('[getLastWeekSessions] Parsed session: workoutDate=${s.workoutDate}, isUtc=${s.workoutDate.isUtc}');
+    }
+
+    return sessions;
   }
 
   /// 특정 날짜의 평균 무게/횟수 조회
+  ///
+  /// [FIX] UTC 변환 제거 - 로컬 날짜 문자열로 직접 쿼리하여 타임존 이슈 방지
   Future<(double weight, int reps)> getLastWeekAverageSets(
     String baselineId,
     DateTime date,
   ) async {
+    // [FIX] UTC 변환 없이 로컬 날짜 문자열 사용
     final dateStr = DateFormat('yyyy-MM-dd').format(date);
-    final startStr = '${dateStr}T00:00:00Z';
-    final endStr = '${dateStr}T23:59:59.999Z';
+    final startStr = '${dateStr}T00:00:00';
+    final endStr = '${dateStr}T23:59:59.999';
 
     final response = await client
         .from('workout_sets')
@@ -697,13 +714,20 @@ class WorkoutStatsRepository with BaseRepositoryMixin {
   }
 
   /// 특정 날짜의 '최고 중량 세트' 조회
+  ///
+  /// [FIX] UTC 변환 제거 - 로컬 날짜 문자열로 직접 쿼리하여 타임존 이슈 방지
   Future<(double weight, int reps)> getLastWeekBestSet(
     String baselineId,
     DateTime date,
   ) async {
+    // [FIX] UTC 변환 없이 로컬 날짜 문자열 사용
+    // created_at은 'YYYY-MM-DDTHH:MM:SS' 형식으로 저장되므로 문자열 범위 쿼리 사용
     final dateStr = DateFormat('yyyy-MM-dd').format(date);
-    final startStr = '${dateStr}T00:00:00Z';
-    final endStr = '${dateStr}T23:59:59.999Z';
+    final startStr = '${dateStr}T00:00:00';
+    final endStr = '${dateStr}T23:59:59.999';
+
+    debugPrint('[getLastWeekBestSet] Input: baselineId=$baselineId, date=$date');
+    debugPrint('[getLastWeekBestSet] Query range (local): $startStr to $endStr');
 
     final response = await client
         .from('workout_sets')
@@ -715,6 +739,8 @@ class WorkoutStatsRepository with BaseRepositoryMixin {
         .order('weight', ascending: false)
         .limit(1)
         .maybeSingle();
+
+    debugPrint('[getLastWeekBestSet] Response: $response');
 
     if (response == null) return (0.0, 0);
 

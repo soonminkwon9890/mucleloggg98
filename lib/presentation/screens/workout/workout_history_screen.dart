@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/utils/date_formatter.dart';
@@ -201,6 +202,13 @@ class _WorkoutHistoryScreenState extends ConsumerState<WorkoutHistoryScreen> {
       final repo = ref.read(workoutRepositoryProvider);
 
       final sessions = await repo.getLastWeekSessions();
+      // [DEBUG #1] Total sessions from DB
+      debugPrint('====== ROUTINE GENERATION DEBUG ======');
+      debugPrint('[DEBUG #1] Total sessions fetched from DB: ${sessions.length}');
+      for (final s in sessions) {
+        debugPrint('  - Session: baselineId=${s.baselineId}, workoutDate=${s.workoutDate}, difficulty=${s.difficulty}');
+      }
+
       if (sessions.isEmpty) {
         if (mounted) {
           Navigator.pop(context);
@@ -216,6 +224,8 @@ class _WorkoutHistoryScreenState extends ConsumerState<WorkoutHistoryScreen> {
 
       final filteredSessions =
           sessions.where((s) => _selectedBaselineIds.contains(s.baselineId)).toList();
+      debugPrint('[DEBUG #1.5] Filtered sessions (matching selected baselines): ${filteredSessions.length}');
+      debugPrint('  Selected baseline IDs: $_selectedBaselineIds');
 
       if (filteredSessions.isEmpty) {
         if (mounted) {
@@ -235,18 +245,79 @@ class _WorkoutHistoryScreenState extends ConsumerState<WorkoutHistoryScreen> {
       final baselines = await repo.getBaselinesByIds(_selectedBaselineIds.toList());
       final baselineMap = {for (var b in baselines) b.id: b};
 
+      // [FIX 1] Composite key로 세션별 bestSet 매핑 (baselineId + 날짜)
+      // 같은 운동을 여러 날 수행해도 각 세션의 bestSet을 정확히 조회
+      // DateFormat('yyyy-MM-dd')로 일관된 날짜 문자열 생성
       final bestSetsFutures = filteredSessions.map((s) async {
         final bestSet = await repo.getLastWeekBestSet(s.baselineId, s.workoutDate);
-        return MapEntry(s.baselineId, bestSet);
+        final dateStr = DateFormat('yyyy-MM-dd').format(s.workoutDate);
+        final compositeKey = '${s.baselineId}_$dateStr';
+
+        debugPrint('[DEBUG #2] Building bestSetsMap entry:');
+        debugPrint('  compositeKey=$compositeKey');
+        debugPrint('  bestSet: weight=${bestSet.$1}, reps=${bestSet.$2}');
+        return MapEntry(compositeKey, bestSet);
       }).toList();
       final bestSetsMap = Map.fromEntries(await Future.wait(bestSetsFutures));
 
+      // [DEBUG] Verify the EXACT keys in bestSetsMap
+      debugPrint('[DEBUG #2.5] bestSetsMap FINAL KEYS:');
+      for (final key in bestSetsMap.keys) {
+        debugPrint('  KEY: "$key"');
+      }
+
+     // [수정된 Ghost Session 필터링]
+      // getLastWeekBestSet은 기록이 없으면 null을 반환합니다.
+      final validSessions = filteredSessions.where((s) {
+        final dateStr = DateFormat('yyyy-MM-dd').format(s.workoutDate);
+        final compositeKey = '${s.baselineId}_$dateStr';
+        
+        // 맵에서 데이터를 꺼냈을 때, null이 아니면(실제 기록이 있으면) 통과(true)시킵니다.
+        return bestSetsMap[compositeKey] != null;
+      }).toList();
+
+      // [DEBUG #3] Valid sessions after bestSet filter
+      debugPrint('[DEBUG #3] Valid sessions after bestSet filter: ${validSessions.length}');
+      if (validSessions.isEmpty) {
+        debugPrint('  ⚠️ ALL SESSIONS FILTERED OUT! This is likely the bug.');
+        debugPrint('  BestSetsMap contents:');
+        bestSetsMap.forEach((key, value) {
+          debugPrint('    $key => (weight=${value.$1}, reps=${value.$2})');
+        });
+      }
+
+      if (validSessions.isEmpty) {
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('완료된 세트가 있는 운동 기록이 없습니다.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      // [DEBUG CRITICAL] Verify bestSetsMap keys RIGHT BEFORE calling AI service
+      debugPrint('[DEBUG CRITICAL] bestSetsMap keys BEFORE AI call:');
+      for (final k in bestSetsMap.keys) {
+        debugPrint('  "$k"');
+      }
+
       final plans = await WorkoutRecommendationService.generateWeeklyPlan(
-        lastWeekSessions: filteredSessions,
+        lastWeekSessions: validSessions,
         userGoal: userGoal,
         baselineMap: baselineMap,
         bestSetsMap: bestSetsMap,
       );
+
+      // [DEBUG #4] Plans generated from AI
+      debugPrint('[DEBUG #4] Plans generated from AI: ${plans.length}');
+      for (final plan in plans) {
+        debugPrint('  - Plan: ${plan.exerciseName}, date=${plan.scheduledDate}, weight=${plan.targetWeight}, reps=${plan.targetReps}');
+      }
+      debugPrint('====== END ROUTINE GENERATION DEBUG ======');
 
       if (mounted) {
         Navigator.pop(context);
@@ -261,7 +332,9 @@ class _WorkoutHistoryScreenState extends ConsumerState<WorkoutHistoryScreen> {
           );
         }
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('[DEBUG ERROR] Exception: $e');
+      debugPrint('[DEBUG ERROR] StackTrace: $stackTrace');
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(

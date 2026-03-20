@@ -110,6 +110,10 @@ class WorkoutRecommendationService {
     required Map<String, (double weight, int reps)> bestSetsMap,
   }) async {
     debugPrint('[WorkoutRecommendationService] AI Start');
+    debugPrint('[WorkoutRecommendationService] bestSetsMap keys RECEIVED:');
+    for (final k in bestSetsMap.keys) {
+      debugPrint('  "$k"');
+    }
     try {
       final plans = await AiCoachingService.getRecommendations(
         lastWeekSessions: lastWeekSessions,

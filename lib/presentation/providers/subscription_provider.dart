@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'auth_provider.dart';
+import '../../core/config/app_config.dart';
 import '../../data/models/user_profile.dart';
 
 /// 개발용 프리미엄 강제 모드 (릴리즈에서는 절대 동작하지 않음)
@@ -36,6 +37,19 @@ final subscriptionProvider = Provider<SubscriptionState>((ref) {
 
   return profileAsync.when(
     data: (UserProfile? profile) {
+      // [Feature Flag] 결제 비활성화 시 모든 사용자에게 프리미엄 권한 부여
+      // 베타 런칭 기간 동안 모든 기능 무료 제공
+      if (!AppConfig.isPaymentEnabled) {
+        final isAdmin = profile?.isAdmin == true;
+        return SubscriptionState(
+          isPremium: true, // 베타 기간: 모든 사용자 프리미엄
+          isAdmin: isAdmin,
+          isFreeTrial: false,
+          hasCoupon: false,
+          isLoading: false,
+        );
+      }
+
       // 1) 개발자 강제 모드 (릴리즈에선 절대 동작 안 함)
       if (!kReleaseMode && forcePremiumDevMode) {
         return const SubscriptionState(
@@ -71,7 +85,7 @@ final subscriptionProvider = Provider<SubscriptionState>((ref) {
     },
     loading: () => SubscriptionState.loading,
     error: (_, __) => const SubscriptionState(
-      isPremium: false,
+      isPremium: !AppConfig.isPaymentEnabled, // 베타 기간: 에러 시에도 프리미엄
       isAdmin: false,
       isFreeTrial: false,
       hasCoupon: false,

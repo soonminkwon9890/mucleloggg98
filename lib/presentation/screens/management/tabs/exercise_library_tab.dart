@@ -28,6 +28,19 @@ class _ExerciseLibraryTabState extends ConsumerState<ExerciseLibraryTab>
   BodyPart _selectedBodyPart = BodyPart.upper;
   late TabController _tabController;
 
+  // [Smart Search & Filter] 검색어 및 세부 부위 필터 상태
+  String _searchQuery = '';
+  String _selectedSubPart = '전체';
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+
+  // 부위별 세부 필터 칩 목록
+  static const Map<BodyPart, List<String>> _subPartChips = {
+    BodyPart.upper: ['전체', '가슴', '등', '어깨', '팔', '이두', '삼두', '코어'],
+    BodyPart.lower: ['전체', '대퇴사두', '햄스트링', '둔근', '종아리'],
+    BodyPart.full: ['전체'],
+  };
+
   @override
   bool get wantKeepAlive => true; // 탭 전환 시 상태 유지
 
@@ -40,7 +53,8 @@ class _ExerciseLibraryTabState extends ConsumerState<ExerciseLibraryTab>
         setState(() {
           final tabs = [BodyPart.upper, BodyPart.lower, BodyPart.full];
           _selectedBodyPart = tabs[_tabController.index];
-          // 선택 상태는 유지 (부위 탭 전환 시에도 초기화하지 않음)
+          // 탭 전환 시 세부 필터 초기화 (검색어는 유지)
+          _selectedSubPart = '전체';
         });
       }
     });
@@ -49,13 +63,60 @@ class _ExerciseLibraryTabState extends ConsumerState<ExerciseLibraryTab>
   @override
   void dispose() {
     _tabController.dispose();
+    _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
+  /// [Smart Filter] 검색어 + 세부 부위 필터 적용
   List<ExerciseBaseline> _filterBaselines(List<ExerciseBaseline> baselines) {
     return baselines.where((baseline) {
-      return baseline.bodyPart == _selectedBodyPart;
+      // 1. 메인 부위 필터 (탭 기준)
+      if (baseline.bodyPart != _selectedBodyPart) {
+        return false;
+      }
+
+      // 2. 검색어 필터 (대소문자/공백 무시)
+      final normalizedQuery = _searchQuery.replaceAll(' ', '').toLowerCase();
+      final normalizedName = baseline.exerciseName.replaceAll(' ', '').toLowerCase();
+      final matchesSearch = normalizedQuery.isEmpty || normalizedName.contains(normalizedQuery);
+
+      if (!matchesSearch) {
+        return false;
+      }
+
+      // 3. 세부 부위 필터 (MULTI-TARGET 지원: contains 사용)
+      if (_selectedSubPart == '전체') {
+        return true;
+      }
+
+      // targetMuscles 리스트에서 선택된 세부 부위를 포함하는지 확인
+      final targetMuscles = baseline.targetMuscles ?? [];
+      final matchesSubPart = targetMuscles.any((muscle) {
+        // 근육명이 선택된 필터를 포함하는지 (부분 매칭)
+        final normalizedMuscle = muscle.replaceAll(' ', '').toLowerCase();
+        final normalizedSubPart = _selectedSubPart.replaceAll(' ', '').toLowerCase();
+        return normalizedMuscle.contains(normalizedSubPart) ||
+               normalizedSubPart.contains(normalizedMuscle);
+      });
+
+      return matchesSubPart;
     }).toList();
+  }
+
+  /// 검색어 클리어
+  void _clearSearch() {
+    setState(() {
+      _searchQuery = '';
+      _searchController.clear();
+    });
+  }
+
+  /// 세부 부위 필터 선택
+  void _selectSubPart(String subPart) {
+    setState(() {
+      _selectedSubPart = subPart;
+    });
   }
 
   /// 운동 옵션 메뉴 표시 (운동 기록 보기, 삭제)
@@ -483,6 +544,95 @@ class _ExerciseLibraryTabState extends ConsumerState<ExerciseLibraryTab>
     }
   }
 
+  /// [Smart Search & Filter] 검색창 위젯 빌드
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      child: TextField(
+        controller: _searchController,
+        focusNode: _searchFocusNode,
+        onChanged: (value) {
+          setState(() {
+            _searchQuery = value;
+          });
+        },
+        decoration: InputDecoration(
+          hintText: '운동 이름으로 검색...',
+          hintStyle: TextStyle(color: Colors.grey[500]),
+          prefixIcon: Icon(Icons.search, color: Colors.grey[600]),
+          suffixIcon: _searchQuery.isNotEmpty
+              ? IconButton(
+                  icon: Icon(Icons.clear, color: Colors.grey[600]),
+                  onPressed: _clearSearch,
+                )
+              : null,
+          filled: true,
+          fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(
+              color: Theme.of(context).colorScheme.primary,
+              width: 1.5,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// [Smart Search & Filter] 세부 부위 필터 칩 빌드
+  Widget _buildSubPartFilterChips() {
+    final chips = _subPartChips[_selectedBodyPart] ?? ['전체'];
+
+    // 전신 탭이거나 칩이 '전체' 하나뿐이면 칩 UI 숨김
+    if (chips.length <= 1) {
+      return const SizedBox.shrink();
+    }
+
+    return SizedBox(
+      height: 44,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        itemCount: chips.length,
+        itemBuilder: (context, index) {
+          final chip = chips[index];
+          final isSelected = _selectedSubPart == chip;
+
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: FilterChip(
+              label: Text(chip),
+              selected: isSelected,
+              onSelected: (_) => _selectSubPart(chip),
+              showCheckmark: false,
+              labelStyle: TextStyle(
+                color: isSelected
+                    ? Theme.of(context).colorScheme.onPrimary
+                    : Theme.of(context).colorScheme.onSurface,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                fontSize: 13,
+              ),
+              backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+              selectedColor: Theme.of(context).colorScheme.primary,
+              side: BorderSide.none,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context); // AutomaticKeepAliveClientMixin 필수
@@ -501,10 +651,14 @@ class _ExerciseLibraryTabState extends ConsumerState<ExerciseLibraryTab>
               .map((bodyPart) => Tab(text: bodyPart.label))
               .toList(),
         ),
+        // [Smart Search & Filter] 검색창
+        _buildSearchBar(),
+        // [Smart Search & Filter] 세부 부위 필터 칩
+        _buildSubPartFilterChips(),
         // [Phase 2] 헤더 영역: Selection Mode에서만 안내 텍스트 표시
         if (isSelectionMode)
           const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12.0),
+            padding: EdgeInsets.symmetric(vertical: 8.0),
             child: Text(
               '운동을 선택하고 날짜를 지정하세요.',
               style: TextStyle(color: Colors.grey, fontSize: 13),
@@ -516,7 +670,18 @@ class _ExerciseLibraryTabState extends ConsumerState<ExerciseLibraryTab>
             data: (baselines) {
               final filtered = _filterBaselines(baselines);
 
+              // [Smart Search & Filter] 필터 결과 없음 처리
               if (filtered.isEmpty) {
+                // 검색어나 필터가 있는 경우 다른 메시지 표시
+                if (_searchQuery.isNotEmpty || _selectedSubPart != '전체') {
+                  return FullScreenEmptyState(
+                    icon: Icons.search_off,
+                    title: '검색 결과가 없습니다',
+                    subtitle: _searchQuery.isNotEmpty
+                        ? '"$_searchQuery"에 해당하는 운동이 없습니다'
+                        : '$_selectedSubPart 부위의 운동이 없습니다',
+                  );
+                }
                 return const FullScreenEmptyState(
                   icon: Icons.fitness_center,
                   title: '해당 부위의 운동이 없습니다',
