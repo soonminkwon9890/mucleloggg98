@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/utils/ai_consent_helper.dart';
 import '../../../core/utils/date_formatter.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/workout_provider.dart';
@@ -82,7 +83,7 @@ class _WorkoutHistoryScreenState extends ConsumerState<WorkoutHistoryScreen> {
                 if (_selectedBaselineIds.isNotEmpty)
                   IconButton(
                     icon: const Icon(Icons.auto_awesome),
-                    onPressed: _generateRoutineForSelected,
+                    onPressed: _handleAiCoachingRequest,
                     tooltip: 'AI 계획 수립',
                   ),
               ]
@@ -164,6 +165,13 @@ class _WorkoutHistoryScreenState extends ConsumerState<WorkoutHistoryScreen> {
         ),
       ),
     );
+  }
+
+  /// AI 코칭 요청 진입점 — PIPA 동의 확인 후 실제 생성 메서드를 호출합니다.
+  Future<void> _handleAiCoachingRequest() async {
+    final consented = await AiConsentHelper.ensureConsent(context);
+    if (!consented || !mounted) return;
+    await _generateRoutineForSelected();
   }
 
   /// 선택된 운동들에 대한 AI 루틴 생성 (기존 WorkoutLogScreen 로직 유지)

@@ -1,7 +1,7 @@
 name: musclelog
 description: AI Progressive Overload Coaching App
 publish_to: "none"
-version: 1.0.0+20
+version: 1.0.0+22
 
 environment:
   sdk: ">=3.2.0 <4.0.0"
@@ -18,9 +18,8 @@ dependencies:
   freezed_annotation: ^2.4.1
   json_annotation: ^4.8.1
 
-  # 2. 백엔드 (Supabase & 환경변수)
+  # 2. 백엔드 (Supabase)
   supabase_flutter: ^2.3.0
-  flutter_dotenv: ^5.1.0 # .env 파일 로드용
 
   # 3. 미디어 처리 (영상/이미지)
   image_picker: ^1.0.7 # 촬영 및 갤러리 선택
@@ -46,6 +45,7 @@ dependencies:
   pub_semver: any # 버전 비교
   url_launcher: ^6.3.2 # 스토어/외부 링크 열기
   flutter_slidable: ^3.0.0 # 리스트 스와이프 액션
+  shared_preferences: ^2.3.2 # 동의 상태 등 경량 로컬 플래그 저장
 
   # 7. 인앱 결제 (RevenueCat)
   purchases_flutter: ^9.11.0 # iOS 구독 시스템
@@ -78,8 +78,6 @@ flutter_launcher_icons:
 
 flutter:
   uses-material-design: true
-  assets:
-    - .env
-  # 나중에 이미지 자산(Asset) 추가할 때 여기 주석 풉니다
+  # 나중에 이미지 자산(Asset) 추가할 때 주석 풀고 assets: 섹션 추가
   # assets:
   #   - assets/images/

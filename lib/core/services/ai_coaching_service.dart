@@ -49,26 +49,27 @@ class AiCoachingService {
     required Map<String, ExerciseBaseline> baselineMap,
     required Map<String, (double weight, int reps)> bestSetsMap,
   }) async {
-    debugPrint('====== AI COACHING SERVICE DEBUG ======');
-    debugPrint('[AI] Input sessions: ${lastWeekSessions.length}');
-    debugPrint('[AI] BaselineMap keys (${baselineMap.length}): ${baselineMap.keys.toList()}');
-    debugPrint('[AI] BestSetsMap EXACT KEYS (${bestSetsMap.length}):');
-    for (final key in bestSetsMap.keys) {
-      debugPrint('  KEY="$key" (length=${key.length})');
+    if (kDebugMode) {
+      debugPrint('====== AI COACHING SERVICE DEBUG ======');
+      debugPrint('[AI] Input sessions: ${lastWeekSessions.length}');
+      debugPrint('[AI] BaselineMap keys (${baselineMap.length}): ${baselineMap.keys.toList()}');
+      debugPrint('[AI] BestSetsMap EXACT KEYS (${bestSetsMap.length}):');
+      for (final key in bestSetsMap.keys) {
+        debugPrint('  KEY="$key" (length=${key.length})');
+      }
+      // [DEBUG] Show what composite keys would be built from sessions
+      debugPrint('[AI] Sessions -> expected composite keys:');
+      for (final s in lastWeekSessions) {
+        final dateStr = DateFormat('yyyy-MM-dd').format(s.workoutDate);
+        final expectedKey = '${s.baselineId}_$dateStr';
+        final found = bestSetsMap.containsKey(expectedKey);
+        debugPrint('  session.workoutDate=${s.workoutDate} -> expectedKey="$expectedKey" (found=$found)');
+      }
     }
 
-    // [DEBUG] Show what composite keys would be built from sessions
-    debugPrint('[AI] Sessions -> expected composite keys:');
-    for (final s in lastWeekSessions) {
-      final dateStr = DateFormat('yyyy-MM-dd').format(s.workoutDate);
-      final expectedKey = '${s.baselineId}_$dateStr';
-      final found = bestSetsMap.containsKey(expectedKey);
-      debugPrint('  session.workoutDate=${s.workoutDate} -> expectedKey="$expectedKey" (found=$found)');
-    }
-
-    final apiKey = EnvConfig.geminiApiKey;
-    if (apiKey == null || apiKey.isEmpty) {
-      throw Exception('GEMINI_API_KEY가 설정되지 않았습니다.');
+    const apiKey = EnvConfig.geminiApiKey;
+    if (apiKey.isEmpty) {
+      throw Exception('GEMINI_API_KEY가 설정되지 않았습니다. --dart-define=GEMINI_API_KEY=... 로 빌드하세요.');
     }
 
     // [Step 1] baselineId별 고유 운동 목록 추출 (LLM용, 날짜 없음)
@@ -78,13 +79,15 @@ class AiCoachingService {
       bestSetsMap: bestSetsMap,
     );
 
-    debugPrint('[AI] Step 1 - Unique exercises extracted: ${uniqueExercises.length}');
-    for (final entry in uniqueExercises.entries) {
-      debugPrint('  - ${entry.key}: ${entry.value.exerciseName}, ${entry.value.weight}kg x ${entry.value.reps}');
+    if (kDebugMode) {
+      debugPrint('[AI] Step 1 - Unique exercises extracted: ${uniqueExercises.length}');
+      for (final entry in uniqueExercises.entries) {
+        debugPrint('  - ${entry.key}: ${entry.value.exerciseName}, ${entry.value.weight}kg x ${entry.value.reps}');
+      }
     }
 
     if (uniqueExercises.isEmpty) {
-      debugPrint('[AI] ⚠️ uniqueExercises is EMPTY! Returning empty list.');
+      if (kDebugMode) debugPrint('[AI] ⚠️ uniqueExercises is EMPTY! Returning empty list.');
       return [];
     }
 
@@ -100,12 +103,12 @@ class AiCoachingService {
       userGoal: userGoal,
     );
 
-    debugPrint('[AI] Step 2 - User prompt:\n$userPrompt');
+    if (kDebugMode) debugPrint('[AI] Step 2 - User prompt:\n$userPrompt');
 
     final response = await model.generateContent([Content.text(userPrompt)]);
     final text = response.text;
 
-    debugPrint('[AI] Step 2 - Raw LLM Response:\n$text');
+    if (kDebugMode) debugPrint('[AI] Step 2 - Raw LLM Response:\n$text');
 
     if (text == null || text.isEmpty) {
       throw Exception('Gemini API 응답이 비어있습니다.');
@@ -114,9 +117,11 @@ class AiCoachingService {
     // [Step 3] LLM 응답을 Map<baselineId, recommendation>으로 파싱
     final llmRecommendations = _parseLlmResponse(text, uniqueExercises);
 
-    debugPrint('[AI] Step 3 - Parsed recommendations: ${llmRecommendations.length}');
-    for (final entry in llmRecommendations.entries) {
-      debugPrint('  - ${entry.key}: ${entry.value.weight}kg x ${entry.value.reps}');
+    if (kDebugMode) {
+      debugPrint('[AI] Step 3 - Parsed recommendations: ${llmRecommendations.length}');
+      for (final entry in llmRecommendations.entries) {
+        debugPrint('  - ${entry.key}: ${entry.value.weight}kg x ${entry.value.reps}');
+      }
     }
 
     // [Step 4] 원본 세션을 날짜별로 순회하며 계획 생성
@@ -127,8 +132,10 @@ class AiCoachingService {
       llmRecommendations: llmRecommendations,
     );
 
-    debugPrint('[AI] Step 4 - Final plans generated: ${plans.length}');
-    debugPrint('====== END AI COACHING SERVICE DEBUG ======');
+    if (kDebugMode) {
+      debugPrint('[AI] Step 4 - Final plans generated: ${plans.length}');
+      debugPrint('====== END AI COACHING SERVICE DEBUG ======');
+    }
 
     return plans;
   }
@@ -143,14 +150,14 @@ class AiCoachingService {
   }) {
     final uniqueExercises = <String, _UniqueExercise>{};
 
-    debugPrint('[_extractUniqueExercises] Processing ${lastWeekSessions.length} sessions');
+    if (kDebugMode) debugPrint('[_extractUniqueExercises] Processing ${lastWeekSessions.length} sessions');
 
     for (final session in lastWeekSessions) {
       final baselineId = session.baselineId;
 
       // 이미 처리된 baselineId는 스킵 (중복 제거)
       if (uniqueExercises.containsKey(baselineId)) {
-        debugPrint('  [SKIP] baselineId=$baselineId already processed');
+        if (kDebugMode) debugPrint('  [SKIP] baselineId=$baselineId already processed');
         continue;
       }
 
@@ -161,28 +168,30 @@ class AiCoachingService {
       final compositeKey = '${baselineId}_$dateStr';
       final bestSet = bestSetsMap[compositeKey] ?? bestSetsMap[baselineId];
 
-      debugPrint('  [CHECK] baselineId=$baselineId');
-      debugPrint('    compositeKey=$compositeKey, fallbackKey=$baselineId');
-      debugPrint('    baseline=${baseline?.exerciseName ?? "NULL"}');
-      debugPrint('    bestSet=$bestSet (found via ${bestSetsMap.containsKey(compositeKey) ? "composite" : "fallback"})');
+      if (kDebugMode) {
+        debugPrint('  [CHECK] baselineId=$baselineId');
+        debugPrint('    compositeKey=$compositeKey, fallbackKey=$baselineId');
+        debugPrint('    baseline=${baseline?.exerciseName ?? "NULL"}');
+        debugPrint('    bestSet=$bestSet (found via ${bestSetsMap.containsKey(compositeKey) ? "composite" : "fallback"})');
+      }
 
       if (baseline == null) {
-        debugPrint('    ⚠️ SKIPPED: baseline is NULL');
+        if (kDebugMode) debugPrint('    ⚠️ SKIPPED: baseline is NULL');
         continue;
       }
       if (bestSet == null) {
-        debugPrint('    ⚠️ SKIPPED: bestSet is NULL for both $compositeKey and $baselineId');
+        if (kDebugMode) debugPrint('    ⚠️ SKIPPED: bestSet is NULL for both $compositeKey and $baselineId');
         continue;
       }
 
       final (weight, reps) = bestSet;
       // 0kg/0회 운동은 제외
       if (weight <= 0 && reps <= 0) {
-        debugPrint('    ⚠️ SKIPPED: weight=$weight, reps=$reps (zero data)');
+        if (kDebugMode) debugPrint('    ⚠️ SKIPPED: weight=$weight, reps=$reps (zero data)');
         continue;
       }
 
-      debugPrint('    ✓ ADDED: ${baseline.exerciseName}, ${weight}kg x $reps');
+      if (kDebugMode) debugPrint('    ✓ ADDED: ${baseline.exerciseName}, ${weight}kg x $reps');
       uniqueExercises[baselineId] = _UniqueExercise(
         baselineId: baselineId,
         exerciseName: baseline.exerciseName,
@@ -290,8 +299,10 @@ JSON 배열만 출력해줘.''';
   }) {
     final plans = <PlannedWorkoutDto>[];
 
-    debugPrint('[_reconstructCalendar] Processing ${lastWeekSessions.length} sessions');
-    debugPrint('[_reconstructCalendar] llmRecommendations keys: ${llmRecommendations.keys.toList()}');
+    if (kDebugMode) {
+      debugPrint('[_reconstructCalendar] Processing ${lastWeekSessions.length} sessions');
+      debugPrint('[_reconstructCalendar] llmRecommendations keys: ${llmRecommendations.keys.toList()}');
+    }
 
     // 날짜순 정렬 (일관된 순서 보장)
     final sortedSessions = List<WorkoutSession>.from(lastWeekSessions)
@@ -309,31 +320,33 @@ JSON 배열만 출력해줘.''';
       final compositeKey = '${baselineId}_$dateStr';
       final bestSet = bestSetsMap[compositeKey] ?? bestSetsMap[baselineId];
 
-      debugPrint('[_reconstructCalendar] Session: baselineId=$baselineId');
-      debugPrint('  compositeKey=$compositeKey, fallbackKey=$baselineId');
-      debugPrint('  baseline=${baseline?.exerciseName ?? "NULL"}');
-      debugPrint('  bestSet=$bestSet (found via ${bestSetsMap.containsKey(compositeKey) ? "composite" : "fallback"})');
+      if (kDebugMode) {
+        debugPrint('[_reconstructCalendar] Session: baselineId=$baselineId');
+        debugPrint('  compositeKey=$compositeKey, fallbackKey=$baselineId');
+        debugPrint('  baseline=${baseline?.exerciseName ?? "NULL"}');
+        debugPrint('  bestSet=$bestSet (found via ${bestSetsMap.containsKey(compositeKey) ? "composite" : "fallback"})');
+      }
 
       if (baseline == null) {
-        debugPrint('  ⚠️ SKIPPED: baseline is NULL');
+        if (kDebugMode) debugPrint('  ⚠️ SKIPPED: baseline is NULL');
         continue;
       }
       if (bestSet == null) {
-        debugPrint('  ⚠️ SKIPPED: bestSet is NULL for both keys');
+        if (kDebugMode) debugPrint('  ⚠️ SKIPPED: bestSet is NULL for both keys');
         continue;
       }
 
       final (currentWeight, currentReps) = bestSet;
       // 0kg/0회 운동은 제외
       if (currentWeight <= 0 && currentReps <= 0) {
-        debugPrint('  ⚠️ SKIPPED: zero weight/reps');
+        if (kDebugMode) debugPrint('  ⚠️ SKIPPED: zero weight/reps');
         continue;
       }
 
       // 같은 날 같은 운동 중복 방지
       final uniqueKey = '$baselineId|$dateStr';
       if (processedKeys.contains(uniqueKey)) {
-        debugPrint('  ⚠️ SKIPPED: duplicate key $uniqueKey');
+        if (kDebugMode) debugPrint('  ⚠️ SKIPPED: duplicate key $uniqueKey');
         continue;
       }
       processedKeys.add(uniqueKey);
@@ -348,7 +361,7 @@ JSON 배열만 출력해줘.''';
 
       // LLM 추천 조회
       final rec = llmRecommendations[baselineId];
-      debugPrint('  LLM rec for $baselineId: ${rec != null ? "${rec.weight}kg x ${rec.reps}" : "NULL (will use fallback)"}');
+      if (kDebugMode) debugPrint('  LLM rec for $baselineId: ${rec != null ? "${rec.weight}kg x ${rec.reps}" : "NULL (will use fallback)"}');
 
       if (rec != null) {
         // AI 추천 있음 → AI 권장 무게/횟수 사용
@@ -363,7 +376,7 @@ JSON 배열만 출력해줘.''';
           aiComment: rec.reason,
           scheduledDate: targetDate,
         ));
-        debugPrint('  ✓ ADDED with AI: ${baseline.exerciseName} -> ${rec.weight}kg x ${rec.reps}');
+        if (kDebugMode) debugPrint('  ✓ ADDED with AI: ${baseline.exerciseName} -> ${rec.weight}kg x ${rec.reps}');
       } else {
         // [폴백] AI가 누락한 운동 → 원본 무게/횟수 그대로 복사
         plans.add(PlannedWorkoutDto(
@@ -377,11 +390,11 @@ JSON 배열만 출력해줘.''';
           aiComment: '유지',
           scheduledDate: targetDate,
         ));
-        debugPrint('  ✓ ADDED with fallback: ${baseline.exerciseName} -> ${currentWeight}kg x $currentReps');
+        if (kDebugMode) debugPrint('  ✓ ADDED with fallback: ${baseline.exerciseName} -> ${currentWeight}kg x $currentReps');
       }
     }
 
-    debugPrint('[_reconstructCalendar] Total plans created: ${plans.length}');
+    if (kDebugMode) debugPrint('[_reconstructCalendar] Total plans created: ${plans.length}');
     return plans;
   }
 

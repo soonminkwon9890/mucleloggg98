@@ -411,7 +411,7 @@ class WorkoutRepository with BaseRepositoryMixin {
   Future<Map<String, double>> getBodyBalance({DateTime? weekStart}) =>
       _statsRepo.getBodyBalance(weekStart: weekStart);
 
-  /// targetMuscles 문자열을 8개 카테고리로 매핑
+  /// targetMuscles 문자열을 10개 카테고리로 매핑 (레거시 '팔'→이두+삼두, '복근'→코어 포함)
   String mapMuscleToAxis(String muscle) => _statsRepo.mapMuscleToAxis(muscle);
 
   /// 특정 운동의 날짜별 강도 조회

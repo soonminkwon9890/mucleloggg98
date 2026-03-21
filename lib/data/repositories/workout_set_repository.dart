@@ -106,12 +106,39 @@ class WorkoutSetRepository with BaseRepositoryMixin {
   }
 
   /// 세트 삭제
+  ///
+  /// 보안: workout_sets 에는 user_id 컬럼이 없으므로 exercise_baselines 조인으로
+  /// 소유권을 검증한 뒤 삭제합니다 (IDOR 방어 - 앱 레이어 2차 방어선).
   Future<void> deleteWorkoutSet(String setId) async {
+    final ownerCheck = await client
+        .from('workout_sets')
+        .select('id, exercise_baselines!inner(user_id)')
+        .eq('id', setId)
+        .eq('exercise_baselines.user_id', currentUserId)
+        .maybeSingle();
+
+    if (ownerCheck == null) {
+      throw Exception('세트를 찾을 수 없거나 삭제 권한이 없습니다.');
+    }
+
     await client.from('workout_sets').delete().eq('id', setId);
   }
 
   /// 오늘의 운동 세션 삭제: 오늘 세트 물리 삭제
+  ///
+  /// 보안: baselineId 가 현재 사용자 소유인지 먼저 검증합니다 (IDOR 방어).
   Future<void> deleteTodaySets(String baselineId) async {
+    final ownerCheck = await client
+        .from('exercise_baselines')
+        .select('id')
+        .eq('id', baselineId)
+        .eq('user_id', currentUserId)
+        .maybeSingle();
+
+    if (ownerCheck == null) {
+      throw Exception('운동을 찾을 수 없거나 삭제 권한이 없습니다.');
+    }
+
     final now = DateTime.now();
     final todayStart = DateTime(now.year, now.month, now.day);
     final todayEnd = todayStart.add(const Duration(days: 1));
@@ -125,7 +152,20 @@ class WorkoutSetRepository with BaseRepositoryMixin {
   }
 
   /// 특정 날짜의 세트 기록 삭제 (Soft Delete)
+  ///
+  /// 보안: baselineId 소유권 검증 후 soft-delete 실행 (IDOR 방어).
   Future<void> deleteWorkoutSetsByDate(String baselineId, DateTime date) async {
+    final ownerCheck = await client
+        .from('exercise_baselines')
+        .select('id')
+        .eq('id', baselineId)
+        .eq('user_id', currentUserId)
+        .maybeSingle();
+
+    if (ownerCheck == null) {
+      throw Exception('운동을 찾을 수 없거나 수정 권한이 없습니다.');
+    }
+
     final dateStr = DateFormat('yyyy-MM-dd').format(date);
     final startStr = '${dateStr}T00:00:00Z';
     final endStr = '${dateStr}T23:59:59.999Z';

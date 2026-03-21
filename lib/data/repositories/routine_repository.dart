@@ -130,12 +130,39 @@ class RoutineRepository with BaseRepositoryMixin {
   }
 
   /// 루틴에서 개별 운동 삭제
+  ///
+  /// 보안: routine_items 에는 user_id 컬럼이 없으므로 routines 조인으로
+  /// 소유권을 검증한 뒤 삭제합니다 (IDOR 방어 - 앱 레이어 2차 방어선).
   Future<void> removeExerciseFromRoutine(String routineItemId) async {
+    final ownerCheck = await client
+        .from('routine_items')
+        .select('id, routines!inner(user_id)')
+        .eq('id', routineItemId)
+        .eq('routines.user_id', currentUserId)
+        .maybeSingle();
+
+    if (ownerCheck == null) {
+      throw Exception('루틴 항목을 찾을 수 없거나 삭제 권한이 없습니다.');
+    }
+
     await client.from('routine_items').delete().eq('id', routineItemId);
   }
 
   /// 루틴 내 운동 순서 변경
+  ///
+  /// 보안: routineId 가 현재 사용자 소유인지 먼저 검증합니다 (IDOR 방어).
   Future<void> updateRoutineItemOrder(String routineId, List<String> newOrder) async {
+    final ownerCheck = await client
+        .from('routines')
+        .select('id')
+        .eq('id', routineId)
+        .eq('user_id', currentUserId)
+        .maybeSingle();
+
+    if (ownerCheck == null) {
+      throw Exception('루틴을 찾을 수 없거나 수정 권한이 없습니다.');
+    }
+
     for (int i = 0; i < newOrder.length; i++) {
       await client
           .from('routine_items')

@@ -1,5 +1,5 @@
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/config/env_config.dart';
 
 /// Supabase 서비스 클래스
 class SupabaseService {
@@ -7,12 +7,13 @@ class SupabaseService {
 
   /// Supabase 초기화
   static Future<void> initialize() async {
-    final url = dotenv.env['SUPABASE_URL'];
-    final anonKey = dotenv.env['SUPABASE_ANON_KEY'];
+    const url = EnvConfig.supabaseUrl;
+    const anonKey = EnvConfig.supabaseAnonKey;
 
-    if (url == null || anonKey == null) {
+    if (url.isEmpty || anonKey.isEmpty) {
       throw Exception(
-        'Supabase 환경 변수가 설정되지 않았습니다. .env 파일을 확인하세요.',
+        'Supabase 환경 변수가 설정되지 않았습니다. '
+        '--dart-define=SUPABASE_URL=... --dart-define=SUPABASE_ANON_KEY=... 로 빌드하세요.',
       );
     }
 
@@ -44,4 +45,3 @@ class SupabaseService {
   /// Storage 버킷 가져오기
   static StorageFileApi get storageBucket => client.storage.from('videos');
 }
-

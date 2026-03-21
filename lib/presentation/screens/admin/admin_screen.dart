@@ -13,6 +13,63 @@ class AdminScreen extends ConsumerStatefulWidget {
   ConsumerState<AdminScreen> createState() => _AdminScreenState();
 }
 
+/// 관리자 권한 전용 접근 제어 위젯.
+///
+/// UserProfile.isAdmin 이 true 가 아닌 사용자에게는 어드민 UI를 일절 렌더링하지 않습니다.
+/// Supabase RLS 가 백엔드 1차 방어선이고, 이 위젯이 클라이언트 2차 방어선입니다.
+class _AdminGuard extends ConsumerWidget {
+  final Widget child;
+  const _AdminGuard({required this.child});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final profileAsync = ref.watch(currentProfileProvider);
+
+    return profileAsync.when(
+      loading: () => const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      ),
+      error: (_, __) => _accessDeniedScaffold(context),
+      data: (profile) {
+        if (profile?.isAdmin != true) {
+          return _accessDeniedScaffold(context);
+        }
+        return child;
+      },
+    );
+  }
+
+  Widget _accessDeniedScaffold(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('접근 거부')),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.lock_outline,
+                size: 64, color: Theme.of(context).colorScheme.error),
+            const SizedBox(height: 16),
+            Text(
+              '접근 권한이 없습니다.',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(color: Theme.of(context).colorScheme.error),
+            ),
+            const SizedBox(height: 8),
+            const Text('관리자 계정으로 로그인하세요.'),
+            const SizedBox(height: 24),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('돌아가기'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _AdminScreenState extends ConsumerState<AdminScreen> {
   final _targetIdController = TextEditingController();
   bool _isProcessing = false;
@@ -101,6 +158,12 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return _AdminGuard(
+      child: _buildAdminUi(context),
+    );
+  }
+
+  Widget _buildAdminUi(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Admin'),

@@ -9,13 +9,13 @@ import '../services/supabase_service.dart';
 class AuthRepository {
   final _client = SupabaseService.client;
 
-  // Google Sign-In Client IDs
+  // Google Sign-In Client IDs — 컴파일 타임 주입 (--dart-define)
   // Web Client ID: Supabase에 등록된 OAuth Client ID (ID Token 검증용 - serverClientId)
   // iOS Client ID: Google Cloud Console에서 생성한 iOS 앱용 Client ID (clientId)
   static const String _webClientId =
-      '503997494754-dm502sekm7kvrsmo2es1jsbc3mfmhm7d.apps.googleusercontent.com';
+      String.fromEnvironment('GOOGLE_WEB_CLIENT_ID');
   static const String _iosClientId =
-      '503997494754-k1q97404sbquc6fheabjp49k6c2nu2s9.apps.googleusercontent.com';
+      String.fromEnvironment('GOOGLE_IOS_CLIENT_ID');
 
   /// 로그아웃
   Future<void> signOut() async {

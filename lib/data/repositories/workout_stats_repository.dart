@@ -341,7 +341,7 @@ class WorkoutStatsRepository with BaseRepositoryMixin {
         .gte('created_at', startUtc)
         .lt('created_at', endUtc);
 
-    const axes = ['가슴', '등', '어깨', '팔', '복근', '대퇴사두', '햄스트링', '둔근'];
+    const axes = ['가슴', '등', '어깨', '이두', '삼두', '코어', '대퇴사두', '햄스트링', '둔근', '종아리'];
     final result = {for (final a in axes) a: 0.0};
 
     final seen = <String>{};
@@ -390,8 +390,9 @@ class WorkoutStatsRepository with BaseRepositoryMixin {
       final muscles = _extractTargetMuscles(baselineRow['target_muscles']);
       final mappedAxes = <String>{};
       for (final m in muscles) {
-        final axis = mapMuscleToAxis(m);
-        if (axis != '기타') mappedAxes.add(axis);
+        for (final axis in mapMuscleToAxes(m)) {
+          if (axis != '기타') mappedAxes.add(axis);
+        }
       }
 
       if (mappedAxes.isEmpty) continue;
@@ -421,21 +422,30 @@ class WorkoutStatsRepository with BaseRepositoryMixin {
     return const [];
   }
 
-  String mapMuscleToAxis(String muscle) {
+  /// 근육 문자열 → 차트 축 이름 목록 (레거시 '팔'은 ['이두','삼두'] 모두 반환)
+  List<String> mapMuscleToAxes(String muscle) {
     final m = muscle.trim();
-    if (m.isEmpty) return '기타';
+    if (m.isEmpty) return const ['기타'];
 
-    if (m.contains('가슴') || m.contains('흉') || m.contains('대흉')) return '가슴';
-    if (m.contains('등') || m.contains('광배') || m.contains('승모')) return '등';
-    if (m.contains('어깨') || m.contains('삼각')) return '어깨';
-    if (m.contains('팔') || m.contains('이두') || m.contains('삼두') || m.contains('전완')) return '팔';
-    if (m.contains('복근') || m.contains('코어') || m.contains('복직')) return '복근';
-    if (m.contains('대퇴') || m.contains('사두') || m.contains('쿼드')) return '대퇴사두';
-    if (m.contains('햄') || m.contains('햄스트링')) return '햄스트링';
-    if (m.contains('둔근') || m.contains('엉덩')) return '둔근';
+    if (m.contains('가슴') || m.contains('흉') || m.contains('대흉')) return const ['가슴'];
+    if (m.contains('등') || m.contains('광배') || m.contains('승모')) return const ['등'];
+    if (m.contains('어깨') || m.contains('삼각')) return const ['어깨'];
+    if (m.contains('이두') || m.contains('전완')) return const ['이두'];
+    if (m.contains('삼두')) return const ['삼두'];
+    // 레거시 '팔' → 이두 + 삼두 양쪽 모두 집계
+    if (m.contains('팔')) return const ['이두', '삼두'];
+    // 레거시 '복근' 포함 → 코어
+    if (m.contains('코어') || m.contains('복근') || m.contains('복직')) return const ['코어'];
+    if (m.contains('대퇴') || m.contains('사두') || m.contains('쿼드')) return const ['대퇴사두'];
+    if (m.contains('햄') || m.contains('햄스트링')) return const ['햄스트링'];
+    if (m.contains('둔근') || m.contains('엉덩')) return const ['둔근'];
+    if (m.contains('종아리') || m.contains('비복') || m.contains('가자미')) return const ['종아리'];
 
-    return '기타';
+    return const ['기타'];
   }
+
+  /// 단일 축 반환 (하위 호환용 — 복수 매핑 시 첫 번째 값 반환)
+  String mapMuscleToAxis(String muscle) => mapMuscleToAxes(muscle).first;
 
   /// 특정 운동의 날짜별 강도 조회
   Future<Map<String, String?>> getDifficultyByExerciseName(String exerciseName) async {

@@ -1,10 +1,16 @@
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-
-/// .env 기반 환경 변수 접근
-/// GEMINI_API_KEY 등 API 키는 서비스 레이어에서 null/빈 문자열 시 예외 처리.
+/// 컴파일 타임 환경 변수 접근
+/// 빌드 시 --dart-define=KEY=VALUE 로 주입됩니다.
+/// 예) flutter run --dart-define=GEMINI_API_KEY=... --dart-define=SUPABASE_URL=... --dart-define=SUPABASE_ANON_KEY=...
 class EnvConfig {
   EnvConfig._();
 
-  /// Gemini API 키 (AiCoachingService 등에서 사용)
-  static String? get geminiApiKey => dotenv.env['GEMINI_API_KEY'];
+  /// Gemini API 키 (AiCoachingService 에서 사용)
+  static const String geminiApiKey = String.fromEnvironment('GEMINI_API_KEY');
+
+  /// Supabase 프로젝트 URL
+  static const String supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+
+  /// Supabase anon key
+  static const String supabaseAnonKey =
+      String.fromEnvironment('SUPABASE_ANON_KEY');
 }

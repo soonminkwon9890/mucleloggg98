@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:uuid/uuid.dart';
+import '../../../core/utils/ai_consent_helper.dart';
 import '../../../core/utils/date_formatter.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/workout_provider.dart';
@@ -357,6 +358,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
+  /// AI 코칭 요청 진입점 — PIPA 동의 확인 후 실제 생성 메서드를 호출합니다.
+  Future<void> _handleAiCoachingRequest() async {
+    if (_isGeneratingRoutine) return;
+    final consented = await AiConsentHelper.ensureConsent(context);
+    if (!consented || !mounted) return;
+    await _generateWeeklyRoutine();
+  }
+
   /// AI 루틴 생성 메서드
   Future<void> _generateWeeklyRoutine() async {
     if (_isGeneratingRoutine) return;
@@ -621,7 +630,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           child: ElevatedButton.icon(
                             onPressed: _isGeneratingRoutine
                                 ? null
-                                : _generateWeeklyRoutine,
+                                : _handleAiCoachingRequest,
                             icon: _isGeneratingRoutine
                                 ? const SizedBox(
                                     width: 20,

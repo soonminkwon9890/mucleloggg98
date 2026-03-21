@@ -338,18 +338,32 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
   }
 
   String _buildAiComment(Map<String, double> bodyBalance) {
-    const axes = [
+    const axisKeys = [
       '가슴',
       '등',
       '어깨',
-      '팔',
-      '복근',
+      '이두',
+      '삼두',
+      '코어',
       '대퇴사두',
       '햄스트링',
       '둔근',
+      '종아리',
+    ];
+    const axisLabels = [
+      '가슴',
+      '등',
+      '어깨',
+      '이두',
+      '삼두',
+      '코어',
+      '대퇴사두(앞)',
+      '햄스트링(뒤)',
+      '둔근(힙)',
+      '종아리',
     ];
 
-    final values = axes.map((k) => bodyBalance[k] ?? 0.0).toList();
+    final values = axisKeys.map((k) => bodyBalance[k] ?? 0.0).toList();
 
     // 1) 데이터 없음
     final maxVal = values.fold<double>(0.0, (p, c) => c > p ? c : p);
@@ -362,8 +376,8 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
       return keys.fold<double>(0.0, (sum, k) => sum + (bodyBalance[k] ?? 0.0));
     }
 
-    const upperKeys = ['가슴', '등', '어깨', '팔', '복근'];
-    const lowerKeys = ['대퇴사두', '햄스트링', '둔근'];
+    const upperKeys = ['가슴', '등', '어깨', '이두', '삼두', '코어'];
+    const lowerKeys = ['대퇴사두', '햄스트링', '둔근', '종아리'];
 
     final upperTotal = sumByKeys(upperKeys);
     final lowerTotal = sumByKeys(lowerKeys);
@@ -382,8 +396,8 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
     final minVal =
         values.fold<double>(double.infinity, (p, c) => c < p ? c : p);
     final minIdx = values.indexOf(minVal);
-    final minAxis = axes[minIdx];
-    return '$minAxis 운동이 가장 부족해요.';
+    final minLabel = axisLabels[minIdx];
+    return '$minLabel 운동이 가장 부족해요.';
   }
 }
 
@@ -545,20 +559,37 @@ class BodyBalanceChartCard extends StatelessWidget {
     required this.bodyBalance,
   });
 
-  static const _axes = [
+  // bodyBalance 맵 조회용 키 (레포지토리 반환 키와 일치)
+  static const _axisKeys = [
     '가슴',
     '등',
     '어깨',
-    '팔',
-    '복근',
+    '이두',
+    '삼두',
+    '코어',
     '대퇴사두',
     '햄스트링',
     '둔근',
+    '종아리',
+  ];
+
+  // 차트에 표시되는 레이블 (순서는 _axisKeys와 동일)
+  static const _axisLabels = [
+    '가슴',
+    '등',
+    '어깨',
+    '이두',
+    '삼두',
+    '코어',
+    '대퇴사두(앞)',
+    '햄스트링(뒤)',
+    '둔근(힙)',
+    '종아리',
   ];
 
   @override
   Widget build(BuildContext context) {
-    final values = _axes.map((k) => bodyBalance[k] ?? 0.0).toList();
+    final values = _axisKeys.map((k) => bodyBalance[k] ?? 0.0).toList();
     final maxVal = values.fold<double>(0.0, (p, c) => c > p ? c : p);
     // fl_chart 0.66.x RadarChartData는 max 값을 직접 받지 않습니다.
     // 요구사항(꽉 차 보이기)을 만족하기 위해 값을 0~10 범위로 정규화합니다.
@@ -599,7 +630,7 @@ class BodyBalanceChartCard extends StatelessWidget {
                   tickCount: 4,
                   getTitle: (index, angle) {
                     return RadarChartTitle(
-                      text: _axes[index],
+                      text: _axisLabels[index],
                     );
                   },
                   dataSets: [

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
@@ -19,9 +18,6 @@ Future<void> main() async {
   // 한국어 날짜 형식 초기화
   await initializeDateFormatting('ko_KR', null);
 
-  // .env 파일 로드
-  await dotenv.load(fileName: ".env");
-
   // Supabase 초기화
   await SupabaseService.initialize();
 
@@ -36,7 +32,7 @@ Future<void> main() async {
   // Sentry 초기화 및 앱 실행
   await SentryFlutter.init(
     (options) {
-      options.dsn = 'https://0109609cd8f1a40ec0554ac0ea48e8a1@o4510906232864768.ingest.us.sentry.io/4510906246889472';
+      options.dsn = const String.fromEnvironment('SENTRY_DSN');
       options.tracesSampleRate = 1.0; // 베타 테스트: 100% 트랜잭션 캡처
     },
     appRunner: () => runApp(const ProviderScope(child: MyApp())),

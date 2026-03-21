@@ -1,5 +1,10 @@
 import 'package:flutter/services.dart';
 
+// 허용 문자: 유니코드 문자(글자·숫자)·공백·하이픈·괄호만 허용.
+// 제어 문자, RTLO(U+202E) 등 유니코드 방향 지정자, 기타 특수기호를 차단합니다.
+final _exerciseNamePattern =
+    RegExp(r'^[\p{L}\p{N}\s\-\(\)]+$', unicode: true);
+
 /// 운동 입력값 검증 유틸리티
 ///
 /// 무게, 횟수 등의 입력값 검증과 제한을 담당합니다.
@@ -38,6 +43,10 @@ class WorkoutValidators {
     }
     if (name.length > exerciseNameMaxLength) {
       return '운동 이름은 $exerciseNameMaxLength자를 초과할 수 없습니다.';
+    }
+    // 제어 문자·특수기호 차단 (허용: 글자, 숫자, 공백, 하이픈, 괄호)
+    if (!_exerciseNamePattern.hasMatch(name.trim())) {
+      return '특수문자는 사용할 수 없습니다.';
     }
     return null;
   }
