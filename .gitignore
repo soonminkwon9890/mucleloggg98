@@ -56,3 +56,6 @@ app.*.map.json
 
 # VS Code related
 .vscode/launch.json
+
+# Config related
+config.json
