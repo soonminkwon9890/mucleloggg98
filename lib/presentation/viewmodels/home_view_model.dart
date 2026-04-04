@@ -40,14 +40,70 @@ class HomeViewModel extends StateNotifier<HomeState> {
   ///
   /// [forceRefresh]: true일 때만 DB에서 강제로 가져옵니다.
   /// false일 때는 같은 날짜이고 state에 데이터가 있으면 Draft를 보존하기 위해 DB 조회를 스킵합니다.
+  /// [date]: null이면 오늘, 지정하면 해당 날짜의 기록을 로드합니다 (과거 날짜는 planned/draft 제외).
   ///
   /// [NEW] planned_workouts 테이블에서 오늘 예정된 운동도 함께 로드합니다.
   /// - scheduled_date = 오늘 AND is_converted_to_log = false 인 항목
   /// - Manual (target_weight=0, target_reps=0): 빈 세트 1개
   /// - AI Plan (target_weight>0 || target_reps>0): target_sets 개수만큼 미리 채운 세트
-  Future<void> loadBaselines({bool forceRefresh = false}) async {
+  Future<void> loadBaselines({bool forceRefresh = false, DateTime? date}) async {
     final today = DateTime.now();
     final normalizedToday = DateTime(today.year, today.month, today.day);
+    final targetDate = date != null
+        ? DateTime(date.year, date.month, date.day)
+        : normalizedToday;
+    final isToday = targetDate == normalizedToday;
+
+    // 오늘 이외 날짜 조회 (과거 + 미래 통합 Diary 뷰)
+    // - 실제 기록(workout_sets) + 계획된 운동(planned_workouts) 함께 표시
+    // - 미래 날짜: planned_workouts가 주된 데이터 소스 (AI플래너/캘린더 예약 내용)
+    // - 과거 날짜: workout_sets가 주된 데이터 소스, 미변환 planned_workouts 보조 표시
+    if (!isToday) {
+      // 날짜가 바뀌면 이전 날짜의 데이터를 즉시 비워서 ghost 방지
+      state = state.copyWith(
+        baselines: const [],
+        groupedWorkouts: const {},
+        totalVolume: 0,
+        mainFocusArea: '—',
+        isLoading: true,
+        errorMessage: null,
+        plannedWorkoutMap: const {},
+      );
+      try {
+        // 실제 운동 기록 (workout_sets 기반)
+        final dbBaselines = await _repository.getBaselinesForDate(targetDate);
+
+        // 계획된 운동 (planned_workouts — is_converted_to_log = false)
+        // 미래 날짜에 AI플래너·캘린더로 예약한 운동, 또는 과거 미이행 계획 포함
+        final (plannedBaselines, plannedWorkoutMap) =
+            await _repository.getPlannedWorkoutsAsBaselines(targetDate);
+
+        // 중복 제거: DB에 이미 workout_sets가 있는 baseline은 planned에서 제외
+        final dbBaselineIds = dbBaselines.map((b) => b.id).toSet();
+        final filteredPlanned = plannedBaselines
+            .where((b) => !dbBaselineIds.contains(b.id))
+            .toList();
+        final filteredPlannedMap =
+            Map<String, PlannedWorkout>.from(plannedWorkoutMap)
+              ..removeWhere((key, _) => dbBaselineIds.contains(key));
+
+        final allBaselines = [...dbBaselines, ...filteredPlanned];
+        final grouped = _groupWorkouts(allBaselines);
+        final all = grouped.values.expand((list) => list).toList();
+
+        state = state.copyWith(
+          baselines: allBaselines,
+          groupedWorkouts: grouped,
+          totalVolume: _calculateVolume(all),
+          mainFocusArea: _getFocusArea(all),
+          isLoading: false,
+          plannedWorkoutMap: filteredPlannedMap,
+        );
+      } catch (e) {
+        state = state.copyWith(isLoading: false, errorMessage: e.toString());
+      }
+      return;
+    }
 
     // Draft 보존 로직: 같은 날짜이고 state에 데이터가 있고 강제 새로고침이 아니면 스킵
     if (!forceRefresh &&
@@ -57,63 +113,40 @@ class HomeViewModel extends StateNotifier<HomeState> {
       return;
     }
 
-    state = state.copyWith(isLoading: true, errorMessage: null);
+    // 날짜 전환 시 이전 날짜 데이터가 잠깐 보이지 않도록 즉시 초기화
+    state = state.copyWith(
+      baselines: const [],
+      groupedWorkouts: const {},
+      totalVolume: 0,
+      mainFocusArea: '—',
+      isLoading: true,
+      errorMessage: null,
+      plannedWorkoutMap: const {},
+    );
 
     try {
-      // [기존] 오늘의 workout_sets 기반 baselines 조회
+      // 오늘의 workout_sets 기반 baselines만 조회.
+      // planned_workouts는 오늘 홈 화면에 자동 표시하지 않습니다.
+      // → 새 날 = 빈 슬레이트(blank slate). 전날 계획이 '빈 템플릿'처럼 복사되는 버그 제거.
+      // → 미래 날짜 클릭 시에만 planned_workouts를 표시 (비-오늘 경로에서 처리).
       final dbBaselines = await _repository.getTodayBaselines();
-
-      // [NEW] 오늘 예정된 planned_workouts 조회 (is_converted_to_log = false)
-      final (plannedBaselines, plannedWorkoutMap) =
-          await _repository.getPlannedWorkoutsAsBaselines(normalizedToday);
 
       _lastLoadedDate = DateTime.now();
 
-      // [NEW] 중복 제거: DB에 이미 workout_sets가 있는 baseline은 planned에서 제외
-      final dbBaselineIds = dbBaselines.map((b) => b.id).toSet();
-      final filteredPlannedBaselines = plannedBaselines.where((b) {
-        return !dbBaselineIds.contains(b.id);
-      }).toList();
-
-      // [NEW] 중복 제거된 plannedWorkoutMap 업데이트
-      final filteredPlannedWorkoutMap = Map<String, PlannedWorkout>.from(plannedWorkoutMap)
-        ..removeWhere((key, _) => dbBaselineIds.contains(key));
-
-      // Draft 병합: 현재 state의 baselines 중에서 DB에 없는 것들 (Draft)을 찾아서 병합
-      final allNewBaselineIds = {
-        ...dbBaselineIds,
-        ...filteredPlannedBaselines.map((b) => b.id),
-      };
-      final draftBaselines = state.baselines.where((b) {
-        // DB/Planned에 없고 오늘 날짜인 것만 Draft로 간주
-        return !allNewBaselineIds.contains(b.id) &&
-               b.createdAt != null &&
-               DateFormatter.isSameDate(b.createdAt!, today);
-      }).toList();
-
-      // DB 데이터와 기존 로컬 상태(state.baselines)를 먼저 병합하여 Draft 세트 보존
-      final mergedFromDb = _mergeDraftSets(dbBaselines, state.baselines);
-
-      // [NEW] Planned 데이터도 Draft 세트 병합 (사용자가 이미 수정한 값 보존)
-      final mergedFromPlanned = _mergeDraftSets(filteredPlannedBaselines, state.baselines);
-
-      // 병합된 DB 데이터 + Planned 데이터 + 완전한 Draft 항목들을 합침
-      final mergedBaselines = [...mergedFromDb, ...mergedFromPlanned, ...draftBaselines];
+      // Draft 세트 보존: 화면 전환 후 돌아왔을 때 in-memory 입력값 복원
+      final mergedBaselines = _mergeDraftSets(dbBaselines, state.baselines);
 
       final groupedWorkouts = _groupWorkouts(mergedBaselines);
       final allTodayWorkouts =
           groupedWorkouts.values.expand((list) => list).toList();
-      final totalVolume = _calculateVolume(allTodayWorkouts);
-      final mainFocusArea = _getFocusArea(allTodayWorkouts);
 
       state = state.copyWith(
         baselines: mergedBaselines,
         groupedWorkouts: groupedWorkouts,
-        totalVolume: totalVolume,
-        mainFocusArea: mainFocusArea,
+        totalVolume: _calculateVolume(allTodayWorkouts),
+        mainFocusArea: _getFocusArea(allTodayWorkouts),
         isLoading: false,
-        // [NEW] planned workout 매핑 저장 (저장 시 is_converted_to_log 업데이트용)
-        plannedWorkoutMap: filteredPlannedWorkoutMap,
+        plannedWorkoutMap: const {},
       );
     } catch (e) {
       state = state.copyWith(
@@ -142,7 +175,9 @@ class HomeViewModel extends StateNotifier<HomeState> {
   /// 운동 삭제 (Draft 안전 처리 포함)
   /// - Draft(미저장): 메모리에서만 제거 (DB 호출 X)
   /// - DB 저장됨: Repository 호출 후 새로고침
-  Future<void> deleteWorkout(String baselineId) async {
+  ///
+  /// [date]: null 이면 오늘(기존 동작), 지정하면 해당 날짜의 세트만 삭제합니다.
+  Future<void> deleteWorkout(String baselineId, {DateTime? date}) async {
     // 1. 삭제 대상 존재 확인
     final existsInState = state.baselines.any((b) => b.id == baselineId);
     if (!existsInState) {
@@ -150,6 +185,35 @@ class HomeViewModel extends StateNotifier<HomeState> {
       return;
     }
 
+    final today = DateTime.now();
+    final normalizedToday = DateTime(today.year, today.month, today.day);
+    final targetDate = date != null
+        ? DateTime(date.year, date.month, date.day)
+        : normalizedToday;
+    final isPastDate = targetDate != normalizedToday;
+
+    // 과거 날짜: 세트만 삭제(baseline is_hidden_from_home 건드리지 않음)
+    if (isPastDate) {
+      try {
+        await _repository.deleteWorkoutsByDate(baselineId, targetDate);
+        final updatedBaselines =
+            state.baselines.where((b) => b.id != baselineId).toList();
+        final groupedWorkouts = _groupWorkouts(updatedBaselines);
+        final allWorkouts =
+            groupedWorkouts.values.expand((list) => list).toList();
+        state = state.copyWith(
+          baselines: updatedBaselines,
+          groupedWorkouts: groupedWorkouts,
+          totalVolume: _calculateVolume(allWorkouts),
+          mainFocusArea: _getFocusArea(allWorkouts),
+        );
+      } catch (e) {
+        state = state.copyWith(errorMessage: '삭제 실패: $e');
+      }
+      return;
+    }
+
+    // 오늘: 기존 로직(Draft 판별 포함)
     // 2. Draft 판별: DB에서 해당 ID가 존재하는지 확인
     final dbBaselines = await _repository.getTodayBaselines();
     final isInDb = dbBaselines.any((db) => db.id == baselineId);
@@ -176,21 +240,24 @@ class HomeViewModel extends StateNotifier<HomeState> {
     try {
       await _repository.deleteTodayWorkoutsByBaseline(baselineId);
 
-      // Optimistic Update: 로컬 상태에서 해당 항목만 제거하여 즉시 갱신
-      // (다른 항목의 Draft 상태를 보존하기 위해 전체 새로고침하지 않음)
+      // Optimistic Update: 즉각적인 UI 반영을 위해 먼저 로컬에서 제거
       final updatedBaselines = state.baselines
           .where((b) => b.id != baselineId)
           .toList();
-
       final groupedWorkouts = _groupWorkouts(updatedBaselines);
       final allWorkouts = groupedWorkouts.values.expand((list) => list).toList();
-
       state = state.copyWith(
         baselines: updatedBaselines,
         groupedWorkouts: groupedWorkouts,
         totalVolume: _calculateVolume(allWorkouts),
         mainFocusArea: _getFocusArea(allWorkouts),
       );
+
+      // [Fix] DB 삭제 후 반드시 강제 새로고침하여 _mergeDraftSets 재병합 시
+      // 삭제된 항목이 ghosting되는 현상을 원천 차단합니다.
+      // 이 호출은 _lastLoadedDate를 갱신하므로, 이후 날짜 변경 후 복귀 시에도
+      // 이전 state(삭제 전 데이터)가 재사용되지 않습니다.
+      await loadBaselines(forceRefresh: true);
     } catch (e) {
       state = state.copyWith(errorMessage: '삭제 실패: $e');
     }
@@ -274,6 +341,7 @@ class HomeViewModel extends StateNotifier<HomeState> {
         bodyPartCode: bodyPartCode,
         targetMuscles: targetMuscles,
         sortTimestamp: sortTimestamp,
+        targetDate: normalizedSelected,
         routineId: null,
       );
 
@@ -338,12 +406,17 @@ class HomeViewModel extends StateNotifier<HomeState> {
   Future<void> addFromArchiveOrRoutine(
     List<ExerciseBaseline> baselines, {
     String? routineId,
+    DateTime? date,
   }) async {
     if (baselines.isEmpty) return;
 
     // 정렬용 기준 타임스탬프
     var sortTimestamp = _getNextSortTimestamp();
     final persistedBaselines = <ExerciseBaseline>[];
+
+    final targetDate = date != null
+        ? DateTime(date.year, date.month, date.day)
+        : null;
 
     try {
       // 각 운동을 순차적으로 DB에 저장 (정렬 순서 보장)
@@ -353,6 +426,7 @@ class HomeViewModel extends StateNotifier<HomeState> {
           bodyPartCode: original.bodyPart?.code ?? 'FULL',
           targetMuscles: original.targetMuscles ?? const [],
           sortTimestamp: sortTimestamp,
+          targetDate: targetDate,
           routineId: routineId,
         );
 
@@ -452,16 +526,15 @@ class HomeViewModel extends StateNotifier<HomeState> {
   }
 
   /// 총 볼륨 계산
+  ///
+  /// 레포지토리가 strict UTC 경계로 해당 날짜의 세트만 반환하므로
+  /// 날짜 재필터링 없이 모든 세트를 합산합니다.
   double _calculateVolume(List<ExerciseBaseline> workouts) {
     double totalVolume = 0.0;
-    final now = DateTime.now();
-
     for (final baseline in workouts) {
       if (baseline.workoutSets == null) continue;
       for (final set in baseline.workoutSets!) {
-        if (DateFormatter.isSameDate(set.createdAt, now)) {
-          totalVolume += set.weight * set.reps;
-        }
+        totalVolume += set.weight * set.reps;
       }
     }
     return totalVolume;

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:table_calendar/table_calendar.dart';
 import 'dart:math' as math;
 import '../../providers/workout_provider.dart';
 import '../../providers/auth_provider.dart';
@@ -10,6 +11,7 @@ import '../../widgets/workout/workout_card.dart';
 import '../../widgets/workout/exercise_add_panel.dart';
 import '../../widgets/workout/reorder_workout_dialog.dart';
 import '../management/management_screen.dart';
+import 'exercise_search_screen.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../utils/premium_guidance_dialog.dart';
 
@@ -23,6 +25,8 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen>
     with WidgetsBindingObserver {
+  // 날짜 이동 방향 (오른쪽: 과거 방향 / 왼쪽: 미래 방향)
+  bool _slideFromRight = false;
 
   @override
   void initState() {
@@ -320,6 +324,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final homeState = ref.watch(homeViewModelProvider);
     final authStateAsync = ref.watch(authStateProvider);
 
+    // 날짜 변경 방향 감지 — AnimatedSwitcher 슬라이드 방향 결정
+    ref.listen<DateTime>(selectedHomeDateProvider, (prev, next) {
+      if (prev != null && prev != next) {
+        setState(() => _slideFromRight = next.isBefore(prev));
+      }
+    });
+
     // [Issue #1 Fix] 에러 메시지 변경 감지 및 SnackBar 표시
     ref.listen<HomeState>(homeViewModelProvider, (previous, next) {
       // 에러 메시지가 새로 설정된 경우에만 SnackBar 표시
@@ -379,6 +390,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final allTodayWorkouts =
         groupedWorkouts.values.expand((list) => list).toList();
 
+    final selectedDate = ref.watch(selectedHomeDateProvider);
+    final today = DateTime.now();
+    final normalizedToday = DateTime(today.year, today.month, today.day);
+    final isToday = selectedDate == normalizedToday;
+
+    // 운동 기록 날짜 목록 (캘린더 도트 마커용)
+    final workoutDatesAsync = ref.watch(workoutDatesProvider);
+    final workoutDateSet = workoutDatesAsync.maybeWhen(
+      data: (dates) => dates
+          .map((d) => DateTime(d.year, d.month, d.day))
+          .toSet(),
+      orElse: () => <DateTime>{},
+    );
+
+    // 날짜 포맷 (오늘이면 "오늘", 아니면 "M월 d일")
+    String dateLabel;
+    if (isToday) {
+      dateLabel = '오늘';
+    } else {
+      dateLabel = '${selectedDate.month}월 ${selectedDate.day}일';
+    }
+
     // [수정됨] RefreshIndicator 제거 - 미저장 데이터 손실 방지
     // Pull-to-refresh 기능을 완전히 비활성화하여 사용자의 입력값이 초기화되는 문제 해결
     return GestureDetector(
@@ -407,28 +440,43 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // 상단 Row: "오늘 총 볼륨" + "보관함" 버튼
+                        // 상단 Row: 날짜 레이블 + 운동 검색 버튼
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
                             Text(
-                              '오늘 총 볼륨',
+                              '$dateLabel 총 볼륨',
                               style: TextStyle(
                                 fontSize: 16,
                                 color: appCard?.subTextColor ?? Colors.grey,
                               ),
                             ),
-                            // 보관함 바로가기 버튼
-                            // [Phase 1] Path B: Management Mode로 진입
+                            // 운동 검색 버튼 (showSearch delegate)
                             InkWell(
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => const ManagementScreen(isSelectionMode: false),
-                                  ),
+                              onTap: () async {
+                                final baselines = await ref
+                                    .read(archivedBaselinesProvider.future);
+                                if (!context.mounted) return;
+                                final result =
+                                    await showSearch<ExerciseSearchResult?>(
+                                  context: context,
+                                  delegate: ExerciseSearchDelegate(
+                                      baselines: baselines),
                                 );
+                                if (result == null || !mounted) return;
+                                if (result.latestDate != null) {
+                                  // 검색 결과 탭 → Home 캘린더를 해당 운동의 최근 기록일로 동기화
+                                  ref
+                                      .read(selectedHomeDateProvider.notifier)
+                                      .state = result.latestDate!;
+                                  ref
+                                      .read(homeViewModelProvider.notifier)
+                                      .loadBaselines(
+                                        forceRefresh: true,
+                                        date: result.latestDate!,
+                                      );
+                                }
                               },
                               borderRadius: BorderRadius.circular(8),
                               child: Padding(
@@ -436,27 +484,75 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                   horizontal: 8,
                                   vertical: 4,
                                 ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.inventory_2_outlined,
-                                      size: 16,
-                                      color: appCard?.subTextColor ?? Colors.grey,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '보관함',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: appCard?.subTextColor ?? Colors.grey,
-                                      ),
-                                    ),
-                                  ],
+                                child: Icon(
+                                  Icons.search,
+                                  size: 22,
+                                  color: appCard?.subTextColor ?? Colors.grey,
                                 ),
                               ),
                             ),
                           ],
+                        ),
+                        // 달력 — 항상 표시 (아코디언 제거)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: TableCalendar(
+                            firstDay: DateTime.utc(2020, 1, 1),
+                            lastDay: DateTime.now().add(
+                                const Duration(days: 365)),
+                            focusedDay: selectedDate,
+                            selectedDayPredicate: (day) =>
+                                isSameDay(day, selectedDate),
+                            locale: 'ko_KR',
+                            calendarFormat: CalendarFormat.month,
+                            startingDayOfWeek: StartingDayOfWeek.monday,
+                            availableGestures: AvailableGestures.horizontalSwipe,
+                            headerStyle: const HeaderStyle(
+                              formatButtonVisible: false,
+                              titleCentered: true,
+                            ),
+                            calendarStyle: const CalendarStyle(
+                              todayDecoration: BoxDecoration(
+                                color: Colors.blue,
+                                shape: BoxShape.circle,
+                              ),
+                              selectedDecoration: BoxDecoration(
+                                color: Colors.orange,
+                                shape: BoxShape.circle,
+                              ),
+                              markersMaxCount: 1,
+                            ),
+                            calendarBuilders: CalendarBuilders(
+                              markerBuilder: (context, day, _) {
+                                final normalized = DateTime(day.year, day.month, day.day);
+                                if (!workoutDateSet.contains(normalized)) return null;
+                                return Positioned(
+                                  bottom: 4,
+                                  child: Container(
+                                    width: 6,
+                                    height: 6,
+                                    decoration: const BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: Colors.blue,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                            onDaySelected: (selectedDay, focusedDay) {
+                              final normalized = DateTime(selectedDay.year,
+                                  selectedDay.month, selectedDay.day);
+                              ref
+                                  .read(selectedHomeDateProvider.notifier)
+                                  .state = normalized;
+                              ref
+                                  .read(homeViewModelProvider.notifier)
+                                  .loadBaselines(
+                                    forceRefresh: true,
+                                    date: normalized,
+                                  );
+                            },
+                          ),
                         ),
                         const SizedBox(height: 8),
                         Text(
@@ -473,7 +569,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          '오늘의 집중',
+                          isToday ? '오늘의 집중' : '해당일 집중',
                           style: TextStyle(
                             fontSize: 16,
                             color: appCard?.subTextColor ?? Colors.grey,
@@ -496,13 +592,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             ),
             const SizedBox(height: 32),
 
-            // 오늘의 운동 섹션 헤더 (순서 변경 + 루틴 저장 버튼 포함)
+            // 운동 섹션 헤더 (순서 변경 + 루틴 저장 버튼 포함)
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  '오늘의 운동',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                Text(
+                  isToday ? '오늘의 운동' : '$dateLabel 운동',
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 ),
                 if (allTodayWorkouts.isNotEmpty)
                   Row(
@@ -541,15 +637,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               ],
             ),
             const SizedBox(height: 16),
-            if (groupedWorkouts.isEmpty)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(32),
-                  child: Text('오늘 기록된 운동이 없습니다'),
-                ),
-              )
-            else
-              Consumer(
+            // 날짜 전환 시 페이지 넘김 애니메이션 (FadeTransition + 미세 슬라이드)
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 280),
+              switchInCurve: Curves.easeOut,
+              switchOutCurve: Curves.easeIn,
+              transitionBuilder: (child, animation) {
+                final slideBegin = Offset(_slideFromRight ? -0.04 : 0.04, 0);
+                return SlideTransition(
+                  position: Tween<Offset>(
+                    begin: slideBegin,
+                    end: Offset.zero,
+                  ).animate(CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOut,
+                  )),
+                  child: FadeTransition(opacity: animation, child: child),
+                );
+              },
+              child: KeyedSubtree(
+                key: ValueKey(selectedDate),
+                child: groupedWorkouts.isEmpty
+                    ? Center(
+                        key: const ValueKey('empty'),
+                        child: Padding(
+                          padding: const EdgeInsets.all(32),
+                          child: Text(isToday ? '오늘 기록된 운동이 없습니다' : '$dateLabel 기록된 운동이 없습니다'),
+                        ),
+                      )
+                    : Consumer(
                 builder: (context, ref, child) {
                   final routinesAsync = ref.watch(routinesProvider);
                   return routinesAsync.when(
@@ -594,8 +710,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                             ),
                             ...mergedNewWorkouts.map((baseline) {
                               return WorkoutCard(
-                                key: ValueKey(baseline.id),
+                                key: ValueKey('${baseline.id}_${selectedDate.millisecondsSinceEpoch}'),
                                 baseline: baseline,
+                                displayDate: isToday ? null : selectedDate,
                                 onUpdated: (savedItem, oldId) {
                                   if (savedItem != null && oldId != null) {
                                     ref
@@ -649,8 +766,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     ),
                                     children: entry.value.map((baseline) {
                                       return WorkoutCard(
-                                        key: ValueKey(baseline.id),
+                                        key: ValueKey('${baseline.id}_${selectedDate.millisecondsSinceEpoch}'),
                                         baseline: baseline,
+                                        displayDate: isToday ? null : selectedDate,
                                         onUpdated: (savedItem, oldId) {
                                           if (savedItem != null && oldId != null) {
                                             ref
@@ -681,7 +799,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         Text('루틴 정보 로딩 오류: $error'),
                   );
                 },
-              ),
+              ),   // Consumer 닫힘
+              ),   // KeyedSubtree 닫힘
+            ),   // AnimatedSwitcher 닫힘
           ],
         ),
       ),  // SingleChildScrollView 닫힘

@@ -159,6 +159,8 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
       ref.invalidate(archivedBaselinesProvider);
       ref.invalidate(routinesProvider);
       ref.invalidate(exercisesWithHistoryProvider);
+      // 홈 화면 운동 목록도 즉시 갱신 (이름 변경 반영)
+      ref.read(homeViewModelProvider.notifier).loadBaselines(forceRefresh: true);
 
       // 상태 업데이트
       setState(() {
@@ -266,24 +268,11 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
     });
   }
 
-  /// 단순 Epley 공식: 1RM = 무게 * (1 + (0.0333 * 횟수))
-  /// WorkoutRecommendationService를 사용하도록 변경
-  double _calculateOneRepMax(double weight, int reps) {
-    return WorkoutRecommendationService.calculateOneRepMax(weight, reps);
-  }
-
-  /// 특정 날짜의 세트들 중 최고 1RM 값 반환
-  double? _getMax1RMForDate(List<WorkoutSet> sets) {
+  /// 특정 날짜의 총 볼륨(무게×횟수 합산) 반환
+  double? _getTotalVolumeForDate(List<WorkoutSet> sets) {
     if (sets.isEmpty) return null;
-
-    double max1RM = 0.0;
-    for (final set in sets) {
-      final oneRM = _calculateOneRepMax(set.weight, set.reps);
-      if (oneRM > max1RM) {
-        max1RM = oneRM;
-      }
-    }
-    return max1RM;
+    final volume = sets.fold(0.0, (sum, set) => sum + (set.weight * set.reps));
+    return volume > 0 ? volume : null;
   }
 
   /// 차트 데이터 준비
@@ -304,10 +293,10 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
     for (int i = 0; i < sortedEntries.length; i++) {
       final dateKey = sortedEntries[i].key;
       final sets = sortedEntries[i].value;
-      final max1RM = _getMax1RMForDate(sets);
+      final volume = _getTotalVolumeForDate(sets);
 
-      if (max1RM != null) {
-        spots.add(FlSpot(i.toDouble(), max1RM));
+      if (volume != null) {
+        spots.add(FlSpot(i.toDouble(), volume));
         // 날짜 포맷: MM.dd
         final date = DateTime.parse(dateKey);
         labels[i] = DateFormatter.formatChartLabel(date);
@@ -346,42 +335,7 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
               sets.fold(0.0, (sum, set) => sum + (set.weight * set.reps));
           final totalReps = sets.fold(0, (sum, set) => sum + set.reps);
 
-          return Dismissible(
-            key: Key('date_$dateKey'),
-            direction: DismissDirection.endToStart,
-            background: Container(
-              alignment: Alignment.centerRight,
-              padding: const EdgeInsets.only(right: 20),
-              color: Colors.red,
-              child: const Icon(Icons.delete, color: Colors.white),
-            ),
-            confirmDismiss: (direction) async {
-              return await showDialog<bool>(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      title: const Text('기록 삭제'),
-                      content: Text('$dateKey의 기록을 삭제하시겠습니까?'),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, false),
-                          child: const Text('취소'),
-                        ),
-                        ElevatedButton(
-                          onPressed: () => Navigator.pop(context, true),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red,
-                          ),
-                          child: const Text('삭제'),
-                        ),
-                      ],
-                    ),
-                  ) ??
-                  false;
-            },
-            onDismissed: (direction) async {
-              await _deleteDateRecords(dateKey);
-            },
-            child: Card(
+          return Card(
               margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: ExpansionTile(
                 key: PageStorageKey('analysis_date_$dateKey'),
@@ -393,18 +347,9 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
                     _buildDifficultyTag(_difficultyByDate?[dateKey]),
                   ],
                 ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextButton(
-                      onPressed: () => _copyRecordToToday(dateKey, sets),
-                      child: const Text('기록 복사'),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline),
-                      onPressed: () => _showDeleteConfirmation(dateKey),
-                    ),
-                  ],
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: () => _showDeleteConfirmation(dateKey),
                 ),
                 children: [
                   Padding(
@@ -430,7 +375,6 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
                   ),
                 ],
               ),
-            ),
           );
         },
         childCount: sortedDates.length,
@@ -477,7 +421,7 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
     );
   }
 
-  /// 1RM 성장 추이 차트 위젯
+  /// 총 볼륨 성장 추이 차트 위젯
   Widget _buildTrendChart() {
     if (_chartSpots == null || _chartSpots!.isEmpty) {
       return const Card(
@@ -512,7 +456,7 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              '1RM 성장 추이',
+              '총 볼륨 성장 추이',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
@@ -536,15 +480,16 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
                     leftTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
-                        reservedSize: 50,
-                        interval: 1,
+                        reservedSize: 56,
                         getTitlesWidget: (value, meta) => Text(
-                          '${value.toInt()}kg',
+                          value >= 1000
+                              ? '${(value / 1000).toStringAsFixed(1)}t'
+                              : '${value.toInt()}kg',
                           style: const TextStyle(fontSize: 10),
                         ),
                       ),
                       axisNameWidget: const Text(
-                        '1RM (kg)',
+                        '볼륨 (kg)',
                         style: TextStyle(fontSize: 12),
                       ),
                     ),
@@ -578,8 +523,11 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
                         return spots.map((spot) {
                           final dateIndex = spot.x.toInt();
                           final dateLabel = _xAxisLabels?[dateIndex] ?? '';
+                          final volLabel = spot.y >= 1000
+                              ? '${(spot.y / 1000).toStringAsFixed(1)}t'
+                              : '${spot.y.toInt()}kg';
                           return LineTooltipItem(
-                            '$dateLabel: ${spot.y.toInt()}kg',
+                            '$dateLabel: $volLabel',
                             const TextStyle(color: Colors.white),
                           );
                         }).toList();
@@ -727,103 +675,6 @@ class _WorkoutAnalysisScreenState extends ConsumerState<WorkoutAnalysisScreen> {
     }
   }
 
-  /// 선택한 날짜의 운동 기록을 오늘로 복사
-  Future<void> _copyRecordToToday(String dateKey, List<WorkoutSet> sets) async {
-    // ScaffoldMessenger 캡처
-    final messenger = ScaffoldMessenger.of(context);
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('기록 가져오기'),
-        content: const Text(
-          '선택한 날짜의 운동 기록(무게/횟수)을 오늘의 루틴에 그대로 복사하시겠습니까?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('취소'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('확인'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true || !mounted) return;
-
-    try {
-      final repository = ref.read(workoutRepositoryProvider);
-
-      // baselineId 가져오기 (첫 번째 세트에서)
-      if (sets.isEmpty) {
-        if (!mounted) return;
-        messenger.showSnackBar(
-          const SnackBar(
-            content: Text('복사할 세트가 없습니다.'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
-
-      final baselineId = sets.first.baselineId;
-      final date = DateTime.parse(dateKey);
-
-      // DB에서 선택 날짜의 완료 세트 재조회
-      final fetchedSets = await repository
-          .getCompletedWorkoutSetsByBaselineIdForDate(baselineId, date);
-
-      // 복사할 세트가 없으면 안내 후 종료
-      if (fetchedSets.isEmpty) {
-        if (!mounted) return;
-        messenger.showSnackBar(
-          const SnackBar(
-            content: Text('복사할 세트가 없습니다.'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
-
-      // 선택한 날짜의 세트를 오늘로 복사
-      await repository.copySetsToToday(baselineId, fetchedSets);
-
-      // [Fix] async gap 후 mounted 체크 필수
-      if (!mounted) return;
-
-      // Provider 갱신
-      ref.invalidate(baselinesProvider);
-      ref.invalidate(workoutDatesProvider);
-
-      // 홈 화면 데이터 강제 새로고침
-      await ref
-          .read(homeViewModelProvider.notifier)
-          .loadBaselines(forceRefresh: true);
-
-      if (!mounted) return;
-
-      // 성공 메시지 표시
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('홈 화면의 오늘 운동에 추가되었습니다.'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-
-      // 에러 메시지 표시
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('복사 중 오류 발생: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
 
   /// 다음 주 루틴 생성 (현재 미사용 - AppBar 버튼 제거로 인해)
   /// AI 루틴 생성 기능은 워크아웃 로그 탭의 "AI 강도 측정 / 계획 수립" 기능으로 통합됨

@@ -21,10 +21,14 @@ class WorkoutCard extends ConsumerStatefulWidget {
   final ExerciseBaseline baseline;
   final OnWorkoutUpdated onUpdated;
 
+  /// null이면 오늘 날짜, 지정하면 해당 날짜의 세트를 로드·편집합니다.
+  final DateTime? displayDate;
+
   const WorkoutCard({
     super.key,
     required this.baseline,
     required this.onUpdated,
+    this.displayDate,
   });
 
   @override
@@ -42,6 +46,13 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
 
   // [Phase 2] 저장 완료 상태 추적 (입력 필드는 유지)
   bool _hasSaved = false;
+
+  /// displayDate가 지정된 경우 해당 날짜(자정)를 반환, 아니면 오늘
+  DateTime get _targetDate {
+    final d = widget.displayDate;
+    if (d == null) return DateTime.now();
+    return DateTime(d.year, d.month, d.day);
+  }
 
   // [Issue #2 Fix] 저장 중 상태 - 더블 서브밋 방지
   bool _isSaving = false;
@@ -114,10 +125,10 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
   /// [방어 로직] 이미 해당 Set ID의 컨트롤러가 있으면 텍스트를 덮어쓰지 않음 (다른 카드 입력값 보존).
   void _syncFromBaseline(ExerciseBaseline baseline) {
     final sets = baseline.workoutSets ?? [];
-    final today = DateTime.now();
+    final today = _targetDate; // displayDate 반영
 
     for (final set in sets) {
-      // 오늘 날짜가 아니면 스킵
+      // 해당 날짜가 아니면 스킵
       if (set.createdAt == null ||
           !DateFormatter.isSameDate(set.createdAt!, today)) {
         continue;
@@ -162,8 +173,8 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
       }
     }
     
-    // baseline에 없는 세트 제거 (오늘 날짜가 아닌 세트는 제거하지 않음)
-    final setIds = sets.where((s) => 
+    // baseline에 없는 세트 제거 (해당 날짜가 아닌 세트는 제거하지 않음)
+    final setIds = sets.where((s) =>
       s.createdAt != null && DateFormatter.isSameDate(s.createdAt!, today)
     ).map((s) => s.id).toSet();
     
@@ -195,15 +206,15 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
     _weightFocusNodes.clear();
     _repsFocusNodes.clear();
 
-    final today = DateTime.now();
+    final today = _targetDate; // displayDate 반영 (과거 날짜 지원)
 
-    // 오늘 날짜의 세트만 필터링하여 새로 추가
+    // 해당 날짜의 세트만 필터링하여 새로 추가
     if (widget.baseline.workoutSets != null) {
       for (final set in widget.baseline.workoutSets!) {
         if (set.createdAt == null) continue;
         // 정확한 날짜 비교 (DateFormatter 사용)
         if (!DateFormatter.isSameDate(set.createdAt!, today)) {
-          continue; // 오늘 날짜가 아니면 무시
+          continue; // 해당 날짜가 아니면 무시
         }
         _sets[set.id] = set;
         _controllers['weight_${set.id}'] =
@@ -219,7 +230,7 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
       }
     }
 
-    // 오늘 세트가 없으면 초기 세트 하나 생성
+    // 해당 날짜 세트가 없으면 초기 세트 하나 생성
     if (_sets.isEmpty) {
       final newSet = WorkoutSet(
         id: const Uuid().v4(),
@@ -228,7 +239,7 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
         reps: 0,
         sets: 1,
         isCompleted: false,
-        createdAt: DateTime.now(),
+        createdAt: _targetDate,
       );
       _sets[newSet.id] = newSet;
       _controllers['weight_${newSet.id}'] = TextEditingController(text: '0');
@@ -342,7 +353,7 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
       reps: 0,
       sets: _sets.length + 1, // 세트 번호 자동 할당
       isCompleted: false,
-      createdAt: DateTime.now(),
+      createdAt: _targetDate, // displayDate 반영
     );
 
     setState(() {
@@ -423,9 +434,10 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
       final baselineId = persistedBaseline.id;
 
       // [추가] 세션 정보 저장 (DB에 확보된 baseline_id 사용)
+      // displayDate가 있으면 해당 날짜로 저장 (과거 기록 수정 지원)
       await repository.saveWorkoutSession(
         baselineId: baselineId,
-        date: DateTime.now(),
+        date: _targetDate,
         difficulty: difficulty,
         totalVolume: totalVolume,
       );
@@ -568,12 +580,15 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
     final messenger = ScaffoldMessenger.of(context);
 
     try {
-      await ref.read(homeViewModelProvider.notifier).deleteWorkout(widget.baseline.id);
+      await ref.read(homeViewModelProvider.notifier).deleteWorkout(
+            widget.baseline.id,
+            date: widget.displayDate,
+          );
 
       if (!mounted) return;
       messenger.showSnackBar(
         const SnackBar(
-          content: Text('오늘 기록이 삭제되었습니다.'),
+          content: Text('기록이 삭제되었습니다.'),
           backgroundColor: Colors.green,
         ),
       );
@@ -589,12 +604,324 @@ class _WorkoutCardState extends ConsumerState<WorkoutCard>
   }
 
 
+  /// 이 카드의 날짜가 오늘보다 이전이면 true
+  bool get _isPastDate {
+    final today = DateTime(
+        DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    return _targetDate.isBefore(today);
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context); // AutomaticKeepAliveClientMixin 필수
 
-    // [Phase 2] 항상 입력 카드 표시 (저장 후에도 입력 필드 유지)
-    return _buildInputCard(context);
+    // 과거 날짜 → 요약 카드 / 오늘·미래 → 입력 카드
+    return _isPastDate ? _buildPastRecordCard(context) : _buildInputCard(context);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 과거 기록 요약 카드
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _buildPastRecordCard(BuildContext context) {
+    final setCount = _sets.length;
+    final completedSets = _sets.values.where((s) => s.isCompleted).toList();
+    final maxWeight = completedSets.isEmpty
+        ? 0.0
+        : completedSets.map((s) => s.weight).reduce((a, b) => a > b ? a : b);
+    final totalReps = completedSets.fold(0, (sum, s) => sum + s.reps);
+
+    final weightLabel = maxWeight % 1 == 0
+        ? '${maxWeight.toInt()}kg'
+        : '${maxWeight}kg';
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        leading: const CircleAvatar(
+          backgroundColor: Colors.blue,
+          child: Icon(Icons.fitness_center, color: Colors.white, size: 18),
+        ),
+        title: Text(
+          widget.baseline.exerciseName,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        subtitle: setCount == 0
+            ? const Text('기록 없음')
+            : Text(
+                '$setCount세트  ·  최대 $weightLabel  ·  총 $totalReps회',
+                style: TextStyle(color: Colors.grey[600], fontSize: 13),
+              ),
+        trailing: IconButton(
+          icon: const Icon(Icons.more_horiz),
+          tooltip: '더보기',
+          onPressed: () => _showMoreOptionsSheet(context),
+        ),
+      ),
+    );
+  }
+
+  void _showMoreOptionsSheet(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // 핸들
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: Colors.grey[400],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit_outlined, color: Colors.blue),
+              title: const Text('수정'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _showEditPastRecordDialog();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: Colors.red),
+              title: const Text('삭제',
+                  style: TextStyle(color: Colors.red)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _showDeleteConfirmation();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showEditPastRecordDialog() async {
+    if (_sets.isEmpty) return;
+
+    // 다이얼로그 로컬 상태: 현재 표시 중인 세트 목록 + 삭제 예정 ID 집합
+    // (StatefulBuilder 안에서 setState를 통해 목록을 동적으로 변경)
+    var visibleEntries = _sets.entries.toList();
+    final removedIds = <String>{};
+
+    // 컨트롤러는 모든 세트에 대해 미리 생성 (제거된 세트는 저장 시 무시)
+    final weightCtrls = {
+      for (final e in visibleEntries)
+        e.key: TextEditingController(text: e.value.weight.toString()),
+    };
+    final repsCtrls = {
+      for (final e in visibleEntries)
+        e.key: TextEditingController(text: e.value.reps.toString()),
+    };
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (sbCtx, sbSetState) => AlertDialog(
+          title: Text('${widget.baseline.exerciseName} 수정'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 헤더 행
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      SizedBox(width: 52),
+                      Expanded(
+                        child: Text('무게 (kg)',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 12)),
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text('횟수',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 12)),
+                      ),
+                      // 삭제 버튼 열 헤더 공간
+                      SizedBox(width: 36),
+                    ],
+                  ),
+                ),
+                // 세트 행 목록 (동적 — StatefulBuilder로 실시간 반영)
+                ...visibleEntries.asMap().entries.map((entry) {
+                  final idx = entry.key;
+                  final setId = entry.value.key;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 52,
+                          child: Text('${idx + 1}세트',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w600)),
+                        ),
+                        Expanded(
+                          child: TextField(
+                            controller: weightCtrls[setId],
+                            keyboardType:
+                                const TextInputType.numberWithOptions(
+                                    decimal: true),
+                            decoration: const InputDecoration(
+                              border: OutlineInputBorder(),
+                              isDense: true,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: repsCtrls[setId],
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              border: OutlineInputBorder(),
+                              isDense: true,
+                            ),
+                          ),
+                        ),
+                        // ❌ 세트 삭제 버튼 (마지막 1개는 비활성)
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 18),
+                          tooltip: '세트 삭제',
+                          color: Colors.red,
+                          onPressed: visibleEntries.length > 1
+                              ? () {
+                                  sbSetState(() {
+                                    removedIds.add(setId);
+                                    visibleEntries = visibleEntries
+                                        .where((e) => e.key != setId)
+                                        .toList();
+                                  });
+                                }
+                              : null,
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+                // ➕ 세트 추가 버튼
+                const SizedBox(height: 4),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('세트 추가'),
+                    onPressed: () {
+                      final newId = const Uuid().v4();
+                      final raw = widget.displayDate ?? DateTime.now();
+                      final d = DateTime(raw.year, raw.month, raw.day, 12, 0, 0);
+                      final newSet = WorkoutSet(
+                        id: newId,
+                        baselineId: widget.baseline.id,
+                        weight: 0.0,
+                        reps: 0,
+                        sets: visibleEntries.length + 1,
+                        isCompleted: false,
+                        createdAt: d,
+                      );
+                      weightCtrls[newId] = TextEditingController(text: '0');
+                      repsCtrls[newId] = TextEditingController(text: '0');
+                      sbSetState(() {
+                        visibleEntries = [...visibleEntries, MapEntry(newId, newSet)];
+                      });
+                    },
+                  ),
+                ),
+              ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(sbCtx, false),
+              child: const Text('취소'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(sbCtx, true),
+              child: const Text('저장'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      try {
+        final repository = ref.read(workoutRepositoryProvider);
+
+        // 1. 남아있는 세트 저장 (무게/횟수 업데이트 + 인덱스 재정렬)
+        final setsToSave = visibleEntries.asMap().entries.map((entry) {
+          final idx = entry.key;
+          final setId = entry.value.key;
+          final current = entry.value.value;
+          return current.copyWith(
+            weight:
+                double.tryParse(weightCtrls[setId]!.text) ?? current.weight,
+            reps: int.tryParse(repsCtrls[setId]!.text) ?? current.reps,
+            sets: idx + 1,
+            isCompleted: true,
+          );
+        }).toList();
+
+        if (setsToSave.isNotEmpty) {
+          await repository.batchSaveWorkoutSets(setsToSave);
+        }
+
+        // 2. 제거된 세트 DB에서 삭제
+        for (final id in removedIds) {
+          await repository.deleteWorkoutSet(id);
+        }
+
+        if (!mounted) return;
+
+        // 로컬 상태 갱신
+        setState(() {
+          for (final id in removedIds) {
+            _sets.remove(id);
+          }
+          for (final s in setsToSave) {
+            _sets[s.id] = s;
+          }
+        });
+
+        ref.invalidate(workoutDatesProvider);
+        ref.invalidate(archivedBaselinesProvider);
+        ref
+            .read(homeViewModelProvider.notifier)
+            .loadBaselines(forceRefresh: true, date: widget.displayDate);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('기록이 수정되었습니다.')),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('수정 오류: $e')),
+        );
+      }
+    }
+
+    // 컨트롤러 정리
+    for (final c in weightCtrls.values) { c.dispose(); }
+    for (final c in repsCtrls.values) { c.dispose(); }
   }
 
   /// [Phase 2] 입력 카드 UI (저장 후에도 입력 필드 유지)

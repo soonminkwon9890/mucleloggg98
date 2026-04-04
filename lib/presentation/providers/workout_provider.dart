@@ -71,6 +71,12 @@ final routinesProvider = FutureProvider<List<Routine>>((ref) async {
   return await repository.getRoutines();
 });
 
+/// 홈 화면 날짜 선택 프로바이더 (오늘 기본값)
+final selectedHomeDateProvider = StateProvider<DateTime>((ref) {
+  final now = DateTime.now();
+  return DateTime(now.year, now.month, now.day);
+});
+
 /// 홈 화면 ViewModel 프로바이더
 final homeViewModelProvider =
     StateNotifierProvider<HomeViewModel, HomeState>((ref) {

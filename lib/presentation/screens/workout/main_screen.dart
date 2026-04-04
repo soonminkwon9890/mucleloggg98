@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'home_screen.dart';
 import 'workout_log_screen.dart';
-import '../profile/profile_screen.dart';
 import '../../providers/workout_provider.dart';
 import '../profile/my_page_screen.dart';
+import '../planner/weekly_routine_planner_screen.dart';
 
 /// 메인 화면 (3단 탭 구조)
 class MainScreen extends ConsumerStatefulWidget {
@@ -20,23 +20,23 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   final List<Widget> _screens = [
     const HomeScreen(),
     const WorkoutLogScreen(),
-    const ProfileScreen(),
+    const WeeklyRoutinePlannerScreen(selectedBaselineIds: {}),
     const MyPageScreen(),
   ];
 
   final List<String> _appBarTitles = [
     'MuscleLog',
-    '운동 분석',
-    '운동 기록 달력',
+    '운동 기록',
+    'AI 루틴',
     '내 정보',
   ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // 운동 분석 탭(Index 1)과 내 정보 탭(Index 3)은 자체 AppBar를 가지므로
-      // MainScreen의 AppBar는 숨겨서 타이틀 중복을 방지한다.
-      appBar: (_currentIndex == 1 || _currentIndex == 3)
+      // 운동 기록(1), AI 루틴(2), 내 정보(3) 탭은 자체 Scaffold/AppBar를 가지므로
+      // MainScreen AppBar를 숨겨 타이틀 중복을 방지한다.
+      appBar: (_currentIndex == 1 || _currentIndex == 2 || _currentIndex == 3)
           ? null
           : AppBar(
               title: Text(_appBarTitles[_currentIndex]),
@@ -71,11 +71,11 @@ class _MainScreenState extends ConsumerState<MainScreen> {
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.fitness_center),
-            label: '운동 분석',
+            label: '운동 기록',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.calendar_month),
-            label: '캘린더',
+            icon: Icon(Icons.auto_awesome),
+            label: 'AI 루틴',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person),

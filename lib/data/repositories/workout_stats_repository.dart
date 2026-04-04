@@ -65,20 +65,18 @@ class WorkoutStatsRepository with BaseRepositoryMixin {
   }) async {
     final userId = currentUserId;
 
-    final targetYear = date.year;
-    final targetMonth = date.month;
-    final targetDay = date.day;
-
-    final bufferStart = date.subtract(const Duration(days: 2)).toUtc().toIso8601String();
-    final bufferEnd = date.add(const Duration(days: 2)).toUtc().toIso8601String();
+    // 엄격한 UTC 경계: 로컬 자정(00:00:00) ~ 로컬 23:59:59.999 를 UTC 로 변환하여
+    // 인접 날짜 간 경계 겹침(KST +9h 오프셋에서 ±2일 버퍼를 쓸 때 발생하는 ghost) 을 차단합니다.
+    final startOfDay = DateTime(date.year, date.month, date.day, 0, 0, 0).toUtc();
+    final endOfDay = DateTime(date.year, date.month, date.day, 23, 59, 59, 999).toUtc();
 
     var query = client
         .from('workout_sets')
         .select(
           'id, baseline_id, weight, reps, sets, rpe, rpe_level, estimated_1rm, is_ai_suggested, performance_score, is_completed, is_hidden, created_at, exercise_baselines!inner(user_id)',
         )
-        .gte('created_at', bufferStart)
-        .lte('created_at', bufferEnd)
+        .gte('created_at', startOfDay.toIso8601String())
+        .lte('created_at', endOfDay.toIso8601String())
         .eq('is_hidden', false)
         .eq('exercise_baselines.user_id', userId);
 
@@ -98,14 +96,6 @@ class WorkoutStatsRepository with BaseRepositoryMixin {
 
       final createdAtStr = row['created_at'] as String?;
       if (createdAtStr == null) continue;
-
-      final itemTime = DateTime.parse(createdAtStr).toLocal();
-
-      if (itemTime.year != targetYear ||
-          itemTime.month != targetMonth ||
-          itemTime.day != targetDay) {
-        continue;
-      }
 
       final rowMap = Map<String, dynamic>.from(row);
       rowMap.remove('exercise_baselines');
@@ -150,61 +140,6 @@ class WorkoutStatsRepository with BaseRepositoryMixin {
     return await getWorkoutsByDate(normalizedToday);
   }
 
-  /// 특정 baseline의 특정 날짜 완료 세트 조회
-  Future<List<WorkoutSet>> getCompletedWorkoutSetsByBaselineIdForDate(
-    String baselineId,
-    DateTime date,
-  ) async {
-    final userId = currentUserId;
-
-    final targetYear = date.year;
-    final targetMonth = date.month;
-    final targetDay = date.day;
-
-    final bufferStart = date.subtract(const Duration(days: 2)).toUtc().toIso8601String();
-    final bufferEnd = date.add(const Duration(days: 2)).toUtc().toIso8601String();
-
-    final setsResponse = await client
-        .from('workout_sets')
-        .select(
-          'id, baseline_id, weight, reps, sets, rpe, rpe_level, estimated_1rm, is_ai_suggested, performance_score, is_completed, is_hidden, created_at, exercise_baselines!inner(user_id)',
-        )
-        .eq('baseline_id', baselineId)
-        .gte('created_at', bufferStart)
-        .lte('created_at', bufferEnd)
-        .eq('is_completed', true)
-        .eq('is_hidden', false)
-        .eq('exercise_baselines.user_id', userId)
-        .order('created_at', ascending: true);
-
-    if (setsResponse.isEmpty) {
-      return [];
-    }
-
-    final filteredSets = <WorkoutSet>[];
-    for (final row in (setsResponse as List)) {
-      if (row is! Map<String, dynamic>) continue;
-
-      final createdAtStr = row['created_at'] as String?;
-      if (createdAtStr == null) continue;
-
-      final itemTime = DateTime.parse(createdAtStr).toLocal();
-
-      if (itemTime.year != targetYear ||
-          itemTime.month != targetMonth ||
-          itemTime.day != targetDay) {
-        continue;
-      }
-
-      final rowMap = Map<String, dynamic>.from(row);
-      rowMap.remove('exercise_baselines');
-
-      final set = WorkoutSet.fromJson(rowMap);
-      filteredSets.add(set);
-    }
-
-    return filteredSets;
-  }
 
   /// 특정 운동의 날짜별 기록 조회
   Future<Map<String, List<WorkoutSet>>> getHistoryByExerciseName(String exerciseName) async {
@@ -645,13 +580,22 @@ class WorkoutStatsRepository with BaseRepositoryMixin {
     });
   }
 
-  /// 이번 주 운동 세션 조회
-  Future<List<WorkoutSession>> getLastWeekSessions() async {
+  /// AI 분석용 소스 데이터 조회
+  ///
+  /// [isNextWeek] == true  → 다음주 루틴 분석: 소스 = 이번 주 (Mon–Sun)
+  /// [isNextWeek] == false → 이번주 루틴 분석: 소스 = 지난 주 (prev Mon–prev Sun)
+  Future<List<WorkoutSession>> getLastWeekSessions({
+    bool isNextWeek = true,
+  }) async {
     final userId = currentUserId;
 
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final startOfWeek = today.subtract(Duration(days: today.weekday - 1));
+    // 이번 주 월요일
+    final thisMonday = today.subtract(Duration(days: today.weekday - 1));
+    // 소스 주간 시작: isNextWeek=true → 이번 주 월요일, false → 지난 주 월요일
+    final startOfWeek =
+        isNextWeek ? thisMonday : thisMonday.subtract(const Duration(days: 7));
     final endOfWeek = startOfWeek.add(const Duration(days: 6));
 
     final startDate = DateFormat('yyyy-MM-dd').format(startOfWeek);

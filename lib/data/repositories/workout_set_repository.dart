@@ -1,5 +1,3 @@
-import 'package:uuid/uuid.dart';
-import 'package:intl/intl.dart';
 import '../models/workout_set.dart';
 import '../models/check_point.dart';
 import 'base_repository.dart';
@@ -127,6 +125,9 @@ class WorkoutSetRepository with BaseRepositoryMixin {
   /// 오늘의 운동 세션 삭제: 오늘 세트 물리 삭제
   ///
   /// 보안: baselineId 가 현재 사용자 소유인지 먼저 검증합니다 (IDOR 방어).
+  ///
+  /// [Fix] DB 에 저장된 created_at 은 UTC ISO8601 형식이므로 쿼리 범위도 반드시 UTC 로 변환해야
+  /// 타임존 불일치(예: KST +9h 환경에서 자정 경계가 어긋남)로 인한 삭제 누락을 방지합니다.
   Future<void> deleteTodaySets(String baselineId) async {
     final ownerCheck = await client
         .from('exercise_baselines')
@@ -140,15 +141,16 @@ class WorkoutSetRepository with BaseRepositoryMixin {
     }
 
     final now = DateTime.now();
-    final todayStart = DateTime(now.year, now.month, now.day);
-    final todayEnd = todayStart.add(const Duration(days: 1));
+    // 로컬 자정을 UTC 로 변환 — DB 저장 시 toUtc() 를 사용하므로 쿼리도 동일 기준 사용
+    final todayStartUtc = DateTime(now.year, now.month, now.day).toUtc();
+    final todayEndUtc = todayStartUtc.add(const Duration(days: 1));
 
     await client
         .from('workout_sets')
         .delete()
         .eq('baseline_id', baselineId)
-        .gte('created_at', todayStart.toIso8601String())
-        .lt('created_at', todayEnd.toIso8601String());
+        .gte('created_at', todayStartUtc.toIso8601String())
+        .lt('created_at', todayEndUtc.toIso8601String());
   }
 
   /// 특정 날짜의 세트 기록 삭제 (Soft Delete)
@@ -166,17 +168,17 @@ class WorkoutSetRepository with BaseRepositoryMixin {
       throw Exception('운동을 찾을 수 없거나 수정 권한이 없습니다.');
     }
 
-    final dateStr = DateFormat('yyyy-MM-dd').format(date);
-    final startStr = '${dateStr}T00:00:00Z';
-    final endStr = '${dateStr}T23:59:59.999Z';
+    // 로컬 자정을 UTC 로 변환 — 하드코딩 'T00:00:00Z' 는 로컬 날짜를 UTC 로 잘못 해석하므로 수정
+    final startOfDay = DateTime(date.year, date.month, date.day, 0, 0, 0).toUtc();
+    final endOfDay = DateTime(date.year, date.month, date.day, 23, 59, 59, 999).toUtc();
 
     // Soft Delete: is_hidden = true
     await client
         .from('workout_sets')
         .update({'is_hidden': true})
         .eq('baseline_id', baselineId)
-        .gte('created_at', startStr)
-        .lte('created_at', endStr);
+        .gte('created_at', startOfDay.toIso8601String())
+        .lte('created_at', endOfDay.toIso8601String());
   }
 
   /// 운동 추가/복구 로직 (같은 날짜에 숨겨진 세트 복구)
@@ -196,9 +198,8 @@ class WorkoutSetRepository with BaseRepositoryMixin {
     }
 
     final now = DateTime.now();
-    final dateStr = DateFormat('yyyy-MM-dd').format(now);
-    final startStr = '${dateStr}T00:00:00Z';
-    final endStr = '${dateStr}T23:59:59.999Z';
+    final startStr = DateTime(now.year, now.month, now.day, 0, 0, 0).toUtc().toIso8601String();
+    final endStr = DateTime(now.year, now.month, now.day, 23, 59, 59, 999).toUtc().toIso8601String();
 
     // 숨겨진 세트 조회
     final hiddenSets = await client
@@ -235,63 +236,6 @@ class WorkoutSetRepository with BaseRepositoryMixin {
     return false; // 신규
   }
 
-  /// 과거 날짜의 세트 데이터를 오늘 날짜로 복사
-  Future<void> copySetsToToday(String baselineId, List<WorkoutSet> pastSets, String userId) async {
-    await ensureProfileExists();
-
-    // 오늘의 미완료 세트 삭제 (중복 방지)
-    final now = DateTime.now();
-    final todayStart = DateTime(now.year, now.month, now.day).toUtc();
-    final todayEnd = todayStart.add(const Duration(days: 1));
-
-    await client
-        .from('workout_sets')
-        .delete()
-        .eq('baseline_id', baselineId)
-        .eq('is_completed', false)
-        .gte('created_at', todayStart.toIso8601String())
-        .lt('created_at', todayEnd.toIso8601String());
-
-    // 새로운 세트 생성
-    final sortedSets = List<WorkoutSet>.from(pastSets);
-    sortedSets.sort((a, b) {
-      final setsComparison = a.sets.compareTo(b.sets);
-      if (setsComparison != 0) return setsComparison;
-      if (a.createdAt != null && b.createdAt != null) {
-        return a.createdAt!.compareTo(b.createdAt!);
-      }
-      return 0;
-    });
-
-    final todayUtc = DateTime.now().toUtc();
-
-    final newSets = <WorkoutSet>[];
-    for (int i = 0; i < sortedSets.length; i++) {
-      final pastSet = sortedSets[i];
-      final newSet = pastSet.copyWith(
-        id: const Uuid().v4(),
-        baselineId: baselineId,
-        sets: i + 1,
-        isCompleted: false,
-        createdAt: todayUtc,
-      );
-      newSets.add(newSet);
-    }
-
-    if (newSets.isNotEmpty) {
-      await batchSaveWorkoutSets(newSets);
-    }
-
-    // ExerciseBaseline 상태 업데이트
-    await client
-        .from('exercise_baselines')
-        .update({
-          'is_hidden_from_home': false,
-          'updated_at': DateTime.now().toUtc().toIso8601String(),
-        })
-        .eq('id', baselineId)
-        .eq('user_id', userId);
-  }
 
   /// 중간 점검 데이터 저장
   Future<CheckPoint> saveCheckPoint(CheckPoint checkPoint) async {

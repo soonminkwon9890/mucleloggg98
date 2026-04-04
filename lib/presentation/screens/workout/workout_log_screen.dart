@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:fl_chart/fl_chart.dart';
+import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -9,6 +10,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/subscription_provider.dart';
 import '../../providers/workout_provider.dart';
 import '../../../utils/premium_guidance_dialog.dart';
+import '../management/management_screen.dart';
 
 /// 운동 분석 탭 메인 화면 (대시보드)
 class WorkoutLogScreen extends ConsumerStatefulWidget {
@@ -83,7 +85,7 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('운동 분석'),
+        title: const Text('운동 기록'),
       ),
       body: SafeArea(
         child: authStateAsync.when(
@@ -115,6 +117,60 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        // 라이브러리 버튼 (내 보관함) — premium card style
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(0, 8, 0, 4),
+                          child: Material(
+                            color: Colors.grey[900],
+                            borderRadius: BorderRadius.circular(12),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const ManagementScreen(
+                                      isSelectionMode: false),
+                                ),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: 18, horizontal: 20),
+                                child: Row(
+                                  children: [
+                                    SizedBox(
+                                      width: 40,
+                                      child: Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: const Icon(
+                                            Icons.view_list_rounded,
+                                            color: Colors.blueAccent,
+                                            size: 26),
+                                      ),
+                                    ),
+                                    const Expanded(
+                                      child: Text(
+                                        '나만의 운동 라이브러리',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: 40,
+                                      child: Align(
+                                        alignment: Alignment.centerRight,
+                                        child: Icon(Icons.chevron_right,
+                                            color: Colors.grey[500]),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                         // 주 선택기 UI
                         // [Phase 3] Center로 감싸서 날짜 네비게이션 중앙 정렬
                         Padding(
@@ -437,6 +493,10 @@ class WeeklyVolumeChartCard extends StatelessWidget {
 
   Widget _buildChart(BuildContext context, List<DateTime> days, List<double> values) {
     final maxY = values.fold<double>(0.0, (p, c) => c > p ? c : p);
+    final chartMaxY = maxY <= 0 ? 10.0 : maxY * 1.2;
+    const barColor = Color(0xFFAEC4F8);
+    const backColor = Color(0xFF333333);
+    final fmt = NumberFormat('#,###');
 
     final barGroups = <BarChartGroupData>[];
     for (int i = 0; i < days.length; i++) {
@@ -446,9 +506,14 @@ class WeeklyVolumeChartCard extends StatelessWidget {
           barRods: [
             BarChartRodData(
               toY: values[i],
-              borderRadius: BorderRadius.circular(6),
-              color: Theme.of(context).colorScheme.primary,
-              width: 14,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+              color: barColor,
+              width: 26,
+              backDrawRodData: BackgroundBarChartRodData(
+                show: true,
+                toY: chartMaxY,
+                color: backColor,
+              ),
             ),
           ],
         ),
@@ -482,7 +547,7 @@ class WeeklyVolumeChartCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              '주간 총 운동 볼륨',
+              '주간 총 운동 볼륨 (Kg)',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
@@ -490,9 +555,9 @@ class WeeklyVolumeChartCard extends StatelessWidget {
               height: 220,
               child: BarChart(
                 BarChartData(
-                  maxY: maxY <= 0 ? 10 : maxY * 1.2,
+                  maxY: chartMaxY,
                   barGroups: barGroups,
-                  gridData: const FlGridData(show: true),
+                  gridData: const FlGridData(show: false),
                   borderData: FlBorderData(show: false),
                   titlesData: FlTitlesData(
                     topTitles: const AxisTitles(
@@ -502,10 +567,7 @@ class WeeklyVolumeChartCard extends StatelessWidget {
                       sideTitles: SideTitles(showTitles: false),
                     ),
                     leftTitles: const AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 44,
-                      ),
+                      sideTitles: SideTitles(showTitles: false),
                     ),
                     bottomTitles: AxisTitles(
                       sideTitles: SideTitles(
@@ -530,13 +592,18 @@ class WeeklyVolumeChartCard extends StatelessWidget {
                   barTouchData: BarTouchData(
                     enabled: true,
                     touchTooltipData: BarTouchTooltipData(
+                      tooltipBgColor: Colors.black87,
+                      tooltipRoundedRadius: 8,
                       getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                        final d = days[group.x.toInt()];
-                        final label = DateFormatter.formatShortDateWithWeekday(d);
                         final v = rod.toY;
+                        if (v <= 0) return null;
                         return BarTooltipItem(
-                          '$label\n${v.toStringAsFixed(0)} kg',
-                          const TextStyle(color: Colors.white),
+                          fmt.format(v.toInt()),
+                          const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
                         );
                       },
                     ),
@@ -611,23 +678,29 @@ class BodyBalanceChartCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             SizedBox(
-              height: 260,
+              height: 280,
               child: RadarChart(
                 RadarChartData(
                   radarBackgroundColor: Colors.transparent,
                   radarShape: RadarShape.polygon,
-                  radarBorderData: BorderSide(
-                    color: Theme.of(context).dividerColor,
+                  radarBorderData: const BorderSide(
+                    color: Colors.white24,
+                    width: 1,
                   ),
-                  tickBorderData: BorderSide(
-                    color: Theme.of(context).dividerColor,
+                  tickBorderData: const BorderSide(
+                    color: Colors.white24,
+                    width: 1,
                   ),
-                  gridBorderData: BorderSide(
-                    color: Theme.of(context).dividerColor,
+                  gridBorderData: const BorderSide(
+                    color: Colors.white24,
+                    width: 1,
                   ),
-                  titleTextStyle: const TextStyle(fontSize: 11),
-                  titlePositionPercentageOffset: 0.15,
-                  tickCount: 4,
+                  titleTextStyle: const TextStyle(
+                    fontSize: 11,
+                    color: Colors.grey,
+                  ),
+                  titlePositionPercentageOffset: 0.2,
+                  tickCount: 1,
                   getTitle: (index, angle) {
                     return RadarChartTitle(
                       text: _axisLabels[index],
@@ -635,12 +708,9 @@ class BodyBalanceChartCard extends StatelessWidget {
                   },
                   dataSets: [
                     RadarDataSet(
-                      fillColor: Theme.of(context)
-                          .colorScheme
-                          .primary
-                          .withValues(alpha: 0.2),
-                      borderColor: Theme.of(context).colorScheme.primary,
-                      entryRadius: 2,
+                      fillColor: const Color(0xFFAEC4F8).withValues(alpha: 0.4),
+                      borderColor: const Color(0xFFAEC4F8),
+                      entryRadius: 3,
                       borderWidth: 2,
                       dataEntries: scaledEntries,
                     ),

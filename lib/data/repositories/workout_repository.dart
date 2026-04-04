@@ -51,6 +51,10 @@ class WorkoutRepository with BaseRepositoryMixin {
   /// 오늘 날짜의 운동 기준 정보 가져오기
   Future<List<ExerciseBaseline>> getTodayBaselines() => _statsRepo.getTodayBaselines();
 
+  /// 특정 날짜의 운동 기준 정보 가져오기
+  Future<List<ExerciseBaseline>> getBaselinesForDate(DateTime date) =>
+      _statsRepo.getWorkoutsByDate(DateTime(date.year, date.month, date.day));
+
   /// 날짜 변경 시 홈 화면 초기화
   Future<void> resetHomeForNewDay() => _statsRepo.resetHomeForNewDay();
 
@@ -217,13 +221,14 @@ class WorkoutRepository with BaseRepositoryMixin {
         .eq('user_id', userId);
   }
 
+  /// 특정 날짜의 운동 세트 삭제 (과거 날짜 전용, baseline 은 건드리지 않음)
+  Future<void> deleteWorkoutsByDate(String baselineId, DateTime date) =>
+      _setRepo.deleteWorkoutSetsByDate(baselineId, date);
+
   /// 운동 추가/복구 로직
   Future<bool> recoverOrAddExercise(String baselineId) =>
       _setRepo.recoverOrAddExercise(baselineId, currentUserId);
 
-  /// 과거 날짜의 세트 데이터를 오늘 날짜로 복사
-  Future<void> copySetsToToday(String baselineId, List<WorkoutSet> pastSets) =>
-      _setRepo.copySetsToToday(baselineId, pastSets, currentUserId);
 
   /// 중간 점검 데이터 저장
   Future<CheckPoint> saveCheckPoint(CheckPoint checkPoint) =>
@@ -390,12 +395,6 @@ class WorkoutRepository with BaseRepositoryMixin {
   }) =>
       _statsRepo.getWorkoutsByDate(date, completedOnly: completedOnly);
 
-  /// 특정 baseline의 특정 날짜 완료 세트 조회
-  Future<List<WorkoutSet>> getCompletedWorkoutSetsByBaselineIdForDate(
-    String baselineId,
-    DateTime date,
-  ) =>
-      _statsRepo.getCompletedWorkoutSetsByBaselineIdForDate(baselineId, date);
 
   /// 특정 운동의 날짜별 기록 조회
   Future<Map<String, List<WorkoutSet>>> getHistoryByExerciseName(
@@ -450,9 +449,11 @@ class WorkoutRepository with BaseRepositoryMixin {
         durationMinutes: durationMinutes,
       );
 
-  /// 이번 주 운동 세션 조회
-  Future<List<WorkoutSession>> getLastWeekSessions() =>
-      _statsRepo.getLastWeekSessions();
+  /// AI 분석용 소스 데이터 조회 (isNextWeek에 따라 주간 범위 결정)
+  Future<List<WorkoutSession>> getLastWeekSessions({
+    bool isNextWeek = true,
+  }) =>
+      _statsRepo.getLastWeekSessions(isNextWeek: isNextWeek);
 
   /// 특정 날짜의 평균 무게/횟수 조회
   Future<(double weight, int reps)> getLastWeekAverageSets(
@@ -519,12 +520,17 @@ class WorkoutRepository with BaseRepositoryMixin {
     required String bodyPartCode,
     required List<String> targetMuscles,
     DateTime? sortTimestamp,
+    DateTime? targetDate, // 실제 세트가 속하는 날짜 (과거 날짜 지정 시 사용)
     String? routineId,
   }) async {
     final userId = currentUserId;
     await ensureProfileExists();
 
     final now = sortTimestamp ?? DateTime.now();
+    // targetDate: 세트의 created_at 기준 날짜. 미지정 시 sortTimestamp 날짜를 사용.
+    final setDay = targetDate != null
+        ? DateTime(targetDate.year, targetDate.month, targetDate.day)
+        : DateTime(now.year, now.month, now.day);
     final trimmedName = exerciseName.trim();
 
     final existingBaseline = await client
@@ -557,8 +563,8 @@ class WorkoutRepository with BaseRepositoryMixin {
           .update({
             'is_hidden_from_home': false,
             'routine_id': routineId,
-            'created_at': now.toIso8601String(),
-            'updated_at': now.toIso8601String(),
+            'created_at': now.toUtc().toIso8601String(),
+            'updated_at': now.toUtc().toIso8601String(),
           })
           .eq('id', existing.id)
           .eq('user_id', userId);
@@ -569,9 +575,8 @@ class WorkoutRepository with BaseRepositoryMixin {
       baseline = updated ?? existing;
     }
 
-    final dateStr = DateFormat('yyyy-MM-dd').format(now);
-    final startStr = '${dateStr}T00:00:00Z';
-    final endStr = '${dateStr}T23:59:59.999Z';
+    final startStr = DateTime(setDay.year, setDay.month, setDay.day, 0, 0, 0).toUtc().toIso8601String();
+    final endStr = DateTime(setDay.year, setDay.month, setDay.day, 23, 59, 59, 999).toUtc().toIso8601String();
 
     final existingSets = await client
         .from('workout_sets')
@@ -582,6 +587,8 @@ class WorkoutRepository with BaseRepositoryMixin {
         .lte('created_at', endStr);
 
     if ((existingSets as List).isEmpty) {
+      // 세트의 created_at: 대상 날짜의 정오(12:00) — 자정 UTC 경계 오류 방지
+      final setCreatedAt = DateTime(setDay.year, setDay.month, setDay.day, 12, 0, 0);
       final emptySet = WorkoutSet(
         id: const Uuid().v4(),
         baselineId: baseline.id,
@@ -589,7 +596,7 @@ class WorkoutRepository with BaseRepositoryMixin {
         reps: 0,
         sets: 1,
         isCompleted: false,
-        createdAt: now,
+        createdAt: setCreatedAt,
       );
       await upsertWorkoutSet(emptySet);
     }

@@ -140,10 +140,6 @@ class _ExerciseInputScreenState extends ConsumerState<ExerciseInputScreen> {
       final repository = ref.read(workoutRepositoryProvider);
       final baselineId = const Uuid().v4();
 
-      // 영상 로직은 PostureAnalysisScreen으로 이동됨
-      String? videoUrl;
-      String? thumbnailUrl;
-
       // 현재 사용자 ID 가져오기
       final userId = ref.read(authRepositoryProvider).getCurrentUserId();
       if (userId == null) {
@@ -158,10 +154,7 @@ class _ExerciseInputScreenState extends ConsumerState<ExerciseInputScreen> {
         exerciseName: _exerciseTitleController.text.trim(),
         targetMuscles:
             _selectedTargetMuscles.isEmpty ? null : _selectedTargetMuscles,
-        bodyPart: _selectedBodyPart, // Enum 직접 사용
-        videoUrl: videoUrl,
-        thumbnailUrl: thumbnailUrl,
-        skeletonData: null, // 영상 로직은 PostureAnalysisScreen으로 이동됨
+        bodyPart: _selectedBodyPart,
         createdAt: DateTime.now(),
       );
 
@@ -247,29 +240,6 @@ class _ExerciseInputScreenState extends ConsumerState<ExerciseInputScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // 영상 로직은 PostureAnalysisScreen으로 이동됨
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.info_outline, color: Colors.blue),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'AI 분석을 위해 영상을 업로드해주세요',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-
               // 운동 제목 입력
               TextFormField(
                 controller: _exerciseTitleController,

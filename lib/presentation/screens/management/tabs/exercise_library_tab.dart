@@ -479,10 +479,11 @@ class _ExerciseLibraryTabState extends ConsumerState<ExerciseLibraryTab>
 
     try {
       if (!isFutureDate) {
-        // [Case A: 오늘] - 기존 _addToToday 로직 사용 (DB 즉시 저장)
+        // [Case A: 오늘/과거] - 기존 _addToToday 로직 사용 (DB 즉시 저장)
         await ref.read(homeViewModelProvider.notifier).addFromArchiveOrRoutine(
               selectedBaselines,
               routineId: null,
+              date: normalizedSelected,
             );
 
         // 선택 초기화 (via provider)

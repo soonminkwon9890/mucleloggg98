@@ -550,12 +550,13 @@ class _RoutineManagementTabState extends ConsumerState<RoutineManagementTab> {
       }
 
       if (!isFutureDate) {
-        // [Case A: 오늘] - 홈 화면에 추가 (DB 즉시 저장)
+        // [Case A: 오늘/과거] - 홈 화면에 추가 (DB 즉시 저장)
         await ref.read(homeViewModelProvider.notifier).addFromArchiveOrRoutine(
               allBaselines,
               routineId: selectedRoutines.length == 1
                   ? selectedRoutines.first.id
                   : null,
+              date: normalizedSelected,
             );
 
         // 선택 초기화 (via provider)
