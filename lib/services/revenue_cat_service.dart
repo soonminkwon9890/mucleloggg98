@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-/// RevenueCat 구독 관리 서비스 (iOS 클로즈 베타용)
+/// RevenueCat 구독 관리 서비스
 /// Singleton 패턴으로 앱 전역에서 접근 가능
 class RevenueCatService {
   // Singleton

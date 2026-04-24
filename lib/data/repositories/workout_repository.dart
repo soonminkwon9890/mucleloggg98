@@ -40,11 +40,6 @@ class WorkoutRepository with BaseRepositoryMixin {
   Future<ExerciseBaseline> upsertBaseline(ExerciseBaseline baseline) =>
       _exerciseRepo.upsertBaseline(baseline);
 
-  /// [Deprecated] 운동 기준 정보 저장
-  @Deprecated('Use upsertBaseline instead')
-  Future<ExerciseBaseline> saveBaseline(ExerciseBaseline baseline) async =>
-      upsertBaseline(baseline.copyWith(id: const Uuid().v4()));
-
   /// 사용자의 모든 운동 기준 정보 가져오기
   Future<List<ExerciseBaseline>> getBaselines() => _exerciseRepo.getBaselines();
 
@@ -90,11 +85,6 @@ class WorkoutRepository with BaseRepositoryMixin {
             _setRepo.recoverOrAddExercise(baselineId, currentUserId),
       );
 
-  /// [Deprecated] 기존 운동의 상태 업데이트
-  @Deprecated('Use upsertBaseline instead')
-  Future<void> updateBaseline(ExerciseBaseline baseline) async =>
-      await upsertBaseline(baseline);
-
   /// Baseline의 영상 URL 업데이트
   Future<void> updateBaselineVideo(
     String baselineId,
@@ -131,11 +121,6 @@ class WorkoutRepository with BaseRepositoryMixin {
   // WorkoutSet 관련 메서드
   // ============================================
 
-  /// [Deprecated] 운동 세트 기록 저장
-  @Deprecated('Use upsertWorkoutSet instead')
-  Future<WorkoutSet> saveWorkoutSet(WorkoutSet workoutSet) =>
-      upsertWorkoutSet(workoutSet);
-
   /// 특정 운동의 모든 세트 기록 가져오기
   Future<List<WorkoutSet>> getWorkoutSets(String baselineId) =>
       _setRepo.getWorkoutSets(baselineId);
@@ -151,10 +136,6 @@ class WorkoutRepository with BaseRepositoryMixin {
   /// 세트 일괄 저장
   Future<void> batchSaveWorkoutSets(List<WorkoutSet> sets) =>
       _setRepo.batchSaveWorkoutSets(sets);
-
-  /// [Deprecated] 세트 수정
-  @Deprecated('Use upsertWorkoutSet instead')
-  Future<WorkoutSet> updateWorkoutSet(WorkoutSet set) => upsertWorkoutSet(set);
 
   /// 세트 삭제
   Future<void> deleteWorkoutSet(String setId) => _setRepo.deleteWorkoutSet(setId);
@@ -222,8 +203,27 @@ class WorkoutRepository with BaseRepositoryMixin {
   }
 
   /// 특정 날짜의 운동 세트 삭제 (과거 날짜 전용, baseline 은 건드리지 않음)
-  Future<void> deleteWorkoutsByDate(String baselineId, DateTime date) =>
-      _setRepo.deleteWorkoutSetsByDate(baselineId, date);
+  ///
+  /// [BUG FIX] 세트 soft delete 후 planned_workouts가 is_converted_to_log=false로
+  /// 남아있으면 동일 날짜 재접근 시 syntheticSets(0/0)로 재표시되는 버그 수정.
+  /// 세트 삭제와 동시에 동일 baselineId+날짜의 planned_workouts도 is_converted_to_log=true 처리.
+  Future<void> deleteWorkoutsByDate(String baselineId, DateTime date) async {
+    await _setRepo.deleteWorkoutSetsByDate(baselineId, date);
+
+    // planned_workouts에서 동일 baseline + 동일 날짜 계획이 있으면 converted 처리
+    // (삭제가 아니라 converted=true 마킹: 기록 보존 원칙 유지)
+    final userId = currentUserId;
+    final dateStr = DateFormat('yyyy-MM-dd').format(
+      DateTime(date.year, date.month, date.day),
+    );
+    await client
+        .from('planned_workouts')
+        .update({'is_converted_to_log': true})
+        .eq('user_id', userId)
+        .eq('baseline_id', baselineId)
+        .eq('scheduled_date', dateStr)
+        .eq('is_converted_to_log', false);
+  }
 
   /// 운동 추가/복구 로직
   Future<bool> recoverOrAddExercise(String baselineId) =>
@@ -409,6 +409,16 @@ class WorkoutRepository with BaseRepositoryMixin {
   /// 특정 주 부위 밸런스 집계
   Future<Map<String, double>> getBodyBalance({DateTime? weekStart}) =>
       _statsRepo.getBodyBalance(weekStart: weekStart);
+
+  /// 특정 월의 주차별 볼륨 집계 (1주차~5주차)
+  Future<Map<int, double>> getMonthlyVolumeByWeek(
+          {required DateTime monthStart}) =>
+      _statsRepo.getMonthlyVolumeByWeek(monthStart: monthStart);
+
+  /// 특정 월의 부위 밸런스 집계
+  Future<Map<String, double>> getMonthlyBodyBalance(
+          {required DateTime monthStart}) =>
+      _statsRepo.getMonthlyBodyBalance(monthStart: monthStart);
 
   /// targetMuscles 문자열을 10개 카테고리로 매핑 (레거시 '팔'→이두+삼두, '복근'→코어 포함)
   String mapMuscleToAxis(String muscle) => _statsRepo.mapMuscleToAxis(muscle);

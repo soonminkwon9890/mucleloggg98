@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/common/loading_overlay.dart';
@@ -35,6 +36,50 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   void dispose() {
     _authStateSubscription?.cancel();
     super.dispose();
+  }
+
+  Future<void> _signInWithApple() async {
+    setState(() => _isLoading = true);
+    try {
+      // 1. sign_in_with_apple 패키지로 Apple ID 자격증명 획득
+      final appleCredential = await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+      );
+
+      final idToken = appleCredential.identityToken;
+      if (idToken == null) throw Exception('Apple identity token이 null입니다.');
+
+      // 2. Supabase에 Apple ID 토큰으로 로그인
+      final AuthResponse res =
+          await Supabase.instance.client.auth.signInWithIdToken(
+        provider: OAuthProvider.apple,
+        idToken: idToken,
+      );
+
+      if (res.session != null) {
+        debugPrint('Apple 로그인 성공');
+        // 화면 전환은 main.dart의 StreamBuilder(onAuthStateChange)가 처리합니다.
+      }
+    } catch (e) {
+      debugPrint('Apple 로그인 오류: $e');
+      if (mounted) {
+        final errorMessage = e.toString().contains('canceled') ||
+                e.toString().contains('취소') ||
+                e.toString().contains('AuthorizationErrorCode.canceled')
+            ? '로그인이 취소되었습니다.'
+            : 'Apple 로그인에 실패했습니다. 다시 시도해주세요.';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(errorMessage)),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   Future<void> _handleGoogleSignIn() async {
@@ -75,14 +120,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 'MuscleLog',
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      color: Theme.of(context).brightness == Brightness.light
+                          ? Colors.black
+                          : Colors.white,
                     ),
               ),
               const SizedBox(height: 16),
               Text(
                 'AI 강도 분석 및 점진적 과부하 코칭',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.grey,
+                      color: Theme.of(context).brightness == Brightness.light
+                          ? Colors.grey[700]
+                          : Colors.grey[400],
                     ),
               ),
               const SizedBox(height: 80),
@@ -96,6 +145,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   child: _isLoading
                       ? const ButtonLoadingIndicator()
                       : const Text('Google로 계속하기'),
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: 280,
+                child: SignInWithAppleButton(
+                  onPressed: _isLoading ? () {} : _signInWithApple,
+                  style: Theme.of(context).brightness == Brightness.light
+                      ? SignInWithAppleButtonStyle.black
+                      : SignInWithAppleButtonStyle.white,
                 ),
               ),
             ],

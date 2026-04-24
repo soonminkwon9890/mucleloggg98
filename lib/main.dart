@@ -1,12 +1,15 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'firebase_options.dart';
 // [NEW] 한국어 Material UI 로컬라이제이션
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'core/theme/app_theme.dart';
 import 'data/services/supabase_service.dart';
+import 'services/analytics_service.dart';
 import 'services/revenue_cat_service.dart';
 import 'presentation/screens/onboarding/login_screen.dart';
 import 'presentation/screens/workout/main_screen.dart';
@@ -15,13 +18,16 @@ import 'presentation/screens/splash/app_start_gate.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Firebase 초기화 (Analytics보다 먼저 실행 필요)
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
   // 한국어 날짜 형식 초기화
   await initializeDateFormatting('ko_KR', null);
 
   // Supabase 초기화
   await SupabaseService.initialize();
 
-  // RevenueCat 초기화 (iOS 클로즈 베타용)
+  // RevenueCat 초기화
   try {
     await RevenueCatService.instance.init();
   } catch (e) {
@@ -29,11 +35,14 @@ Future<void> main() async {
     // 초기화 실패해도 앱은 계속 실행
   }
 
+  // Amplitude Analytics 초기화 (runApp 이전에 호출)
+  AnalyticsService().init();
+
   // Sentry 초기화 및 앱 실행
   await SentryFlutter.init(
     (options) {
       options.dsn = const String.fromEnvironment('SENTRY_DSN');
-      options.tracesSampleRate = 1.0; // 베타 테스트: 100% 트랜잭션 캡처
+      options.tracesSampleRate = 1.0; // 출시 초기: 100% 트랜잭션 캡처
     },
     appRunner: () => runApp(const ProviderScope(child: MyApp())),
   );

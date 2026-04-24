@@ -9,7 +9,7 @@ import 'package:musclelog/presentation/screens/subscription/subscription_screen.
 /// - 반환: Future<bool?> - 결제 성공 시 true, 취소 또는 미완료 시 null/false
 ///
 /// [Feature Flag] 결제 비활성화 시:
-/// - 결제 화면으로 이동하지 않고 베타 무료 안내 SnackBar 표시
+/// - 결제 화면으로 이동하지 않고 출시 기념 이벤트 안내 SnackBar 표시
 /// - true를 반환하여 기능 사용 허용
 Future<bool?> showPremiumGuidanceDialog(
   BuildContext context, {
@@ -17,7 +17,7 @@ Future<bool?> showPremiumGuidanceDialog(
 }) async {
   if (!context.mounted) return null;
 
-  // [Feature Flag] 결제 비활성화 시 베타 무료 안내 메시지 표시
+  // [Feature Flag] 결제 비활성화 시 출시 기념 이벤트 안내 메시지 표시
   if (!AppConfig.isPaymentEnabled) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(

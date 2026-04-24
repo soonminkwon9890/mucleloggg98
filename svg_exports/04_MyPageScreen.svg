@@ -1,0 +1,160 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="402" height="874" viewBox="0 0 402 874" font-family="-apple-system, 'SF Pro Display', 'Roboto', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif">
+
+  <defs>
+    <linearGradient id="proGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2196F3" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#9C27B0" stop-opacity="0.15"/>
+    </linearGradient>
+  </defs>
+
+  <g id="device-frame">
+    <rect x="0" y="0" width="402" height="874" rx="48" fill="#000000"/>
+  </g>
+
+  <g id="status-bar">
+    <text x="34" y="38" font-size="17" font-weight="590" fill="#FFFFFF" letter-spacing="-0.3">9:41</text>
+    <g id="signal-bars" transform="translate(296, 29)">
+      <rect x="0" y="7.5" width="3.2" height="4.5" rx="0.7" fill="#FFFFFF"/>
+      <rect x="4.8" y="5" width="3.2" height="7" rx="0.7" fill="#FFFFFF"/>
+      <rect x="9.6" y="2.5" width="3.2" height="9.5" rx="0.7" fill="#FFFFFF"/>
+      <rect x="14.4" y="0" width="3.2" height="12" rx="0.7" fill="#FFFFFF"/>
+    </g>
+    <g id="wifi-icon" transform="translate(321, 29)">
+      <path d="M8.5 3.2C10.8 3.2 12.9 4.1 14.4 5.6L15.5 4.5C13.7 2.7 11.2 1.5 8.5 1.5C5.8 1.5 3.3 2.7 1.5 4.5L2.6 5.6C4.1 4.1 6.2 3.2 8.5 3.2Z" fill="#FFFFFF"/>
+      <path d="M8.5 6.8C9.9 6.8 11.1 7.3 12 8.2L13.1 7.1C11.8 5.9 10.2 5.1 8.5 5.1C6.8 5.1 5.2 5.9 3.9 7.1L5 8.2C5.9 7.3 7.1 6.8 8.5 6.8Z" fill="#FFFFFF"/>
+      <circle cx="8.5" cy="10.5" r="1.5" fill="#FFFFFF"/>
+    </g>
+    <g id="battery" transform="translate(345, 29)">
+      <rect x="0.5" y="0.5" width="23" height="12" rx="3.5" stroke="#FFFFFF" stroke-opacity="0.35" fill="none"/>
+      <rect x="2" y="2" width="20" height="9" rx="2" fill="#FFFFFF"/>
+      <path d="M25 4.5V8.5C25.8 8.2 26.5 7.2 26.5 6.5C26.5 5.8 25.8 4.8 25 4.5Z" fill="#FFFFFF" fill-opacity="0.4"/>
+    </g>
+  </g>
+
+  <g id="dynamic-island">
+    <rect x="138" y="11" width="126" height="37" rx="24" fill="#000000"/>
+  </g>
+
+  <g id="app-bar">
+    <text x="16" y="85" font-size="20" font-weight="700" fill="#FFFFFF">내 정보</text>
+  </g>
+
+  <g id="profile-card">
+    <rect x="16" y="100" width="370" height="88" rx="16" fill="#1C1C1E"/>
+    <circle cx="60" cy="144" r="28" fill="#333333"/>
+    <text x="60" y="154" text-anchor="middle" font-size="28" fill="#FFFFFF">👤</text>
+    <text x="102" y="140" font-size="18" font-weight="700" fill="#FFFFFF">김근육</text>
+    <text x="102" y="160" font-size="13" fill="#8E8E93">muscle@example.com</text>
+    <rect x="332" y="132" width="42" height="24" rx="12" fill="#FF9800" fill-opacity="0.145"/>
+    <text x="353" y="149" text-anchor="middle" font-size="13" font-weight="700" fill="#FF9800">Pro</text>
+  </g>
+
+  <g id="subscription-card">
+    <rect x="16" y="200" width="370" height="76" rx="16" fill="url(#proGradient)" stroke="#AEC4F8" stroke-opacity="0.2" stroke-width="1"/>
+    <text x="32" y="230" font-size="16" font-weight="700" fill="#FFFFFF">⭐ Pro 구독 중</text>
+    <text x="32" y="252" font-size="13" fill="#8E8E93">다음 결제일: 2025년 5월 22일</text>
+    <rect x="314" y="222" width="56" height="32" rx="8" fill="none" stroke="#2196F3" stroke-width="1"/>
+    <text x="342" y="243" text-anchor="middle" font-size="13" font-weight="600" fill="#2196F3">관리</text>
+  </g>
+
+  <g id="account-settings">
+    <rect x="16" y="288" width="370" height="164" rx="16" fill="#1C1C1E"/>
+    <text x="32" y="312" font-size="12" font-weight="600" fill="#8E8E93" letter-spacing="1">계정</text>
+
+    <g id="row-stats">
+      <rect x="32" y="326" width="32" height="32" rx="8" fill="#2196F3" fill-opacity="0.133"/>
+      <text x="48" y="349" text-anchor="middle" font-size="16" fill="#FFFFFF">📊</text>
+      <text x="76" y="349" font-size="15" fill="#FFFFFF">운동 통계</text>
+      <text x="370" y="349" text-anchor="end" font-size="16" fill="#8E8E93">›</text>
+    </g>
+    <line x1="32" y1="368" x2="370" y2="368" stroke="#3A3A3C" stroke-width="1"/>
+
+    <g id="row-library">
+      <rect x="32" y="378" width="32" height="32" rx="8" fill="#448AFF" fill-opacity="0.133"/>
+      <text x="48" y="401" text-anchor="middle" font-size="16" fill="#FFFFFF">📚</text>
+      <text x="76" y="401" font-size="15" fill="#FFFFFF">운동 라이브러리</text>
+      <text x="370" y="401" text-anchor="end" font-size="16" fill="#8E8E93">›</text>
+    </g>
+    <line x1="32" y1="420" x2="370" y2="420" stroke="#3A3A3C" stroke-width="1"/>
+
+    <g id="row-notif">
+      <rect x="32" y="430" width="32" height="32" rx="8" fill="#FF9800" fill-opacity="0.133"/>
+      <text x="48" y="453" text-anchor="middle" font-size="16" fill="#FFFFFF">🔔</text>
+      <text x="76" y="453" font-size="15" fill="#FFFFFF">알림 설정</text>
+      <text x="342" y="453" text-anchor="end" font-size="14" fill="#8E8E93">켜짐</text>
+      <text x="370" y="453" text-anchor="end" font-size="16" fill="#8E8E93">›</text>
+    </g>
+  </g>
+
+  <g id="info-settings">
+    <rect x="16" y="464" width="370" height="164" rx="16" fill="#1C1C1E"/>
+    <text x="32" y="488" font-size="12" font-weight="600" fill="#8E8E93" letter-spacing="1">정보</text>
+
+    <g id="row-terms">
+      <rect x="32" y="502" width="32" height="32" rx="8" fill="#2196F3" fill-opacity="0.133"/>
+      <text x="48" y="525" text-anchor="middle" font-size="16" fill="#FFFFFF">📜</text>
+      <text x="76" y="525" font-size="15" fill="#FFFFFF">이용약관</text>
+      <text x="370" y="525" text-anchor="end" font-size="16" fill="#8E8E93">›</text>
+    </g>
+    <line x1="32" y1="544" x2="370" y2="544" stroke="#3A3A3C" stroke-width="1"/>
+
+    <g id="row-privacy">
+      <rect x="32" y="554" width="32" height="32" rx="8" fill="#2196F3" fill-opacity="0.133"/>
+      <text x="48" y="577" text-anchor="middle" font-size="16" fill="#FFFFFF">🔒</text>
+      <text x="76" y="577" font-size="15" fill="#FFFFFF">개인정보처리방침</text>
+      <text x="370" y="577" text-anchor="end" font-size="16" fill="#8E8E93">›</text>
+    </g>
+    <line x1="32" y1="596" x2="370" y2="596" stroke="#3A3A3C" stroke-width="1"/>
+
+    <g id="row-version">
+      <rect x="32" y="606" width="32" height="32" rx="8" fill="#2196F3" fill-opacity="0.133"/>
+      <text x="48" y="629" text-anchor="middle" font-size="16" fill="#FFFFFF">ℹ️</text>
+      <text x="76" y="629" font-size="15" fill="#FFFFFF">앱 버전</text>
+      <text x="370" y="629" text-anchor="end" font-size="14" fill="#8E8E93">1.0.0</text>
+    </g>
+  </g>
+
+  <g id="logout-settings">
+    <rect x="16" y="640" width="370" height="112" rx="16" fill="#1C1C1E"/>
+
+    <g id="row-logout">
+      <rect x="32" y="654" width="32" height="32" rx="8" fill="#2196F3" fill-opacity="0.133"/>
+      <text x="48" y="677" text-anchor="middle" font-size="16" fill="#FFFFFF">🚪</text>
+      <text x="76" y="677" font-size="15" fill="#FFFFFF">로그아웃</text>
+      <text x="370" y="677" text-anchor="end" font-size="16" fill="#8E8E93">›</text>
+    </g>
+    <line x1="32" y1="696" x2="370" y2="696" stroke="#3A3A3C" stroke-width="1"/>
+
+    <g id="row-delete">
+      <rect x="32" y="706" width="32" height="32" rx="8" fill="#F44336" fill-opacity="0.133"/>
+      <text x="48" y="729" text-anchor="middle" font-size="16" fill="#FFFFFF">🗑</text>
+      <text x="76" y="729" font-size="15" fill="#F44336">계정 삭제</text>
+    </g>
+  </g>
+
+  <g id="bottom-nav">
+    <rect x="0" y="792" width="402" height="82" fill="#1C1C1E"/>
+    <line x1="0" y1="792" x2="402" y2="792" stroke="#3A3A3C" stroke-width="1"/>
+    <g id="nav-home">
+      <text x="50.25" y="822" text-anchor="middle" font-size="20" fill="#8E8E93">⌂</text>
+      <text x="50.25" y="840" text-anchor="middle" font-size="10" fill="#8E8E93">홈</text>
+    </g>
+    <g id="nav-log">
+      <text x="150.75" y="822" text-anchor="middle" font-size="20" fill="#8E8E93">◉</text>
+      <text x="150.75" y="840" text-anchor="middle" font-size="10" fill="#8E8E93">운동 기록</text>
+    </g>
+    <g id="nav-ai">
+      <text x="251.25" y="822" text-anchor="middle" font-size="20" fill="#8E8E93">✦</text>
+      <text x="251.25" y="840" text-anchor="middle" font-size="10" fill="#8E8E93">AI 루틴</text>
+    </g>
+    <g id="nav-my">
+      <text x="351.75" y="822" text-anchor="middle" font-size="20" fill="#2196F3">◎</text>
+      <text x="351.75" y="840" text-anchor="middle" font-size="10" font-weight="600" fill="#2196F3">내 정보</text>
+    </g>
+  </g>
+
+  <g id="home-indicator">
+    <rect x="131.5" y="861" width="139" height="5" rx="2.5" fill="#FFFFFF" fill-opacity="0.7"/>
+  </g>
+
+</svg>

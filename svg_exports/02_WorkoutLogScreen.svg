@@ -1,0 +1,172 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="402" height="874" viewBox="0 0 402 874" font-family="-apple-system, 'SF Pro Display', 'Roboto', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif">
+
+  <g id="device-frame">
+    <rect x="0" y="0" width="402" height="874" rx="48" fill="#000000"/>
+  </g>
+
+  <g id="status-bar">
+    <text x="34" y="38" font-size="17" font-weight="590" fill="#FFFFFF" letter-spacing="-0.3">9:41</text>
+    <g id="signal-bars" transform="translate(296, 29)">
+      <rect x="0" y="7.5" width="3.2" height="4.5" rx="0.7" fill="#FFFFFF"/>
+      <rect x="4.8" y="5" width="3.2" height="7" rx="0.7" fill="#FFFFFF"/>
+      <rect x="9.6" y="2.5" width="3.2" height="9.5" rx="0.7" fill="#FFFFFF"/>
+      <rect x="14.4" y="0" width="3.2" height="12" rx="0.7" fill="#FFFFFF"/>
+    </g>
+    <g id="wifi-icon" transform="translate(321, 29)">
+      <path d="M8.5 3.2C10.8 3.2 12.9 4.1 14.4 5.6L15.5 4.5C13.7 2.7 11.2 1.5 8.5 1.5C5.8 1.5 3.3 2.7 1.5 4.5L2.6 5.6C4.1 4.1 6.2 3.2 8.5 3.2Z" fill="#FFFFFF"/>
+      <path d="M8.5 6.8C9.9 6.8 11.1 7.3 12 8.2L13.1 7.1C11.8 5.9 10.2 5.1 8.5 5.1C6.8 5.1 5.2 5.9 3.9 7.1L5 8.2C5.9 7.3 7.1 6.8 8.5 6.8Z" fill="#FFFFFF"/>
+      <circle cx="8.5" cy="10.5" r="1.5" fill="#FFFFFF"/>
+    </g>
+    <g id="battery" transform="translate(345, 29)">
+      <rect x="0.5" y="0.5" width="23" height="12" rx="3.5" stroke="#FFFFFF" stroke-opacity="0.35" fill="none"/>
+      <rect x="2" y="2" width="20" height="9" rx="2" fill="#FFFFFF"/>
+      <path d="M25 4.5V8.5C25.8 8.2 26.5 7.2 26.5 6.5C26.5 5.8 25.8 4.8 25 4.5Z" fill="#FFFFFF" fill-opacity="0.4"/>
+    </g>
+  </g>
+
+  <g id="dynamic-island">
+    <rect x="138" y="11" width="126" height="37" rx="24" fill="#000000"/>
+  </g>
+
+  <g id="app-bar">
+    <text x="16" y="85" font-size="20" font-weight="700" fill="#FFFFFF">운동 기록</text>
+  </g>
+
+  <g id="library-button">
+    <rect x="16" y="100" width="370" height="56" rx="12" fill="#111111"/>
+    <text x="36" y="134" font-size="22" fill="#448AFF">☰</text>
+    <text x="201" y="134" text-anchor="middle" font-size="16" font-weight="600" fill="#FFFFFF">나만의 운동 라이브러리</text>
+    <text x="370" y="134" text-anchor="end" font-size="18" fill="#8E8E93">›</text>
+  </g>
+
+  <g id="segment-toggle">
+    <rect x="130" y="168" width="142" height="40" rx="10" fill="#1A1A1A"/>
+    <rect x="133" y="171" width="68" height="34" rx="8" fill="#2196F3"/>
+    <text x="167" y="194" text-anchor="middle" font-size="14" font-weight="700" fill="#FFFFFF">주간</text>
+    <text x="237" y="194" text-anchor="middle" font-size="14" fill="#8E8E93">월간</text>
+  </g>
+
+  <g id="period-navigator">
+    <text x="135" y="238" font-size="20" fill="#8E8E93">‹</text>
+    <text x="201" y="238" text-anchor="middle" font-size="14" font-weight="600" fill="#FFFFFF">4월 14일 ~ 4월 20일</text>
+    <text x="267" y="238" font-size="20" fill="#636366">›</text>
+  </g>
+
+  <g id="volume-chart-card">
+    <rect x="16" y="252" width="370" height="198" rx="16" fill="#1C1C1E"/>
+    <text x="32" y="282" font-size="16" font-weight="700" fill="#FFFFFF">주간 총 운동 볼륨 (Kg)</text>
+
+    <g id="bar-chart">
+      <g id="bar-bg">
+        <rect x="41" y="296" width="42" height="116" rx="4" fill="#333333"/>
+        <rect x="91" y="296" width="42" height="116" rx="4" fill="#333333"/>
+        <rect x="141" y="296" width="42" height="116" rx="4" fill="#333333"/>
+        <rect x="191" y="296" width="42" height="116" rx="4" fill="#333333"/>
+        <rect x="241" y="296" width="42" height="116" rx="4" fill="#333333"/>
+        <rect x="291" y="296" width="42" height="116" rx="4" fill="#333333"/>
+        <rect x="341" y="296" width="42" height="116" rx="4" fill="#333333"/>
+      </g>
+      <g id="bar-values">
+        <rect x="41" y="359" width="42" height="53" rx="4" fill="#AEC4F8"/>
+        <rect x="91" y="326" width="42" height="86" rx="4" fill="#AEC4F8"/>
+        <rect x="141" y="373" width="42" height="39" rx="4" fill="#AEC4F8"/>
+        <rect x="191" y="296" width="42" height="116" rx="4" fill="#AEC4F8"/>
+        <rect x="241" y="344" width="42" height="68" rx="4" fill="#AEC4F8"/>
+      </g>
+      <g id="bar-labels" fill="#8E8E93" font-size="11" text-anchor="middle">
+        <text x="62" y="428">월</text>
+        <text x="112" y="428">화</text>
+        <text x="162" y="428">수</text>
+        <text x="212" y="428">목</text>
+        <text x="262" y="428">금</text>
+        <text x="312" y="428">토</text>
+        <text x="362" y="428">일</text>
+      </g>
+    </g>
+  </g>
+
+  <g id="radar-chart-card">
+    <rect x="16" y="462" width="370" height="232" rx="16" fill="#1C1C1E"/>
+    <text x="32" y="492" font-size="16" font-weight="700" fill="#FFFFFF">주간 부위별 밸런스</text>
+
+    <g id="radar-chart" transform="translate(111, 500)">
+      <g id="radar-rings" fill="none" stroke="#FFFFFF" stroke-opacity="0.12" stroke-width="1">
+        <polygon points="90.0,60.0 103.7,64.5 112.1,76.0 112.1,90.0 103.7,101.5 90.0,106.0 76.3,101.5 67.9,90.0 67.9,76.0 76.3,64.5"/>
+        <polygon points="90.0,30.0 117.4,39.0 134.3,62.0 134.3,90.0 117.4,113.0 90.0,122.0 62.6,113.0 45.7,90.0 45.7,62.0 62.6,39.0"/>
+        <polygon points="90.0,0.0 131.1,13.5 156.4,48.0 156.4,90.0 131.1,124.5 90.0,138.0 48.9,124.5 23.6,90.0 23.6,48.0 48.9,13.5"/>
+      </g>
+      <g id="radar-spokes" stroke="#FFFFFF" stroke-opacity="0.1" stroke-width="1">
+        <line x1="90" y1="90" x2="90" y2="0"/>
+        <line x1="90" y1="90" x2="131.1" y2="13.5"/>
+        <line x1="90" y1="90" x2="156.4" y2="48"/>
+        <line x1="90" y1="90" x2="156.4" y2="90"/>
+        <line x1="90" y1="90" x2="156.4" y2="132"/>
+        <line x1="90" y1="90" x2="131.1" y2="166.5"/>
+        <line x1="90" y1="90" x2="90" y2="180"/>
+        <line x1="90" y1="90" x2="48.9" y2="166.5"/>
+        <line x1="90" y1="90" x2="23.6" y2="132"/>
+        <line x1="90" y1="90" x2="23.6" y2="90"/>
+      </g>
+      <g id="radar-polygon">
+        <polygon points="90.0,20.0 125.9,20.3 146.0,62.0 119.3,112.0 111.1,142.4 73.0,116.3 65.7,123.0 58.2,103.7 67.9,120.0 34.3,62.0" fill="#AEC4F8" fill-opacity="0.35" stroke="#AEC4F8" stroke-width="2"/>
+      </g>
+      <g id="radar-points" fill="#AEC4F8">
+        <circle cx="90" cy="20" r="3"/>
+        <circle cx="125.9" cy="20.3" r="3"/>
+        <circle cx="146" cy="62" r="3"/>
+        <circle cx="119.3" cy="112" r="3"/>
+        <circle cx="111.1" cy="142.4" r="3"/>
+        <circle cx="73" cy="116.3" r="3"/>
+        <circle cx="65.7" cy="123" r="3"/>
+        <circle cx="58.2" cy="103.7" r="3"/>
+        <circle cx="67.9" cy="120" r="3"/>
+        <circle cx="34.3" cy="62" r="3"/>
+      </g>
+      <g id="radar-labels" font-size="9" fill="#8E8E93" text-anchor="middle">
+        <text x="90" y="-11.4">가슴</text>
+        <text x="143.3" y="7.1">등</text>
+        <text x="179.6" y="48">어깨</text>
+        <text x="179.6" y="90">이두</text>
+        <text x="179.6" y="132">삼두</text>
+        <text x="143.3" y="172.9">코어</text>
+        <text x="90" y="191.4">대퇴사두</text>
+        <text x="36.7" y="172.9">햄스트링</text>
+        <text x="0.4" y="132">둔근</text>
+        <text x="0.4" y="90">종아리</text>
+      </g>
+    </g>
+  </g>
+
+  <g id="pro-lock-card">
+    <rect x="16" y="706" width="370" height="72" rx="12" fill="#1C1C1E"/>
+    <rect x="16" y="706" width="370" height="72" rx="12" fill="#000000" fill-opacity="0.45"/>
+    <text x="201" y="735" text-anchor="middle" font-size="22" fill="#FFFFFF">🔒</text>
+    <text x="201" y="760" text-anchor="middle" font-size="15" font-weight="700" fill="#FFFFFF">Pro 버전에서 확인 가능</text>
+  </g>
+
+  <g id="bottom-nav">
+    <rect x="0" y="792" width="402" height="82" fill="#1C1C1E"/>
+    <line x1="0" y1="792" x2="402" y2="792" stroke="#3A3A3C" stroke-width="1"/>
+    <g id="nav-home">
+      <text x="50.25" y="822" text-anchor="middle" font-size="20" fill="#8E8E93">⌂</text>
+      <text x="50.25" y="840" text-anchor="middle" font-size="10" fill="#8E8E93">홈</text>
+    </g>
+    <g id="nav-log">
+      <text x="150.75" y="822" text-anchor="middle" font-size="20" fill="#2196F3">◉</text>
+      <text x="150.75" y="840" text-anchor="middle" font-size="10" font-weight="600" fill="#2196F3">운동 기록</text>
+    </g>
+    <g id="nav-ai">
+      <text x="251.25" y="822" text-anchor="middle" font-size="20" fill="#8E8E93">✦</text>
+      <text x="251.25" y="840" text-anchor="middle" font-size="10" fill="#8E8E93">AI 루틴</text>
+    </g>
+    <g id="nav-my">
+      <text x="351.75" y="822" text-anchor="middle" font-size="20" fill="#8E8E93">◎</text>
+      <text x="351.75" y="840" text-anchor="middle" font-size="10" fill="#8E8E93">내 정보</text>
+    </g>
+  </g>
+
+  <g id="home-indicator">
+    <rect x="131.5" y="861" width="139" height="5" rx="2.5" fill="#FFFFFF" fill-opacity="0.7"/>
+  </g>
+
+</svg>

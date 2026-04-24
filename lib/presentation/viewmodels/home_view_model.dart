@@ -172,7 +172,8 @@ class HomeViewModel extends StateNotifier<HomeState> {
     await loadBaselines(forceRefresh: true);
   }
 
-  /// 운동 삭제 (Draft 안전 처리 포함)
+  /// 운동 삭제 (Draft 안전 처리 + plannedWorkout 처리 포함)
+  /// - plannedWorkout: planned_workouts 테이블에서 직접 삭제
   /// - Draft(미저장): 메모리에서만 제거 (DB 호출 X)
   /// - DB 저장됨: Repository 호출 후 새로고침
   ///
@@ -182,6 +183,46 @@ class HomeViewModel extends StateNotifier<HomeState> {
     final existsInState = state.baselines.any((b) => b.id == baselineId);
     if (!existsInState) {
       state = state.copyWith(errorMessage: '삭제 대상을 찾을 수 없습니다.');
+      return;
+    }
+
+    // [BUG 1 FIX] plannedWorkoutMap에 있으면 planned_workouts 테이블에서 삭제.
+    // AI 플래너로 저장된 운동은 workout_sets에 행이 없으므로,
+    // deleteWorkoutsByDate / deleteTodayWorkoutsByBaseline로는 지울 수 없다.
+    // plannedWorkoutMap에는 getPlannedWorkoutsAsBaselines()가 반환한
+    // PlannedWorkout 객체(DB에서 읽어온 진짜 UUID)가 담겨 있다.
+    final plannedWorkout = state.plannedWorkoutMap[baselineId];
+    if (plannedWorkout != null) {
+      try {
+        // DB에서 planned_workouts 행 삭제
+        await _repository.deletePlannedWorkout(plannedWorkout.id);
+
+        // Optimistic update: 로컬 state에서도 즉시 제거
+        final updatedBaselines =
+            state.baselines.where((b) => b.id != baselineId).toList();
+        final updatedPlannedMap =
+            Map<String, PlannedWorkout>.from(state.plannedWorkoutMap)
+              ..remove(baselineId);
+        final groupedWorkouts = _groupWorkouts(updatedBaselines);
+        final allWorkouts =
+            groupedWorkouts.values.expand((list) => list).toList();
+
+        state = state.copyWith(
+          baselines: updatedBaselines,
+          groupedWorkouts: groupedWorkouts,
+          totalVolume: _calculateVolume(allWorkouts),
+          mainFocusArea: _getFocusArea(allWorkouts),
+          plannedWorkoutMap: updatedPlannedMap,
+        );
+
+        // DB 삭제 후 강제 새로고침 — 동일 baseline의 planned 항목이 여러 개인
+        // 경우에도 정확히 반영된다.
+        // [BUG FIX] date를 전달하지 않으면 loadBaselines가 오늘 날짜로 로드하여
+        // 과거 날짜 화면에서 삭제 시 전체 목록이 오늘 것으로 교체되는 버그 수정.
+        await loadBaselines(forceRefresh: true, date: date);
+      } catch (e) {
+        state = state.copyWith(errorMessage: '삭제 실패: $e');
+      }
       return;
     }
 
@@ -196,8 +237,20 @@ class HomeViewModel extends StateNotifier<HomeState> {
     if (isPastDate) {
       try {
         await _repository.deleteWorkoutsByDate(baselineId, targetDate);
+
+        // [BUG FIX] 세트 soft delete 후에도 planned_workouts가 is_converted_to_log=false로
+        // 남아있으면 다음에 그 날짜를 열 때 syntheticSets(0/0)로 재표시되는 버그 수정.
+        // plannedWorkoutMap에 해당 baselineId가 있으면 planned_workout도 함께 삭제.
+        final plannedForDate = state.plannedWorkoutMap[baselineId];
+        if (plannedForDate != null) {
+          await _repository.deletePlannedWorkout(plannedForDate.id);
+        }
+
         final updatedBaselines =
             state.baselines.where((b) => b.id != baselineId).toList();
+        final updatedPlannedMap =
+            Map<String, PlannedWorkout>.from(state.plannedWorkoutMap)
+              ..remove(baselineId);
         final groupedWorkouts = _groupWorkouts(updatedBaselines);
         final allWorkouts =
             groupedWorkouts.values.expand((list) => list).toList();
@@ -206,6 +259,7 @@ class HomeViewModel extends StateNotifier<HomeState> {
           groupedWorkouts: groupedWorkouts,
           totalVolume: _calculateVolume(allWorkouts),
           mainFocusArea: _getFocusArea(allWorkouts),
+          plannedWorkoutMap: updatedPlannedMap,
         );
       } catch (e) {
         state = state.copyWith(errorMessage: '삭제 실패: $e');
@@ -253,10 +307,8 @@ class HomeViewModel extends StateNotifier<HomeState> {
         mainFocusArea: _getFocusArea(allWorkouts),
       );
 
-      // [Fix] DB 삭제 후 반드시 강제 새로고침하여 _mergeDraftSets 재병합 시
+      // DB 삭제 후 반드시 강제 새로고침하여 _mergeDraftSets 재병합 시
       // 삭제된 항목이 ghosting되는 현상을 원천 차단합니다.
-      // 이 호출은 _lastLoadedDate를 갱신하므로, 이후 날짜 변경 후 복귀 시에도
-      // 이전 state(삭제 전 데이터)가 재사용되지 않습니다.
       await loadBaselines(forceRefresh: true);
     } catch (e) {
       state = state.copyWith(errorMessage: '삭제 실패: $e');
@@ -264,18 +316,51 @@ class HomeViewModel extends StateNotifier<HomeState> {
   }
 
   /// 날짜 변경 체크 및 자동 새로고침
-  /// 앱 라이프사이클 이벤트용
-  Future<void> checkDateAndRefresh() async {
+  /// 앱 라이프사이클 이벤트 및 홈 탭 복귀 시 호출.
+  ///
+  /// Returns `true` when the calendar date rolled over so callers can
+  /// immediately snap [selectedHomeDateProvider] to today — preventing the
+  /// zombie-template bug where stale Day-N data bleeds into Day-N+1.
+  Future<bool> checkDateAndRefresh() async {
     final today = DateTime.now();
+
     if (_lastLoadedDate == null) {
-      await loadBaselines();
-      return;
+      // State was wiped (e.g. logout). Treat as a rollover: hard-clear and
+      // force a fresh load so the caller knows to reset the date picker too.
+      state = state.copyWith(
+        baselines: const [],
+        groupedWorkouts: const {},
+        totalVolume: 0,
+        mainFocusArea: '—',
+        isLoading: true,
+        errorMessage: null,
+        plannedWorkoutMap: const {},
+      );
+      await loadBaselines(forceRefresh: true);
+      return true;
     }
 
-    // 날짜가 변경되었는지 확인 (날짜 변경 시에는 강제 새로고침)
+    // 날짜가 변경되었는지 확인
     if (!DateFormatter.isSameDate(_lastLoadedDate!, today)) {
+      // [ZOMBIE-TEMPLATE FIX] DATE ROLLED OVER
+      // Synchronously wipe every in-memory baseline BEFORE the async DB fetch
+      // so that _mergeDraftSets can never see Day-N sets when loading Day-N+1.
+      state = state.copyWith(
+        baselines: const [],
+        groupedWorkouts: const {},
+        totalVolume: 0,
+        mainFocusArea: '—',
+        isLoading: true,
+        errorMessage: null,
+        plannedWorkoutMap: const {},
+      );
+      // Force-refresh: skips the draft-preservation early-return guard and
+      // calls getTodayBaselines() for the NEW day only.
       await loadBaselines(forceRefresh: true);
+      return true;
     }
+
+    return false;
   }
 
   /// 신규 운동 추가

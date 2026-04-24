@@ -1,6 +1,7 @@
 /// 컴파일 타임 환경 변수 접근
-/// 빌드 시 --dart-define=KEY=VALUE 로 주입됩니다.
-/// 예) flutter run --dart-define=GEMINI_API_KEY=... --dart-define=SUPABASE_URL=... --dart-define=SUPABASE_ANON_KEY=...
+/// 빌드 시 --dart-define-from-file=config.json 으로 주입됩니다.
+/// config.json 은 절대 pubspec.yaml assets 에 선언하지 말 것 (APK/IPA에 번들되면 키 노출).
+/// config.json 은 반드시 .gitignore 에 포함되어야 함.
 class EnvConfig {
   EnvConfig._();
 
@@ -13,4 +14,8 @@ class EnvConfig {
   /// Supabase anon key
   static const String supabaseAnonKey =
       String.fromEnvironment('SUPABASE_ANON_KEY');
+
+  /// Amplitude API 키 (AnalyticsService 에서 사용)
+  static const String amplitudeApiKey =
+      String.fromEnvironment('AMPLITUDE_API_KEY');
 }

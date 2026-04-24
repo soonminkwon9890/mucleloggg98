@@ -5,7 +5,7 @@ import '../../../core/utils/date_formatter.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/subscription_provider.dart';
 
-/// 구독(멤버십) 상태 확인 화면. 클로즈 베타용.
+/// 구독(멤버십) 상태 확인 화면.
 class SubscriptionScreen extends ConsumerWidget {
   const SubscriptionScreen({super.key});
 
@@ -66,7 +66,7 @@ class SubscriptionScreen extends ConsumerWidget {
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 8),
           child: Text(
-            '현재 클로즈 베타 테스트 기간입니다. 결제 기능은 추후 업데이트될 예정입니다.',
+            '출시 기념 이벤트 기간입니다. 결제 기능은 추후 업데이트될 예정입니다.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 14, color: Colors.grey),
           ),
@@ -79,7 +79,7 @@ class SubscriptionScreen extends ConsumerWidget {
             // 호출부(showPremiumGuidanceDialog)에 결제 성공 여부 전달
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('베타 기간에는 무료 쿠폰을 이용해주세요!'),
+                content: Text('출시 기념 이벤트 기간에는 무료 쿠폰을 이용해주세요!'),
               ),
             );
             // 결제 성공 예시:
@@ -175,7 +175,7 @@ class SubscriptionScreen extends ConsumerWidget {
                   ),
                 );
               },
-              child: const Text('베타 쿠폰 쓰러가기'),
+              child: const Text('출시 기념 쿠폰 쓰러가기'),
             ),
           ],
         ),

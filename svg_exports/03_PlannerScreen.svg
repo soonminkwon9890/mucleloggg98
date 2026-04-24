@@ -1,0 +1,142 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="402" height="874" viewBox="0 0 402 874" font-family="-apple-system, 'SF Pro Display', 'Roboto', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif">
+
+  <defs>
+    <linearGradient id="aiGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2196F3"/>
+      <stop offset="100%" stop-color="#9C27B0"/>
+    </linearGradient>
+  </defs>
+
+  <g id="device-frame">
+    <rect x="0" y="0" width="402" height="874" rx="48" fill="#000000"/>
+  </g>
+
+  <g id="status-bar">
+    <text x="34" y="38" font-size="17" font-weight="590" fill="#FFFFFF" letter-spacing="-0.3">9:41</text>
+    <g id="signal-bars" transform="translate(296, 29)">
+      <rect x="0" y="7.5" width="3.2" height="4.5" rx="0.7" fill="#FFFFFF"/>
+      <rect x="4.8" y="5" width="3.2" height="7" rx="0.7" fill="#FFFFFF"/>
+      <rect x="9.6" y="2.5" width="3.2" height="9.5" rx="0.7" fill="#FFFFFF"/>
+      <rect x="14.4" y="0" width="3.2" height="12" rx="0.7" fill="#FFFFFF"/>
+    </g>
+    <g id="wifi-icon" transform="translate(321, 29)">
+      <path d="M8.5 3.2C10.8 3.2 12.9 4.1 14.4 5.6L15.5 4.5C13.7 2.7 11.2 1.5 8.5 1.5C5.8 1.5 3.3 2.7 1.5 4.5L2.6 5.6C4.1 4.1 6.2 3.2 8.5 3.2Z" fill="#FFFFFF"/>
+      <path d="M8.5 6.8C9.9 6.8 11.1 7.3 12 8.2L13.1 7.1C11.8 5.9 10.2 5.1 8.5 5.1C6.8 5.1 5.2 5.9 3.9 7.1L5 8.2C5.9 7.3 7.1 6.8 8.5 6.8Z" fill="#FFFFFF"/>
+      <circle cx="8.5" cy="10.5" r="1.5" fill="#FFFFFF"/>
+    </g>
+    <g id="battery" transform="translate(345, 29)">
+      <rect x="0.5" y="0.5" width="23" height="12" rx="3.5" stroke="#FFFFFF" stroke-opacity="0.35" fill="none"/>
+      <rect x="2" y="2" width="20" height="9" rx="2" fill="#FFFFFF"/>
+      <path d="M25 4.5V8.5C25.8 8.2 26.5 7.2 26.5 6.5C26.5 5.8 25.8 4.8 25 4.5Z" fill="#FFFFFF" fill-opacity="0.4"/>
+    </g>
+  </g>
+
+  <g id="dynamic-island">
+    <rect x="138" y="11" width="126" height="37" rx="24" fill="#000000"/>
+  </g>
+
+  <g id="app-bar">
+    <text x="16" y="85" font-size="20" font-weight="700" fill="#FFFFFF">AI 루틴</text>
+  </g>
+
+  <g id="ai-generate-card">
+    <rect x="16" y="100" width="370" height="128" rx="16" fill="#1C1C1E"/>
+    <text x="201" y="130" text-anchor="middle" font-size="14" fill="#8E8E93">AI가 내 운동 데이터를 분석하여</text>
+    <text x="201" y="150" text-anchor="middle" font-size="14" fill="#8E8E93">최적의 루틴을 생성합니다</text>
+
+    <rect x="32" y="166" width="338" height="48" rx="12" fill="url(#aiGradient)"/>
+    <text x="168" y="197" text-anchor="middle" font-size="18" fill="#FFFFFF">✦</text>
+    <text x="213" y="197" text-anchor="middle" font-size="16" font-weight="700" fill="#FFFFFF">AI 루틴 생성하기</text>
+  </g>
+
+  <g id="section-header">
+    <text x="16" y="267" font-size="20" font-weight="700" fill="#FFFFFF">저장된 루틴</text>
+  </g>
+
+  <g id="routine-card-1">
+    <rect x="16" y="284" width="370" height="224" rx="16" fill="#1C1C1E"/>
+
+    <g id="routine-1-header">
+      <text x="32" y="314" font-size="16" font-weight="700" fill="#FFFFFF">💪 상체 루틴</text>
+      <rect x="314" y="298" width="56" height="28" rx="8" fill="#2196F3"/>
+      <text x="342" y="317" text-anchor="middle" font-size="13" font-weight="600" fill="#FFFFFF">시작</text>
+    </g>
+
+    <g id="routine-1-ex-1">
+      <text x="32" y="348" font-size="14" font-weight="500" fill="#FFFFFF">벤치프레스</text>
+      <text x="32" y="366" font-size="12" fill="#8E8E93">가슴 · 4세트 × 8회</text>
+      <rect x="312" y="347" width="58" height="22" rx="11" fill="#F44336" fill-opacity="0.145"/>
+      <text x="341" y="362" text-anchor="middle" font-size="13" font-weight="700" fill="#F44336">고강도</text>
+    </g>
+
+    <line x1="32" y1="380" x2="370" y2="380" stroke="#3A3A3C" stroke-width="1"/>
+
+    <g id="routine-1-ex-2">
+      <text x="32" y="402" font-size="14" font-weight="500" fill="#FFFFFF">오버헤드프레스</text>
+      <text x="32" y="420" font-size="12" fill="#8E8E93">어깨 · 3세트 × 10회</text>
+      <rect x="322" y="401" width="48" height="22" rx="11" fill="#2196F3" fill-opacity="0.145"/>
+      <text x="346" y="416" text-anchor="middle" font-size="13" font-weight="700" fill="#2196F3">보통</text>
+    </g>
+
+    <line x1="32" y1="434" x2="370" y2="434" stroke="#3A3A3C" stroke-width="1"/>
+
+    <g id="routine-1-ex-3">
+      <text x="32" y="456" font-size="14" font-weight="500" fill="#FFFFFF">랫풀다운</text>
+      <text x="32" y="474" font-size="12" fill="#8E8E93">등 · 3세트 × 12회</text>
+      <rect x="322" y="455" width="48" height="22" rx="11" fill="#2196F3" fill-opacity="0.145"/>
+      <text x="346" y="470" text-anchor="middle" font-size="13" font-weight="700" fill="#2196F3">보통</text>
+    </g>
+  </g>
+
+  <g id="routine-card-2">
+    <rect x="16" y="520" width="370" height="172" rx="16" fill="#1C1C1E"/>
+
+    <g id="routine-2-header">
+      <text x="32" y="550" font-size="16" font-weight="700" fill="#FFFFFF">💪 하체 루틴</text>
+      <rect x="314" y="534" width="56" height="28" rx="8" fill="#2196F3"/>
+      <text x="342" y="553" text-anchor="middle" font-size="13" font-weight="600" fill="#FFFFFF">시작</text>
+    </g>
+
+    <g id="routine-2-ex-1">
+      <text x="32" y="584" font-size="14" font-weight="500" fill="#FFFFFF">스쿼트</text>
+      <text x="32" y="602" font-size="12" fill="#8E8E93">대퇴사두 · 4세트 × 6회</text>
+      <rect x="312" y="583" width="58" height="22" rx="11" fill="#F44336" fill-opacity="0.145"/>
+      <text x="341" y="598" text-anchor="middle" font-size="13" font-weight="700" fill="#F44336">고강도</text>
+    </g>
+
+    <line x1="32" y1="616" x2="370" y2="616" stroke="#3A3A3C" stroke-width="1"/>
+
+    <g id="routine-2-ex-2">
+      <text x="32" y="638" font-size="14" font-weight="500" fill="#FFFFFF">레그프레스</text>
+      <text x="32" y="656" font-size="12" fill="#8E8E93">대퇴사두 · 3세트 × 10회</text>
+      <rect x="322" y="637" width="48" height="22" rx="11" fill="#2196F3" fill-opacity="0.145"/>
+      <text x="346" y="652" text-anchor="middle" font-size="13" font-weight="700" fill="#2196F3">보통</text>
+    </g>
+  </g>
+
+  <g id="bottom-nav">
+    <rect x="0" y="792" width="402" height="82" fill="#1C1C1E"/>
+    <line x1="0" y1="792" x2="402" y2="792" stroke="#3A3A3C" stroke-width="1"/>
+    <g id="nav-home">
+      <text x="50.25" y="822" text-anchor="middle" font-size="20" fill="#8E8E93">⌂</text>
+      <text x="50.25" y="840" text-anchor="middle" font-size="10" fill="#8E8E93">홈</text>
+    </g>
+    <g id="nav-log">
+      <text x="150.75" y="822" text-anchor="middle" font-size="20" fill="#8E8E93">◉</text>
+      <text x="150.75" y="840" text-anchor="middle" font-size="10" fill="#8E8E93">운동 기록</text>
+    </g>
+    <g id="nav-ai">
+      <text x="251.25" y="822" text-anchor="middle" font-size="20" fill="#2196F3">✦</text>
+      <text x="251.25" y="840" text-anchor="middle" font-size="10" font-weight="600" fill="#2196F3">AI 루틴</text>
+    </g>
+    <g id="nav-my">
+      <text x="351.75" y="822" text-anchor="middle" font-size="20" fill="#8E8E93">◎</text>
+      <text x="351.75" y="840" text-anchor="middle" font-size="10" fill="#8E8E93">내 정보</text>
+    </g>
+  </g>
+
+  <g id="home-indicator">
+    <rect x="131.5" y="861" width="139" height="5" rx="2.5" fill="#FFFFFF" fill-opacity="0.7"/>
+  </g>
+
+</svg>

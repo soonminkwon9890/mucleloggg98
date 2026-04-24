@@ -250,6 +250,154 @@ class WorkoutStatsRepository with BaseRepositoryMixin {
     return result;
   }
 
+  /// 특정 월의 주차별 볼륨 집계 (1주차~5주차)
+  ///
+  /// 주차 구분: 월의 1일 기준 7일씩 묶음
+  ///   1주차: 1~7일  2주차: 8~14일  3주차: 15~21일  4주차: 22~28일  5주차: 29일~말일
+  Future<Map<int, double>> getMonthlyVolumeByWeek(
+      {required DateTime monthStart}) async {
+    final userId = currentUserId;
+    final normalizedStart = DateTime(monthStart.year, monthStart.month, 1);
+    final daysInMonth =
+        DateTime(normalizedStart.year, normalizedStart.month + 1, 0).day;
+    final normalizedEnd =
+        DateTime(normalizedStart.year, normalizedStart.month, daysInMonth);
+
+    final queryStart = normalizedStart
+        .subtract(const Duration(days: 1))
+        .toUtc()
+        .toIso8601String();
+    final queryEnd = normalizedEnd
+        .add(const Duration(days: 1))
+        .toUtc()
+        .toIso8601String();
+
+    final response = await client
+        .from('workout_sets')
+        .select(
+            'baseline_id, created_at, weight, reps, exercise_baselines!inner(user_id)')
+        .eq('is_completed', true)
+        .eq('is_hidden', false)
+        .eq('exercise_baselines.user_id', userId)
+        .gte('created_at', queryStart)
+        .lt('created_at', queryEnd);
+
+    // 5주차 슬롯 초기화
+    final result = <int, double>{1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0, 5: 0.0};
+
+    for (final row in (response as List)) {
+      if (row is! Map) continue;
+      final createdAtRaw = row['created_at'];
+      if (createdAtRaw == null) continue;
+
+      final createdAtLocal =
+          DateTime.parse(createdAtRaw.toString()).toLocal();
+      final dayKey = DateTime(
+          createdAtLocal.year, createdAtLocal.month, createdAtLocal.day);
+
+      // 해당 월 범위 외 데이터 제외 (UTC 버퍼로 쿼리했으므로 재필터 필요)
+      if (dayKey.isBefore(normalizedStart) || dayKey.isAfter(normalizedEnd)) {
+        continue;
+      }
+
+      // 주차 계산: (day - 1) ~/ 7 + 1 → 1~5
+      final weekNum = ((dayKey.day - 1) ~/ 7) + 1;
+
+      final weight = (row['weight'] as num?)?.toDouble() ?? 0.0;
+      final reps = (row['reps'] as num?)?.toInt() ?? 0;
+      result[weekNum] = (result[weekNum] ?? 0.0) + weight * reps;
+    }
+
+    return result;
+  }
+
+  /// 특정 월의 부위 밸런스 집계
+  Future<Map<String, double>> getMonthlyBodyBalance(
+      {required DateTime monthStart}) async {
+    final userId = currentUserId;
+    final normalizedStart = DateTime(monthStart.year, monthStart.month, 1);
+    final daysInMonth =
+        DateTime(normalizedStart.year, normalizedStart.month + 1, 0).day;
+    final normalizedEnd =
+        DateTime(normalizedStart.year, normalizedStart.month, daysInMonth);
+
+    final queryStart = normalizedStart
+        .subtract(const Duration(days: 1))
+        .toUtc()
+        .toIso8601String();
+    final queryEnd = normalizedEnd
+        .add(const Duration(days: 1))
+        .toUtc()
+        .toIso8601String();
+
+    final response = await client
+        .from('workout_sets')
+        .select(
+            'baseline_id, created_at, exercise_baselines!inner(user_id, body_part, target_muscles)')
+        .eq('is_completed', true)
+        .eq('is_hidden', false)
+        .eq('exercise_baselines.user_id', userId)
+        .gte('created_at', queryStart)
+        .lt('created_at', queryEnd);
+
+    const axes = [
+      '가슴', '등', '어깨', '이두', '삼두', '코어',
+      '대퇴사두', '햄스트링', '둔근', '종아리'
+    ];
+    final result = {for (final a in axes) a: 0.0};
+    final seen = <String>{};
+
+    for (final row in (response as List)) {
+      if (row is! Map) continue;
+      final baselineId = row['baseline_id']?.toString();
+      final createdAtRaw = row['created_at']?.toString();
+      if (baselineId == null || createdAtRaw == null) continue;
+
+      final createdAt = DateTime.parse(createdAtRaw).toLocal();
+      final dateKey = DateFormat('yyyy-MM-dd').format(createdAt);
+      final dayKey =
+          DateTime(createdAt.year, createdAt.month, createdAt.day);
+
+      // 해당 월 범위 외 데이터 제외
+      if (dayKey.isBefore(normalizedStart) || dayKey.isAfter(normalizedEnd)) {
+        continue;
+      }
+
+      final dedupeKey = '$dateKey|$baselineId';
+      if (!seen.add(dedupeKey)) continue;
+
+      final baselineRow = _extractEmbeddedBaseline(row['exercise_baselines']);
+      if (baselineRow == null) continue;
+
+      final bodyPartCode = baselineRow['body_part']?.toString();
+      final bodyPart = BodyPartParsing.fromCode(bodyPartCode);
+
+      if (bodyPart == BodyPart.full) {
+        for (final a in axes) {
+          result[a] = (result[a] ?? 0.0) + 0.2;
+        }
+        continue;
+      }
+
+      final muscles = _extractTargetMuscles(baselineRow['target_muscles']);
+      final mappedAxes = <String>{};
+      for (final m in muscles) {
+        for (final axis in mapMuscleToAxes(m)) {
+          if (axis != '기타') mappedAxes.add(axis);
+        }
+      }
+
+      if (mappedAxes.isEmpty) continue;
+
+      final per = 1.0 / mappedAxes.length;
+      for (final a in mappedAxes) {
+        result[a] = (result[a] ?? 0.0) + per;
+      }
+    }
+
+    return result;
+  }
+
   /// 특정 주(월~일) 부위 밸런스 집계
   Future<Map<String, double>> getBodyBalance({DateTime? weekStart}) async {
     final userId = currentUserId;
@@ -601,7 +749,7 @@ class WorkoutStatsRepository with BaseRepositoryMixin {
     final startDate = DateFormat('yyyy-MM-dd').format(startOfWeek);
     final endDate = DateFormat('yyyy-MM-dd').format(endOfWeek);
 
-    debugPrint('[getLastWeekSessions] Query range: $startDate to $endDate');
+    if (kDebugMode) debugPrint('[getLastWeekSessions] Query range: $startDate to $endDate');
 
     final response = await client
         .from('workout_sessions')
@@ -611,17 +759,21 @@ class WorkoutStatsRepository with BaseRepositoryMixin {
         .lte('workout_date', endDate)
         .order('workout_date', ascending: false);
 
-    debugPrint('[getLastWeekSessions] Raw response count: ${(response as List).length}');
-    for (final row in response) {
-      debugPrint('[getLastWeekSessions] Raw row: workout_date=${row['workout_date']}, baseline_id=${row['baseline_id']}');
+    if (kDebugMode) {
+      debugPrint('[getLastWeekSessions] Raw response count: ${(response as List).length}');
+      for (final row in response) {
+        debugPrint('[getLastWeekSessions] Raw row: workout_date=${row['workout_date']}, baseline_id=${row['baseline_id']}');
+      }
     }
 
     final sessions = response
         .map((json) => WorkoutSession.fromJson(json))
         .toList();
 
-    for (final s in sessions) {
-      debugPrint('[getLastWeekSessions] Parsed session: workoutDate=${s.workoutDate}, isUtc=${s.workoutDate.isUtc}');
+    if (kDebugMode) {
+      for (final s in sessions) {
+        debugPrint('[getLastWeekSessions] Parsed session: workoutDate=${s.workoutDate}, isUtc=${s.workoutDate.isUtc}');
+      }
     }
 
     return sessions;
@@ -629,15 +781,24 @@ class WorkoutStatsRepository with BaseRepositoryMixin {
 
   /// 특정 날짜의 평균 무게/횟수 조회
   ///
-  /// [FIX] UTC 변환 제거 - 로컬 날짜 문자열로 직접 쿼리하여 타임존 이슈 방지
+  /// [BUG2 FIX] UTC-aware 날짜 범위 사용.
+  /// batchSaveWorkoutSets()는 createdAt을 .toUtc()로 변환하여 저장한다.
+  /// KST(UTC+9) 자정(00:00 local) → UTC 전날 15:00Z.
+  /// 로컬 날짜 문자열('2026-04-21T00:00:00', 타임존 없음)을 PostgreSQL에 전달하면
+  /// UTC로 해석되어 15:00Z가 범위 밖으로 밀린다.
+  /// localDate.toUtc()로 변환하면 정확히 로컬 하루 전체를 UTC 범위로 커버한다.
   Future<(double weight, int reps)> getLastWeekAverageSets(
     String baselineId,
     DateTime date,
   ) async {
-    // [FIX] UTC 변환 없이 로컬 날짜 문자열 사용
-    final dateStr = DateFormat('yyyy-MM-dd').format(date);
-    final startStr = '${dateStr}T00:00:00';
-    final endStr = '${dateStr}T23:59:59.999';
+    // 로컬 자정 → UTC 변환으로 저장된 모든 세트를 정확히 포함하는 범위 계산
+    final localDate = DateTime(date.year, date.month, date.day);
+    final startStr = localDate.toUtc().toIso8601String();
+    final endStr = localDate
+        .add(const Duration(days: 1))
+        .toUtc()
+        .subtract(const Duration(milliseconds: 1))
+        .toIso8601String();
 
     final response = await client
         .from('workout_sets')
@@ -669,32 +830,43 @@ class WorkoutStatsRepository with BaseRepositoryMixin {
 
   /// 특정 날짜의 '최고 중량 세트' 조회
   ///
-  /// [FIX] UTC 변환 제거 - 로컬 날짜 문자열로 직접 쿼리하여 타임존 이슈 방지
+  /// [BUG2 FIX] batchSaveWorkoutSets()가 created_at을 UTC로 변환해 저장하므로,
+  /// 로컬 날짜를 UTC 범위로 변환해 쿼리해야 한다.
   Future<(double weight, int reps)> getLastWeekBestSet(
     String baselineId,
     DateTime date,
   ) async {
-    // [FIX] UTC 변환 없이 로컬 날짜 문자열 사용
-    // created_at은 'YYYY-MM-DDTHH:MM:SS' 형식으로 저장되므로 문자열 범위 쿼리 사용
-    final dateStr = DateFormat('yyyy-MM-dd').format(date);
-    final startStr = '${dateStr}T00:00:00';
-    final endStr = '${dateStr}T23:59:59.999';
+    // [BUG2 FIX] 로컬 자정을 UTC로 변환 — KST(UTC+9) 로컬 자정 = 전날 15:00Z
+    // created_at은 UTC ISO8601로 저장되므로 UTC 범위로 쿼리해야 한다
+    final localDate = DateTime(date.year, date.month, date.day);
+    final startStr = localDate.toUtc().toIso8601String();
+    final endStr = localDate
+        .add(const Duration(days: 1))
+        .toUtc()
+        .subtract(const Duration(milliseconds: 1))
+        .toIso8601String();
 
-    debugPrint('[getLastWeekBestSet] Input: baselineId=$baselineId, date=$date');
-    debugPrint('[getLastWeekBestSet] Query range (local): $startStr to $endStr');
+    if (kDebugMode) {
+      debugPrint('[getLastWeekBestSet] Input: baselineId=$baselineId, date=$date');
+      debugPrint('[getLastWeekBestSet] Query range (UTC): $startStr to $endStr');
+    }
 
+    // [BUG FIX] is_completed=true 필터 제거:
+    // 자동 저장된 세트(is_completed=false)도 포함하여 조회.
+    // 완료 버튼을 누르지 않아도 실제 입력한 무게/횟수 기반으로 AI 추천 가능.
+    // is_hidden=false 필터로 삭제된 세트는 제외.
     final response = await client
         .from('workout_sets')
         .select('weight, reps')
         .eq('baseline_id', baselineId)
-        .eq('is_completed', true)
+        .eq('is_hidden', false)
         .gte('created_at', startStr)
         .lte('created_at', endStr)
         .order('weight', ascending: false)
         .limit(1)
         .maybeSingle();
 
-    debugPrint('[getLastWeekBestSet] Response: $response');
+    if (kDebugMode) debugPrint('[getLastWeekBestSet] Response: $response');
 
     if (response == null) return (0.0, 0);
 

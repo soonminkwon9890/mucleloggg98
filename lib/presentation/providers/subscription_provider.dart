@@ -38,11 +38,11 @@ final subscriptionProvider = Provider<SubscriptionState>((ref) {
   return profileAsync.when(
     data: (UserProfile? profile) {
       // [Feature Flag] 결제 비활성화 시 모든 사용자에게 프리미엄 권한 부여
-      // 베타 런칭 기간 동안 모든 기능 무료 제공
+      // 출시 기념 이벤트 기간 동안 모든 기능 무료 제공
       if (!AppConfig.isPaymentEnabled) {
         final isAdmin = profile?.isAdmin == true;
         return SubscriptionState(
-          isPremium: true, // 베타 기간: 모든 사용자 프리미엄
+          isPremium: true, // 출시 기념 이벤트: 모든 사용자 프리미엄
           isAdmin: isAdmin,
           isFreeTrial: false,
           hasCoupon: false,
@@ -85,7 +85,7 @@ final subscriptionProvider = Provider<SubscriptionState>((ref) {
     },
     loading: () => SubscriptionState.loading,
     error: (_, __) => const SubscriptionState(
-      isPremium: !AppConfig.isPaymentEnabled, // 베타 기간: 에러 시에도 프리미엄
+      isPremium: !AppConfig.isPaymentEnabled, // 출시 기념 이벤트: 에러 시에도 프리미엄
       isAdmin: false,
       isFreeTrial: false,
       hasCoupon: false,

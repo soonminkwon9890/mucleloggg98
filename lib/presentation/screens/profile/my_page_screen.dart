@@ -200,7 +200,7 @@ class _MyPageScreenState extends ConsumerState<MyPageScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      // [Feature Flag] 결제 비활성화 시 베타 무료 배너 표시
+                      // [Feature Flag] 결제 비활성화 시 출시 기념 이벤트 배너 표시
                       if (!AppConfig.isPaymentEnabled) ...[
                         Card(
                           elevation: 2,
@@ -234,7 +234,7 @@ class _MyPageScreenState extends ConsumerState<MyPageScreen> {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          '베타 런칭 이벤트',
+                                          '출시 기념 이벤트',
                                           style: TextStyle(
                                             fontSize: 16,
                                             fontWeight: FontWeight.bold,

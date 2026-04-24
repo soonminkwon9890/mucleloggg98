@@ -4,6 +4,7 @@ import 'package:table_calendar/table_calendar.dart';
 import 'dart:math' as math;
 import '../../providers/workout_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../../services/analytics_service.dart';
 import '../../providers/subscription_provider.dart';
 import '../../viewmodels/home_state.dart';
 import '../../../data/models/exercise_baseline.dart';
@@ -49,7 +50,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     super.didChangeAppLifecycleState(state);
     // [안전핀] 앱이 포그라운드로 돌아올 때 날짜 변경 체크
     if (state == AppLifecycleState.resumed) {
-      ref.read(homeViewModelProvider.notifier).checkDateAndRefresh();
+      _handleResume();
+    }
+  }
+
+  /// 앱 포그라운드 복귀 처리.
+  /// 날짜가 바뀌었으면 selectedHomeDateProvider도 오늘로 강제 리셋하여
+  /// 캘린더가 전날 날짜를 가리킨 채 빈 목록을 보여주는 좀비 템플릿 버그를 차단.
+  Future<void> _handleResume() async {
+    final dateChanged =
+        await ref.read(homeViewModelProvider.notifier).checkDateAndRefresh();
+    if (dateChanged && mounted) {
+      final today = DateTime.now();
+      ref.read(selectedHomeDateProvider.notifier).state =
+          DateTime(today.year, today.month, today.day);
     }
   }
 
@@ -354,7 +368,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     return Scaffold(
       resizeToAvoidBottomInset: true,
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddWorkoutOptions(context),
+        onPressed: () {
+          AnalyticsService().trackEvent('workout_start');
+          _showAddWorkoutOptions(context);
+        },
         icon: const Icon(Icons.add),
         label: const Text('운동 추가하기'),
       ),
@@ -722,7 +739,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                   } else {
                                     ref
                                         .read(homeViewModelProvider.notifier)
-                                        .loadBaselines(forceRefresh: true);
+                                        .loadBaselines(
+                                          forceRefresh: true,
+                                          date: isToday ? null : selectedDate,
+                                        );
                                   }
                                 },
                               );
@@ -780,7 +800,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                             ref
                                                 .read(homeViewModelProvider
                                                     .notifier)
-                                                .loadBaselines(forceRefresh: true);
+                                                .loadBaselines(
+                                                  forceRefresh: true,
+                                                  date: isToday ? null : selectedDate,
+                                                );
                                           }
                                         },
                                       );

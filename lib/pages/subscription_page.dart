@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 import '../services/revenue_cat_service.dart';
 
-/// RevenueCat 구독 화면 (iOS 클로즈 베타용)
+/// RevenueCat 구독 화면
 /// 사용자에게 구독 옵션을 보여주고 구매/복원 기능 제공
 class SubscriptionPage extends StatefulWidget {
   const SubscriptionPage({super.key});

@@ -17,13 +17,25 @@ class AuthRepository {
   static const String _iosClientId =
       String.fromEnvironment('GOOGLE_IOS_CLIENT_ID');
 
+  // v7: GoogleSignIn.instance는 initialize()를 정확히 한 번만 호출해야 함
+  static bool _googleSignInInitialized = false;
+
+  Future<void> _ensureGoogleSignInInitialized() async {
+    if (_googleSignInInitialized) return;
+    await GoogleSignIn.instance.initialize(
+      clientId: Platform.isIOS ? _iosClientId : null,
+      serverClientId: _webClientId,
+    );
+    _googleSignInInitialized = true;
+  }
+
   /// 로그아웃
   Future<void> signOut() async {
     // Google Sign-In 로그아웃도 함께 처리
     if (!kIsWeb && (Platform.isIOS || Platform.isAndroid)) {
       try {
-        final googleSignIn = GoogleSignIn();
-        await googleSignIn.signOut();
+        await _ensureGoogleSignInInitialized();
+        await GoogleSignIn.instance.signOut();
       } catch (_) {
         // Google Sign-In 로그아웃 실패는 무시
       }
@@ -81,26 +93,19 @@ class AuthRepository {
 
     // iOS/Android: 네이티브 Google Sign-In 사용
     try {
-      final GoogleSignIn googleSignIn = GoogleSignIn(
-        clientId: Platform.isIOS ? _iosClientId : null,
-        serverClientId: _webClientId, // Supabase 연동용 (ID Token 검증)
-      );
+      // v7: 싱글턴 인스턴스 사용, initialize()는 최초 1회만 실행
+      await _ensureGoogleSignInInitialized();
 
       // 기존 로그인 세션 정리
-      await googleSignIn.signOut();
+      await GoogleSignIn.instance.signOut();
 
-      // 네이티브 구글 로그인 팝업 표시
-      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+      // 네이티브 구글 로그인 팝업 표시 (v7: authenticate()는 non-nullable 반환, 취소 시 throw)
+      final GoogleSignInAccount googleUser =
+          await GoogleSignIn.instance.authenticate();
 
-      if (googleUser == null) {
-        throw Exception('구글 로그인이 취소되었습니다.');
-      }
+      // 인증 정보 가져오기 (v7: authentication은 동기 프로퍼티, accessToken 제거됨)
+      final GoogleSignInAuthentication googleAuth = googleUser.authentication;
 
-      // 인증 정보 가져오기
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
-
-      final String? accessToken = googleAuth.accessToken;
       final String? idToken = googleAuth.idToken;
 
       if (idToken == null) {
@@ -111,7 +116,6 @@ class AuthRepository {
       final AuthResponse response = await _client.auth.signInWithIdToken(
         provider: OAuthProvider.google,
         idToken: idToken,
-        accessToken: accessToken,
       );
 
       return response;

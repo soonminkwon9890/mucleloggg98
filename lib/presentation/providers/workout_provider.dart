@@ -100,6 +100,26 @@ final dashboardStatsProvider = FutureProvider.family.autoDispose<
   return (weeklyVolume: weekly, bodyBalance: balance);
 });
 
+/// 운동 분석 대시보드 월간 통계 (주차별 볼륨 + 부위 밸런스)
+///
+/// - [monthStart] 해당 월의 1일(정규화된 날짜). 월이 변경될 때마다 새로운 데이터를 가져옴.
+/// - 반환: `weeklyGroupedVolume` (Map<int, double>: 1~5주차 키) + `bodyBalance`
+final monthlyDashboardStatsProvider = FutureProvider.family.autoDispose<
+    ({Map<int, double> weeklyGroupedVolume, Map<String, double> bodyBalance}),
+    DateTime>((ref, monthStart) async {
+  final repository = ref.watch(workoutRepositoryProvider);
+
+  final volumeFuture =
+      repository.getMonthlyVolumeByWeek(monthStart: monthStart);
+  final balanceFuture =
+      repository.getMonthlyBodyBalance(monthStart: monthStart);
+
+  return (
+    weeklyGroupedVolume: await volumeFuture,
+    bodyBalance: await balanceFuture,
+  );
+});
+
 /// 계획된 운동 데이터 갱신 트리거 (ProfileScreen 캘린더 동기화용)
 final plannedWorkoutsRefreshProvider = StateProvider<int>((ref) => 0);
 

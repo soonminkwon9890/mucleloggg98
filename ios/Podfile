@@ -1,5 +1,5 @@
 # iOS 최소 버전 설정 (ML Kit, video_compress 등 라이브러리 호환성)
-platform :ios, '13.0'
+platform :ios, '15.6'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'

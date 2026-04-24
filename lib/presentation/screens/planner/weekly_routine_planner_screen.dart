@@ -156,17 +156,9 @@ class _WeeklyRoutinePlannerScreenState
         return;
       }
 
-      // 이번 주 분석이면 AI가 생성한 날짜를 7일 앞당겨 현재 주로 매핑
-      final finalPlans = isNextWeek
-          ? plans
-          : plans
-              .map((p) => p.copyWith(
-                    scheduledDate:
-                        p.scheduledDate.subtract(const Duration(days: 7)),
-                  ))
-              .toList();
-
-      ref.read(weeklyPlannerProvider.notifier).loadFromPlans(finalPlans);
+      // AI는 session.workoutDate + 7로 대상 날짜를 이미 정확하게 계산하므로
+      // 추가 날짜 조정 불필요. isNextWeek 여부와 관계없이 그대로 사용.
+      ref.read(weeklyPlannerProvider.notifier).loadFromPlans(plans);
       setState(() => _isLoading = false);
     } catch (e) {
       if (mounted) {
@@ -317,18 +309,25 @@ class _WeeklyRoutinePlannerScreenState
 
     setState(() => _isSaving = true);
 
+    // async gap 이전에 messenger 캡처 (use_build_context_synchronously 방지)
+    final messenger = ScaffoldMessenger.of(context);
+
     try {
       const uuid = Uuid();
       const colorHex = '0xFF3F51B5';
 
       final plans = <PlannedWorkout>[];
       for (final day in days) {
+        // AI가 계산한 날짜를 항상 로컬 자정으로 정규화하여 저장합니다.
+        // _isNextWeek 플래그에 의존하지 않고 실제 날짜 값을 그대로 사용합니다.
+        final scheduleDate =
+            DateTime(day.date.year, day.date.month, day.date.day);
         for (final card in day.cards) {
           plans.add(PlannedWorkout(
             id: uuid.v4(),
             userId: '',
             baselineId: card.baselineId,
-            scheduledDate: day.date,
+            scheduledDate: scheduleDate,
             targetWeight: card.targetWeight,
             targetReps: card.targetReps,
             targetSets: card.targetSets,
@@ -346,17 +345,20 @@ class _WeeklyRoutinePlannerScreenState
 
       if (!mounted) return;
 
+      // 홈 화면 달력 즉시 갱신 (plannedWorkoutsRefreshProvider + homeViewModel 강제 리로드)
       ref.read(plannedWorkoutsRefreshProvider.notifier).state++;
+      await ref.read(homeViewModelProvider.notifier).loadBaselines(forceRefresh: true);
 
-      // 저장 완료 후 플래너 초기화 (다음 주 분석을 위해 빈 상태로 리셋)
+      // 저장 완료 후 플래너 초기화 (다음 분석을 위해 빈 상태로 리셋)
       ref.read(weeklyPlannerProvider.notifier).reset();
       setState(() {
+        _isSaving = false;      // Bug 3: 성공 경로에서도 반드시 false로 리셋
         _hasRunAnalysis = false;
         _totalSessions = 0;
         _totalVolume = 0;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: Text('${plans.length}개의 운동이 캘린더에 저장되었습니다. 🎉'),
           backgroundColor: Colors.green,
@@ -366,13 +368,13 @@ class _WeeklyRoutinePlannerScreenState
     } catch (e) {
       if (mounted) {
         setState(() => _isSaving = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('저장 실패: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
       }
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('저장 실패: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -749,13 +751,17 @@ class _WeeklyRoutinePlannerScreenState
       ),
 
       // ── 빈 열 안내 문구 ──
+      // IgnorePointer: 드래그 중 플레이스홀더 텍스트가 DragTarget 히트 테스트를
+      // 가로막지 않도록 포인터 이벤트를 투과시킵니다.
       contentsWhenEmpty: SizedBox(
         height: 80,
         child: Center(
-          child: Text(
-            '운동을\n드래그하세요',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey[400], fontSize: 12),
+          child: IgnorePointer(
+            child: Text(
+              '운동을\n드래그하세요',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey[400], fontSize: 12),
+            ),
           ),
         ),
       ),

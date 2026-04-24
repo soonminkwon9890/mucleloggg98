@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "72245604435",
+    "project_id": "musclelog-a3869",
+    "storage_bucket": "musclelog-a3869.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:72245604435:android:d599ccce4539c4826d56a6",
+        "android_client_info": {
+          "package_name": "com.musclelog.android"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAbEZq3emwp3hRlzesWYc7N-MWmRr5sIlM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

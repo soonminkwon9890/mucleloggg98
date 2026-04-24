@@ -31,6 +31,19 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     '내 정보',
   ];
 
+  /// 홈 탭 복귀 시 날짜 롤오버 체크.
+  /// 날짜가 바뀌었으면 selectedHomeDateProvider를 오늘로 리셋하여
+  /// 캘린더가 구날짜를 가리킨 채 빈 목록을 보이는 좀비 템플릿 버그 차단.
+  Future<void> _checkDateOnHomeTabSwitch() async {
+    final dateChanged =
+        await ref.read(homeViewModelProvider.notifier).checkDateAndRefresh();
+    if (dateChanged && mounted) {
+      final today = DateTime.now();
+      ref.read(selectedHomeDateProvider.notifier).state =
+          DateTime(today.year, today.month, today.day);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -61,7 +74,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
           // 홈 탭(인덱스 0) 클릭 시: Draft 보존을 위해 invalidate 제거
           // 날짜 변경 체크만 수행하여 필요시에만 새로고침 (Draft 유지)
           if (index == 0) {
-            ref.read(homeViewModelProvider.notifier).checkDateAndRefresh();
+            _checkDateOnHomeTabSwitch();
           }
         },
         items: const [

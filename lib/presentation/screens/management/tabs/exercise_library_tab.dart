@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:table_calendar/table_calendar.dart';
 import 'package:uuid/uuid.dart';
 import '../../../../core/constants/workout_colors.dart';
 import '../../../../core/enums/exercise_enums.dart';
@@ -10,7 +9,6 @@ import '../../../../data/services/supabase_service.dart';
 import '../../../providers/selection_provider.dart';
 import '../../../providers/workout_provider.dart';
 import '../../../widgets/common/confirmation_dialog.dart';
-import '../../../widgets/common/bottom_sheet_container.dart';
 import '../../../widgets/common/loading_overlay.dart';
 import '../../../widgets/common/empty_state_widget.dart';
 import '../../workout/workout_analysis_screen.dart';
@@ -231,232 +229,29 @@ class _ExerciseLibraryTabState extends ConsumerState<ExerciseLibraryTab>
     }
   }
 
-  /// [NEW - Task 1] 운동 계획 시트 표시
-  /// 2/3 높이의 BottomSheet에 캘린더를 표시하고, 날짜 선택 시 "운동 계획하기" 버튼 활성화
-  Future<void> _showWorkoutPlanSheet() async {
+  /// 홈 화면에서 현재 선택된 날짜에 운동을 즉시 추가
+  Future<void> _addToCurrentSelectedDate() async {
     final selectionState = ref.read(selectionProvider);
     if (selectionState.selectedBaselineIds.isEmpty) return;
 
-    final messenger = ScaffoldMessenger.of(context);
     final baselines = ref.read(archivedBaselinesProvider).value ?? [];
     final selectedBaselines = baselines
         .where((b) => selectionState.selectedBaselineIds.contains(b.id))
         .toList();
 
     if (selectedBaselines.isEmpty) {
-      messenger.showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('선택된 운동을 찾을 수 없습니다.')),
       );
       return;
     }
 
-    // 캘린더 상태 관리
-    DateTime focusedDay = DateTime.now();
-    DateTime? selectedDay;
-    Map<DateTime, PlannedWorkout> plannedWorkoutsByDate = {};
+    // 홈 화면에서 현재 선택된 날짜 사용 (캘린더 시트 생략)
+    final selectedDate = ref.read(selectedHomeDateProvider);
+    await _planWorkoutForDate(selectedBaselines, selectedDate);
 
-    // Planned workouts 로드 함수
-    Future<void> loadPlannedWorkouts(DateTime month) async {
-      try {
-        final repository = ref.read(workoutRepositoryProvider);
-        final startDate = DateTime(month.year, month.month, 1);
-        final endDate = DateTime(month.year, month.month + 1, 0);
-
-        final plannedWorkouts = await repository.getPlannedWorkoutsByDateRange(
-          startDate,
-          endDate,
-        );
-
-        plannedWorkoutsByDate = {};
-        for (final workout in plannedWorkouts) {
-          if (workout.isConvertedToLog) continue;
-          final dateKey = DateTime(
-            workout.scheduledDate.year,
-            workout.scheduledDate.month,
-            workout.scheduledDate.day,
-          );
-          plannedWorkoutsByDate.putIfAbsent(dateKey, () => workout);
-        }
-      } catch (e) {
-        plannedWorkoutsByDate = {};
-      }
-    }
-
-    // 초기 로드
-    await loadPlannedWorkouts(focusedDay);
-
-    if (!mounted) return;
-
-    // BottomSheet 표시
-    await BottomSheetContainer.show(
-      context: context,
-      maxHeightRatio: 2 / 3,
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return Column(
-              children: [
-                // 헤더
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${selectedBaselines.length}개 운동 선택됨',
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Text(
-                            '운동할 날짜를 선택하세요',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                        ],
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(),
-                // 캘린더
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: TableCalendar(
-                      firstDay: DateTime.now(),
-                      lastDay: DateTime.now().add(const Duration(days: 365)),
-                      focusedDay: focusedDay,
-                      selectedDayPredicate: (day) =>
-                          selectedDay != null && isSameDay(selectedDay!, day),
-                      locale: 'ko_KR',
-                      calendarFormat: CalendarFormat.month,
-                      startingDayOfWeek: StartingDayOfWeek.monday,
-                      eventLoader: (day) {
-                        final dayDate = DateTime(day.year, day.month, day.day);
-                        final plannedWorkout = plannedWorkoutsByDate[dayDate];
-                        return plannedWorkout != null ? [plannedWorkout] : [];
-                      },
-                      onDaySelected: (selected, focused) {
-                        setSheetState(() {
-                          selectedDay = selected;
-                          focusedDay = focused;
-                        });
-                      },
-                      onPageChanged: (focused) async {
-                        setSheetState(() {
-                          focusedDay = focused;
-                        });
-                        await loadPlannedWorkouts(focused);
-                        setSheetState(() {});
-                      },
-                      calendarStyle: CalendarStyle(
-                        todayDecoration: BoxDecoration(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .primary
-                              .withValues(alpha: 0.5),
-                          shape: BoxShape.circle,
-                        ),
-                        selectedDecoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primary,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      calendarBuilders: CalendarBuilders(
-                        markerBuilder: (context, date, events) {
-                          if (events.isEmpty) return null;
-                          final plannedWorkout =
-                              events.whereType<PlannedWorkout>().firstOrNull;
-                          if (plannedWorkout != null) {
-                            return Container(
-                              width: 6,
-                              height: 6,
-                              decoration: BoxDecoration(
-                                color:
-                                    Color(int.parse(plannedWorkout.colorHex)),
-                                shape: BoxShape.circle,
-                              ),
-                            );
-                          }
-                          return null;
-                        },
-                      ),
-                      headerStyle: const HeaderStyle(
-                        formatButtonVisible: false,
-                        titleCentered: true,
-                      ),
-                    ),
-                  ),
-                ),
-                // 하단 버튼 (날짜 선택 시에만 표시)
-                if (selectedDay != null)
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surface,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.1),
-                          blurRadius: 4,
-                          offset: const Offset(0, -2),
-                        ),
-                      ],
-                    ),
-                    child: SafeArea(
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: () async {
-                            // [CRITICAL] 날짜 비교 및 저장 로직
-                            await _planWorkoutForDate(
-                              selectedBaselines,
-                              selectedDay!,
-                            );
-                            if (sheetContext.mounted) {
-                              Navigator.pop(sheetContext);
-                            }
-                          },
-                          icon: const Icon(Icons.calendar_today),
-                          label: Text(
-                            _formatDateLabel(selectedDay!),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            minimumSize: const Size.fromHeight(48),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  /// 날짜 라벨 포맷 (오늘/내일/특정 날짜)
-  String _formatDateLabel(DateTime date) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final selectedDate = DateTime(date.year, date.month, date.day);
-
-    if (selectedDate == today) {
-      return '오늘 운동하기';
-    } else if (selectedDate == today.add(const Duration(days: 1))) {
-      return '내일 (${date.month}/${date.day}) 운동 계획하기';
-    } else {
-      return '${date.month}/${date.day} 운동 계획하기';
+    if (mounted) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
     }
   }
 
@@ -676,7 +471,7 @@ class _ExerciseLibraryTabState extends ConsumerState<ExerciseLibraryTab>
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 8.0),
             child: Text(
-              '운동을 선택하고 날짜를 지정하세요.',
+              '추가할 운동을 선택하세요.',
               style: TextStyle(color: Colors.grey, fontSize: 13),
               textAlign: TextAlign.center,
             ),
@@ -805,10 +600,10 @@ class _ExerciseLibraryTabState extends ConsumerState<ExerciseLibraryTab>
                               SizedBox(
                                 width: double.infinity,
                                 child: ElevatedButton.icon(
-                                  onPressed: _showWorkoutPlanSheet,
-                                  icon: const Icon(Icons.calendar_today),
+                                  onPressed: _addToCurrentSelectedDate,
+                                  icon: const Icon(Icons.add),
                                   label: Text(
-                                    '${selectedIds.length}개 운동 다시하기',
+                                    '${selectedIds.length}개 운동 추가하기',
                                   ),
                                   style: ElevatedButton.styleFrom(
                                     minimumSize: const Size.fromHeight(48),
